@@ -18,8 +18,16 @@ Verified against the [official challenge overview](https://openai.devpost.com/) 
 - Include clear audio explaining what was built and how Codex and GPT-5.6 were used.
 - Provide the repository URL. The repository may be public with appropriate licensing, or private and shared with the two addresses specified in the official rules.
 - Explain in the README how the team collaborated with Codex, where Codex accelerated work, which important decisions the team made, and how Codex and GPT-5.6 contributed.
+
 - Provide the /feedback Codex Session ID for the task where most core functionality was built.
 - Keep the working project available to judges free of charge and without restrictions through the judging period.
+
+### Working submission documents
+
+- [Codex build log](submission/CODEX_BUILD_LOG.md): record the Primary Core Build Session, verified GPT-5.6 use, the required `/feedback` Session ID, commits, team decisions, Codex acceleration, and test evidence as the work happens.
+- [Demo video script](submission/VIDEO_SCRIPT.md): prepare the under-three-minute demonstration, narration, Codex and GPT-5.6 explanation, recording safeguards, and publication checks.
+
+Keep these documents factual. Update them from completed work and recorded evidence rather than anticipated implementation.
 
 ## Judging alignment
 
