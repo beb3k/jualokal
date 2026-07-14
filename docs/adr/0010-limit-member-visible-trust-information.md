@@ -1,0 +1,3 @@
+# Limit member-visible trust information
+
+Jualokal keeps the detailed Trust Record private and shows other Verified Members only a Trust Summary containing identity-verification status, successful-handover count, number of different transaction partners, and current Buyer Tier. Safety allegations, confirmed-report details, dispute details, strike reasons, Tier Progress, and private history are not exposed. Jualokal enforces restrictions directly, and other members see only that the account is unavailable rather than the private reason. This provides useful accountability without turning sensitive safety and enforcement information into a public reputation profile.

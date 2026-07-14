@@ -1,0 +1,3 @@
+# Provide explicit judge demo access
+
+The prototype provides a clearly labelled Demo Mode so hackathon judges can enter as one of three pre-verified sample buyers: a Verified Buyer, Reliable Buyer, or Trusted Buyer, and switch to any of the five Demo Sellers without real identity documents, passwords, or payment. Clearly disclosed seeded fictional transaction histories establish the sample tiers and expose the 1-3-5 purchase limits and front-gate eligibility without implying real traction. Normal onboarding separately demonstrates simulated Identity Verification. The account switcher is visibly prototype-only and does not weaken the intended product rule that every real member must be verified before viewing listings.

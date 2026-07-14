@@ -1,0 +1,3 @@
+# Limit the marketplace to low-risk secondhand goods
+
+Jualokal is a broad secondhand marketplace rather than a fashion-only product, but it is not unrestricted. It admits lawful, tangible, low-risk personal goods while permanently excluding food and beverages, regulated or consumable health products, intoxicants, dangerous goods, animals, counterfeit or stolen goods, recalled goods, and categories that do not fit a local physical handover such as property, vehicles, services, digital accounts, and financial products. This preserves broad local usefulness without taking on incompatible safety, regulatory, or fulfillment risks.

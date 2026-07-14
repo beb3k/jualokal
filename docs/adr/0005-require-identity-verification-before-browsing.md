@@ -1,0 +1,3 @@
+# Require identity verification before browsing
+
+Jualokal is a private, transaction-focused marketplace rather than a public listing catalogue. A person must register and complete Identity Verification before viewing any listing; public visitors may see only the service explanation and registration flow. This deliberate admission barrier reduces casual anonymous browsing and makes every participant accountable, despite adding friction to joining. During the prototype, verification is simulated and no real identity documents are collected. At launch, a specialist provider performs the check while Jualokal retains only the result and provider reference rather than raw identity documents or biometric data.

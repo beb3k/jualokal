@@ -1,0 +1,5 @@
+# Use trust to unlock purchase capacity
+
+Jualokal makes reliability useful through a 1-3-5 Buyer Tier progression: a Verified Buyer may hold one active Purchase Commitment, a Reliable Buyer with successful handovers involving three different sellers may hold three, and a Trusted Buyer with five different sellers may hold five and receive the seller-controlled front-gate option. Any active Reliability Strike, dispute, payment reversal, or confirmed safety finding immediately triggers a Buyer Tier Reset rather than a gradual downgrade. Ordinary reliability progress may be re-earned from zero after the issue clears, while confirmed serious fraud, payment abuse, or safety misconduct may permanently block higher tiers subject to appeal.
+
+Tier Progress is private to the buyer and shows the current tier, transaction limit, progress toward the next tier, active blockers, strike expiry, and available appeal route. Other members see only the buyer's current tier in the Trust Summary, never the reset reason or progress history.

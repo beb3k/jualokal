@@ -1,0 +1,3 @@
+# Limit handover rejection to material mismatches
+
+An in-app payment is a Purchase Commitment, not permission to browse physically. A buyer may reject the item before Handover Confirmation and receive a full refund only for a Material Mismatch; change of mind, subjective dislike, or poor fit despite accurate listing measurements does not qualify. An acknowledged ordinary mismatch pauses the listing for correction, while suspected counterfeit removes the listing and enters fraud review. This protects buyers from misrepresentation while preserving seller convenience and preventing handovers from becoming informal shopping sessions.
