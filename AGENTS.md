@@ -12,4 +12,4 @@ Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-age
 
 ### Domain docs
 
-This is a single-context repository. See `docs/agents/domain.md`.
+This is a single-context repository; use root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
