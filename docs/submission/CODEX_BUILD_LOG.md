@@ -113,6 +113,47 @@ Codex helped stress-test the idea, identify contradictions and missing rules, co
 
 The documents were checked for consistency, structure, sensitive coordinates, and known formatting problems before the commit was created.
 
+### 2026-07-15 - Nearby listing publication and discovery
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Project owner and Codex
+- **Codex model:** Not recorded in repository evidence for this supporting task
+- **Model verification:** Not available; do not use this task as the required model proof
+- **Session ID:** Not captured; this is not the Primary Core Build Session
+- **Starting commit:** `a6a0e65`
+- **Ending implementation commit:** `f463932`
+- **Related commits:** `e586591`, `ed85776`, `f463932`
+- **Objective:** Implement GitHub issue #4 only: publish, manage, and discover one nearby portable-item listing in Demo Mode.
+
+#### Work completed
+
+- Added a pre-activated fictional seller workspace for publishing, editing, deactivating, and marking one cross-listed item unavailable.
+- Added required publication checks for approved categories, the five Condition Grades, fixed rupiah pricing, written disclosures, specifications, portable-item restrictions, three published item-photo records, complete-item coverage, and photo privacy.
+- Added shared buyer discovery with current simulated Browsing Location, rounded distance, the 2 km Discovery Radius, the permanent 10 km maximum, denied and unavailable states, and private location handling.
+- Added the five allowed Structured Questions and required sellers to answer by changing the shared listing rather than through private chat, contact exchange, negotiation, or off-platform arrangements.
+- Kept checkout, payments, identity activation, handover, and later lifecycle behavior out of this issue.
+
+#### Codex contribution
+
+Codex implemented the behavior test-first, used the repository impact graph before edits and commits, exercised the experience in a live browser, and coordinated separate standards and issue-specification reviews. The first review found weaknesses in photo truthfulness, defect disclosure, structured-question updates, and boundary labels; Codex added regression tests, fixed each issue, and sent the result back for closure audits. Both closure audits passed.
+
+#### Verification
+
+| Check | Result | Evidence |
+|---|---|---|
+| Type check | Passed | `npm run typecheck` |
+| Automated browser tests | Passed | `npm test` - 22 tests across phone and desktop projects |
+| Production build | Passed | `npm run build` |
+| Desktop visual check | Passed | Live Demo Mode walkthrough of publication, discovery, photo gallery, distance boundary, and structured-question behavior |
+| Phone visual check | Passed | Live 393 x 851 walkthrough; buyer and seller layouts remained readable and usable without nested scrolling or clipping |
+| GitNexus pre-commit checks | Passed | Expected files only; low risk; no affected execution flows |
+| Independent reviews | Passed after fixes | Separate standards and issue-specification closure audits at `f463932` |
+
+#### Outcome and follow-up
+
+Issue #4 is implemented and verified on `codex/issue-4-nearby-listing`. Checkout, payment, handover, real accounts, real listings, and real location collection remain intentionally deferred to their own issues.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.
