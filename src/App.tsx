@@ -1,8 +1,68 @@
 import { lazy, Suspense, useState } from "react";
+import VerifiedMemberExperience from "./VerifiedMemberExperience";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
-function RegistrationPanel({ onClose }: { onClose: () => void }) {
+function RegistrationPanel({
+  onClose,
+  onVerified,
+}: {
+  onClose: () => void;
+  onVerified: () => void;
+}) {
+  const [step, setStep] = useState<"registration" | "verification">("registration");
+  const [confirmed, setConfirmed] = useState(false);
+
+  if (step === "verification") {
+    return (
+      <div className="dialog-backdrop">
+        <section
+          aria-labelledby="verification-title"
+          aria-modal="true"
+          className="registration-panel"
+          role="dialog"
+        >
+          <button aria-label="Close verification" className="icon-button" onClick={onClose}>
+            ×
+          </button>
+          <p className="eyebrow">Identity Verification walkthrough · Simulation</p>
+          <h2 id="verification-title">Identity Verification walkthrough</h2>
+          <p className="panel-lead">
+            This simulated admission check shows how Jualokal establishes accountable
+            membership before marketplace access.
+          </p>
+          <div className="registration-note">
+            <span aria-hidden="true">!</span>
+            <p>
+              This is not a real identity check. Do not enter or upload real ID, selfies,
+              biometrics, passwords, payment methods, or other sensitive evidence.
+            </p>
+          </div>
+          <label className="verification-confirmation">
+            <input
+              checked={confirmed}
+              onChange={(event) => setConfirmed(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              I understand this is a simulation and will not provide real personal data.
+            </span>
+          </label>
+          <button
+            className="button button-primary"
+            disabled={!confirmed}
+            onClick={onVerified}
+          >
+            Complete simulated verification
+          </button>
+          <button className="text-button" onClick={() => setStep("registration")}>
+            Back to registration
+          </button>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="dialog-backdrop">
       <section
@@ -18,7 +78,7 @@ function RegistrationPanel({ onClose }: { onClose: () => void }) {
         <h2 id="registration-title">Begin registration</h2>
         <p className="panel-lead">
           Create your accountable membership before entering the private marketplace.
-          Identity Verification comes next in a future step.
+          Identity Verification comes next as a clearly simulated walkthrough.
         </p>
         <div className="registration-note">
           <span aria-hidden="true">✓</span>
@@ -27,8 +87,8 @@ function RegistrationPanel({ onClose }: { onClose: () => void }) {
             method, or physical location here.
           </p>
         </div>
-        <button className="button button-disabled" disabled>
-          Continue to Identity Verification · Coming next
+        <button className="button button-primary" onClick={() => setStep("verification")}>
+          Continue to simulated verification
         </button>
         <button className="text-button" onClick={onClose}>
           Back to the public explanation
@@ -41,6 +101,11 @@ function RegistrationPanel({ onClose }: { onClose: () => void }) {
 function App() {
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [memberVerified, setMemberVerified] = useState(false);
+
+  if (memberVerified) {
+    return <VerifiedMemberExperience onExit={() => setMemberVerified(false)} />;
+  }
 
   if (demoOpen) {
     return (
@@ -161,7 +226,15 @@ function App() {
         <span>Prototype · English / Indonesia</span>
       </footer>
 
-      {registrationOpen ? <RegistrationPanel onClose={() => setRegistrationOpen(false)} /> : null}
+      {registrationOpen ? (
+        <RegistrationPanel
+          onClose={() => setRegistrationOpen(false)}
+          onVerified={() => {
+            setRegistrationOpen(false);
+            setMemberVerified(true);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
