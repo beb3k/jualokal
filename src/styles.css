@@ -710,6 +710,40 @@ footer p {
   gap: 15px;
 }
 
+.listing-photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 9px;
+  margin-bottom: 24px;
+}
+
+.published-photo {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+  border: 1px solid rgba(23, 60, 43, 0.13);
+  border-radius: 14px;
+  padding: 13px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), transparent 58%),
+    #ead5b8;
+}
+
+.published-photo span {
+  color: #975125;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.published-photo strong {
+  color: #173c2b;
+  font-size: 0.78rem;
+}
+
 .listing-meta {
   color: #975125;
   font-size: 0.72rem;

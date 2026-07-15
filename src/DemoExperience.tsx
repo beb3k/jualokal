@@ -24,12 +24,12 @@ const prototypeDiscoveryRadiusKm = 2;
 const permanentDiscoveryMaximumKm = 10;
 
 const browsingLocations = [
-  { value: "0.85", label: "Current simulated location · 850 m" },
-  { value: "1.99", label: "Just inside the boundary · 1.99 km" },
-  { value: "2.00", label: "Exactly at the boundary · 2.00 km" },
-  { value: "2.01", label: "Just outside the boundary · 2.01 km" },
-  { value: "10.00", label: "Permanent-maximum test point · 10.00 km" },
-  { value: "10.01", label: "Beyond permanent maximum · 10.01 km" },
+  { value: "0.85", label: "Current simulated location · about 850 m" },
+  { value: "1.99", label: "Nearby boundary check" },
+  { value: "2.00", label: "Discovery-radius edge" },
+  { value: "2.01", label: "Outside discovery-radius check" },
+  { value: "10.00", label: "Permanent-maximum check" },
+  { value: "10.01", label: "Beyond permanent-maximum check" },
   { value: "denied", label: "Location permission denied" },
   { value: "unavailable", label: "Location unavailable" },
 ] as const;
@@ -42,6 +42,8 @@ type PublishedListing = {
   description: string;
   conditionDisclosure: string;
   specifications: string;
+  photos: string[];
+  photoPrivacyConfirmed: boolean;
 };
 
 type ListingStatus = "active" | "deactivated" | "cross-listed-unavailable";
@@ -54,6 +56,8 @@ const initialPublishedListing: PublishedListing = {
   description: demoListing.description,
   conditionDisclosure: "Light surface wear near the rim; the handle is secure.",
   specifications: "42 cm wide × 30 cm high; approximately 650 g.",
+  photos: ["Complete-item view", "Detail view", "Second detail view"],
+  photoPrivacyConfirmed: true,
 };
 
 function formatRupiah(price: number) {
@@ -77,8 +81,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [description, setDescription] = useState<string>(demoListing.description);
   const [specifications, setSpecifications] = useState(initialPublishedListing.specifications);
   const [itemType, setItemType] = useState("One portable item");
-  const [hasKnownDefects, setHasKnownDefects] = useState(false);
-  const [conditionDisclosure, setConditionDisclosure] = useState("No known defects.");
+  const [hasKnownDefects, setHasKnownDefects] = useState(true);
+  const [conditionDisclosure, setConditionDisclosure] = useState(
+    initialPublishedListing.conditionDisclosure,
+  );
   const [completePhotoIncluded, setCompletePhotoIncluded] = useState(true);
   const [detailPhotoIncluded, setDetailPhotoIncluded] = useState(true);
   const [secondDetailPhotoIncluded, setSecondDetailPhotoIncluded] = useState(true);
@@ -111,6 +117,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     }
 
     const numericPrice = Number(price);
+    const selectedPhotos = [
+      completePhotoIncluded ? "Complete-item view" : null,
+      detailPhotoIncluded ? "Detail view" : null,
+      secondDetailPhotoIncluded ? "Second detail view" : null,
+      defectPhotoIncluded ? "Defect view" : null,
+    ].filter((photo): photo is string => photo !== null);
     if (!Number.isInteger(numericPrice) || numericPrice <= 0) {
       errors.push("Add a fixed rupiah price");
     }
@@ -127,10 +139,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       errors.push("Add relevant measurements or specifications");
     }
 
-    if (!detailPhotoIncluded) {
-      errors.push("Add at least three actual-item photos");
-    }
-
     if (!approvedCategories.includes(category as (typeof approvedCategories)[number])) {
       errors.push("Choose an approved category");
     }
@@ -143,7 +151,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       errors.push("List one portable item only");
     }
 
-    if (hasKnownDefects && !conditionDisclosure.trim()) {
+    const normalizedDisclosure = conditionDisclosure
+      .trim()
+      .toLowerCase()
+      .replace(/[.!]+$/, "");
+    if (
+      hasKnownDefects &&
+      (!normalizedDisclosure || normalizedDisclosure === "no known defects")
+    ) {
       errors.push("Describe every known defect in writing; a photo cannot replace it");
     }
 
@@ -151,12 +166,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       errors.push("Include at least one complete-item photo");
     }
 
-    const photoCount = [
-      completePhotoIncluded,
-      detailPhotoIncluded,
-      secondDetailPhotoIncluded,
-    ].filter(Boolean).length;
-    if (photoCount < 3 && !errors.includes("Add at least three actual-item photos")) {
+    if (selectedPhotos.length < 3) {
       errors.push("Add at least three actual-item photos");
     }
 
@@ -164,14 +174,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       errors.push("Confirm photos exclude private details and location metadata");
     }
 
-    setPublicationErrors(errors);
     setPublicationNotice("");
 
     if (errors.length) {
+      setPublicationErrors(errors);
       return;
     }
 
-    setPublishedListing({
+    const nextPublishedListing: PublishedListing = {
       title: title.trim(),
       category,
       conditionGrade,
@@ -179,7 +189,22 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       description: description.trim(),
       conditionDisclosure: conditionDisclosure.trim(),
       specifications: specifications.trim(),
-    });
+      photos: selectedPhotos,
+      photoPrivacyConfirmed,
+    };
+
+    if (
+      pendingQuestion &&
+      JSON.stringify(nextPublishedListing) === JSON.stringify(publishedListing)
+    ) {
+      setPublicationErrors([
+        "Change at least one shared listing detail to answer this request",
+      ]);
+      return;
+    }
+
+    setPublicationErrors([]);
+    setPublishedListing(nextPublishedListing);
     setListingStatus("active");
     setManagementNotice("");
     setPublicationNotice("Listing published");
@@ -314,7 +339,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             hidden={!listingIsDiscoverable}
           >
             <div
-              aria-label="Fictional illustration of a rattan market basket"
+              aria-label="Synthetic fallback illustration, not an item photo"
               className="listing-art"
               role="img"
             >
@@ -331,6 +356,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </span>
             </div>
             <div className="listing-body">
+              <section aria-label="Published item photos" className="listing-photo-gallery">
+                {publishedListing.photos.map((photo, index) => (
+                  <div
+                    aria-label={`Fictional simulated item photo ${index + 1}: ${photo}`}
+                    className="published-photo"
+                    key={photo}
+                    role="img"
+                  >
+                    <span>Fictional simulated item photo {index + 1}</span>
+                    <strong>{photo}</strong>
+                  </div>
+                ))}
+              </section>
               <div className="listing-meta">
                 <span>{publishedListing.category}</span>
                 <span>{formatRoundedDistance(browsingDistanceKm)}</span>
@@ -344,7 +382,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 <strong>Measurements / specifications:</strong> {publishedListing.specifications}
               </p>
               <p className="listing-description">
-                3 item photos · complete-item view included · location metadata removed
+                {publishedListing.photos.length} item photos · complete-item view included ·{" "}
+                {publishedListing.photoPrivacyConfirmed
+                  ? "location metadata removed"
+                  : "photo privacy not confirmed"}
               </p>
               <div className="listing-facts">
                 <span>

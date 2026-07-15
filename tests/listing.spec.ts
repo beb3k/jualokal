@@ -27,7 +27,7 @@ test("seller cannot publish an unsafe or incompletely disclosed item", async ({ 
   await page.getByLabel("Item type").selectOption("Bundle");
   await page.getByLabel("This item has known defects").check();
   await page.getByLabel("Defect photo (optional supplement)").check();
-  await page.getByLabel("Condition Disclosure").fill("");
+  await page.getByLabel("Condition Disclosure").fill("No known defects.");
   await page.getByLabel("Complete-item photo").uncheck();
   await page.getByLabel("Photos exclude private details and location metadata").uncheck();
   await page.getByRole("button", { name: "Publish listing" }).click();
@@ -89,12 +89,15 @@ test("seller publishes one complete portable-item listing for buyer discovery", 
   await page
     .getByLabel("Description")
     .fill("A quiet secondhand fan for a study desk, with three speed settings.");
+  await page.getByLabel("This item has known defects").check();
   await page
     .getByLabel("Condition Disclosure")
-    .fill("Light scuff on the rear grille; tested and working on all speeds.");
+    .fill("A light scuff on the base is shown in the defect photo.");
   await page
     .getByLabel("Measurements or specifications")
     .fill("30 cm high × 22 cm wide; 220 V; 1.4 m cable.");
+  await page.getByLabel("Second detail photo").uncheck();
+  await page.getByLabel("Defect photo (optional supplement)").check();
   await page.getByRole("button", { name: "Publish listing" }).click();
 
   await expect(page.getByText("Listing published")).toBeVisible();
@@ -105,8 +108,14 @@ test("seller publishes one complete portable-item listing for buyer discovery", 
   await expect(listing.getByText("Rp 275.000")).toBeVisible();
   await expect(listing.getByText("Very Good")).toBeVisible();
   await expect(listing.getByText(/30 cm high × 22 cm wide/)).toBeVisible();
-  await expect(listing.getByText(/Light scuff on the rear grille/)).toBeVisible();
+  await expect(listing.getByText(/light scuff on the base/i)).toBeVisible();
   await expect(listing.getByText("3 item photos")).toBeVisible();
+  const photos = listing.getByRole("region", { name: "Published item photos" });
+  await expect(photos.getByRole("img")).toHaveCount(3);
+  await expect(photos).toContainText("Complete-item view");
+  await expect(photos).toContainText("Detail view");
+  await expect(photos).toContainText("Defect view");
+  await expect(photos).not.toContainText("Second detail view");
   await expect(listing.getByText(/Synthetic fallback image/)).toBeVisible();
 });
 
@@ -164,6 +173,11 @@ test("structured questions are answered only through a shared listing update", a
   await page.getByRole("button", { name: "Seller workspace" }).click();
   const request = page.getByRole("region", { name: "Structured Question Request" });
   await expect(request).toContainText("Measurements");
+  await page.getByRole("button", { name: "Update shared listing" }).click();
+  await expect(
+    page.getByRole("alert", { name: "Listing publication errors" }),
+  ).toContainText("Change at least one shared listing detail to answer this request");
+  await expect(request).toBeVisible();
   await page
     .getByLabel("Measurements or specifications")
     .fill("42 cm wide × 31 cm high; approximately 650 g.");
@@ -182,6 +196,8 @@ test("discovery enforces location availability, privacy, and distance boundaries
 
   const location = page.getByLabel("Simulated Browsing Location");
   const listing = page.getByRole("region", { name: "Demo Listing" });
+  const locationLabels = await location.locator("option").allTextContents();
+  expect(locationLabels.join(" ")).not.toMatch(/1\.99|2\.00|2\.01|10\.00|10\.01/);
 
   await location.selectOption("1.99");
   await expect(listing).toBeVisible();
