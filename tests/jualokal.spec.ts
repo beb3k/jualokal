@@ -1,4 +1,18 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function enterVerifiedMember(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Continue to simulated verification" }).click();
+
+  const verification = page.getByRole("dialog", {
+    name: "Identity Verification walkthrough",
+  });
+  await verification
+    .getByRole("checkbox", { name: /I understand this is a simulation/i })
+    .check();
+  await verification.getByRole("button", { name: "Complete simulated verification" }).click();
+}
 
 test("public visitors can understand Jualokal and begin registration without seeing a listing", async ({
   page,
@@ -86,16 +100,7 @@ test("completed verification creates a buyer-only Verified Member", async ({ pag
 });
 
 test("Public Identity exposes only the permitted name and Trust Summary", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Begin registration" }).click();
-  await page.getByRole("button", { name: "Continue to simulated verification" }).click();
-  const verification = page.getByRole("dialog", {
-    name: "Identity Verification walkthrough",
-  });
-  await verification
-    .getByRole("checkbox", { name: /I understand this is a simulation/i })
-    .check();
-  await verification.getByRole("button", { name: "Complete simulated verification" }).click();
+  await enterVerifiedMember(page);
 
   const publicIdentity = page.getByRole("region", { name: "Public Identity" });
   await expect(publicIdentity).toBeVisible();
@@ -120,16 +125,7 @@ test("Public Identity exposes only the permitted name and Trust Summary", async 
 test("Seller Activation stays separate and requires all three private confirmations", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Begin registration" }).click();
-  await page.getByRole("button", { name: "Continue to simulated verification" }).click();
-  const verification = page.getByRole("dialog", {
-    name: "Identity Verification walkthrough",
-  });
-  await verification
-    .getByRole("checkbox", { name: /I understand this is a simulation/i })
-    .check();
-  await verification.getByRole("button", { name: "Complete simulated verification" }).click();
+  await enterVerifiedMember(page);
 
   const sellerActivation = page.getByRole("region", { name: "Seller Activation" });
   await expect(sellerActivation).toContainText("Not activated");

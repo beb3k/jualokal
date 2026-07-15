@@ -11,7 +11,7 @@ function RegistrationPanel({
   onVerified: () => void;
 }) {
   const [step, setStep] = useState<"registration" | "verification">("registration");
-  const [confirmed, setConfirmed] = useState(false);
+  const [simulationAcknowledged, setSimulationAcknowledged] = useState(false);
 
   if (step === "verification") {
     return (
@@ -40,8 +40,8 @@ function RegistrationPanel({
           </div>
           <label className="verification-confirmation">
             <input
-              checked={confirmed}
-              onChange={(event) => setConfirmed(event.target.checked)}
+              checked={simulationAcknowledged}
+              onChange={(event) => setSimulationAcknowledged(event.target.checked)}
               type="checkbox"
             />
             <span>
@@ -50,7 +50,7 @@ function RegistrationPanel({
           </label>
           <button
             className="button button-primary"
-            disabled={!confirmed}
+            disabled={!simulationAcknowledged}
             onClick={onVerified}
           >
             Complete simulated verification
