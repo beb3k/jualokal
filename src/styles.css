@@ -40,24 +40,28 @@ a:focus-visible {
 }
 
 .public-shell,
-.demo-shell {
+.demo-shell,
+.member-shell {
   min-height: 100vh;
   overflow: clip;
 }
 
 .site-header,
 .demo-header,
+.member-header,
 .hero,
 .principles,
 .demo-invitation,
 footer,
-.demo-main {
+.demo-main,
+.member-main {
   width: min(1180px, calc(100% - 32px));
   margin-inline: auto;
 }
 
 .site-header,
-.demo-header {
+.demo-header,
+.member-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -102,6 +106,11 @@ footer,
     background-color 160ms ease;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .button:hover:not(:disabled) {
   transform: translateY(-2px);
 }
@@ -124,7 +133,7 @@ footer,
   box-shadow: 0 12px 30px rgba(23, 60, 43, 0.17);
 }
 
-.button-primary:hover {
+.button-primary:hover:not(:disabled) {
   background: #22543d;
 }
 
@@ -392,6 +401,8 @@ footer p {
 .registration-panel {
   position: relative;
   width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
   border-radius: 30px;
   padding: 38px;
   background: #f8f5ed;
@@ -437,13 +448,6 @@ footer p {
   margin: 0;
 }
 
-.button-disabled {
-  width: 100%;
-  color: #89928d;
-  background: #e2e3df;
-  cursor: not-allowed;
-}
-
 .text-button {
   border: 0;
   padding: 13px 0;
@@ -457,6 +461,256 @@ footer p {
 .registration-panel .text-button {
   display: block;
   margin: 8px auto 0;
+}
+
+.verification-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 22px;
+  border: 1px solid rgba(23, 60, 43, 0.14);
+  border-radius: 16px;
+  padding: 15px;
+  color: #355144;
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.verification-confirmation input,
+.activation-requirements input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: #173c2b;
+}
+
+.registration-panel > .button-primary {
+  width: 100%;
+}
+
+.member-shell {
+  color: #17251e;
+  background:
+    radial-gradient(circle at 92% 2%, rgba(217, 142, 62, 0.15), transparent 28rem),
+    #f3f0e8;
+}
+
+.member-header {
+  padding: 22px 0;
+}
+
+.member-main {
+  display: grid;
+  gap: 24px;
+  padding: 42px 0 80px;
+}
+
+.member-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 30px;
+  border-radius: 32px;
+  padding: 42px;
+  color: #f7f1e5;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 58%),
+    #173c2b;
+  box-shadow: 0 24px 60px rgba(23, 60, 43, 0.16);
+}
+
+.member-hero h1 {
+  margin: 8px 0 12px;
+  color: inherit;
+  font-size: clamp(3rem, 7vw, 5.7rem);
+}
+
+.member-hero p:not(.eyebrow) {
+  max-width: 680px;
+  margin: 0;
+  color: #d9e2d9;
+  line-height: 1.65;
+}
+
+.member-status {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 10px 14px;
+  color: #f6e4c6;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.member-card {
+  border: 1px solid rgba(23, 60, 43, 0.1);
+  border-radius: 26px;
+  padding: 30px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 14px 42px rgba(23, 60, 43, 0.06);
+}
+
+.member-card h2 {
+  margin: 5px 0 10px;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.member-card p {
+  color: #5d6c64;
+  line-height: 1.6;
+}
+
+.member-card-heading,
+.seller-activation-card,
+.public-identity-profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #6b5c42;
+  background: #eee6d7;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-success {
+  color: #24523b;
+  background: #dbe9dd;
+}
+
+.access-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.access-status-grid article,
+.trust-summary article {
+  border-radius: 18px;
+  padding: 18px;
+  background: #eef0e8;
+}
+
+.access-status-grid small,
+.access-status-grid strong,
+.trust-summary small,
+.trust-summary strong {
+  display: block;
+}
+
+.access-status-grid small,
+.trust-summary small {
+  margin-bottom: 7px;
+  color: #76847c;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.access-status-grid p {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+}
+
+.public-identity-profile {
+  justify-content: flex-start;
+}
+
+.public-identity-avatar {
+  display: grid;
+  flex: none;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border-radius: 22px;
+  color: #f8f2e7;
+  background: #b55e31;
+  font-weight: 850;
+}
+
+.profile-picture-status {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.profile-picture-status strong {
+  color: #315846;
+}
+
+.trust-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.trust-summary strong {
+  font-size: 0.88rem;
+}
+
+.seller-activation-card > div:first-child {
+  max-width: 720px;
+}
+
+.seller-activation-action {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  gap: 12px;
+}
+
+.seller-activation-panel {
+  width: min(660px, 100%);
+}
+
+.activation-requirements {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0;
+  border: 0;
+  padding: 0;
+}
+
+.activation-requirements legend {
+  margin-bottom: 10px;
+  color: #315846;
+  font-weight: 800;
+}
+
+.activation-requirements label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid rgba(23, 60, 43, 0.12);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.activation-requirements strong,
+.activation-requirements small {
+  display: block;
+}
+
+.activation-requirements small {
+  margin-top: 4px;
+  color: #6c7972;
+  line-height: 1.45;
 }
 
 .loading {
@@ -836,16 +1090,19 @@ footer p {
 @media (max-width: 680px) {
   .site-header,
   .demo-header,
+  .member-header,
   .hero,
   .principles,
   .demo-invitation,
   footer,
-  .demo-main {
+  .demo-main,
+  .member-main {
     width: min(100% - 24px, 1180px);
   }
 
   .site-header,
-  .demo-header {
+  .demo-header,
+  .member-header {
     padding-block: 15px;
   }
 
@@ -914,6 +1171,49 @@ footer p {
     overflow-y: auto;
     border-radius: 24px;
     padding: 28px 22px;
+  }
+
+  .member-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .member-header .button {
+    max-width: 150px;
+    min-height: 40px;
+    padding-inline: 13px;
+  }
+
+  .member-main {
+    gap: 16px;
+    padding: 24px 0 55px;
+  }
+
+  .member-hero,
+  .member-card-heading,
+  .seller-activation-card {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .member-hero,
+  .member-card {
+    border-radius: 22px;
+    padding: 24px 20px;
+  }
+
+  .member-status {
+    width: fit-content;
+    white-space: normal;
+  }
+
+  .access-status-grid,
+  .trust-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .seller-activation-action {
+    justify-items: stretch;
   }
 
   .registration-panel h2 {
