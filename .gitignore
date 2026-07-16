@@ -1,0 +1,9 @@
+# Local GitNexus index and generated Claude integration
+.gitnexus/
+CLAUDE.md
+.claude/skills/gitnexus/
+
+# Generated dependencies, builds, and test output
+node_modules/
+dist/
+test-results/
