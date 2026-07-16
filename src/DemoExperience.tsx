@@ -238,7 +238,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         <span className="simulation-pill">
           <span aria-hidden="true">●</span> Demo Mode · Simulation
         </span>
-        <p>Accounts, listing, location, identity status, and activity are fictional.</p>
+        <p>
+          Accounts, listing, location, identity status, and activity are fictional.
+          Fictional pre-verified accounts enter directly; normal admission uses the separate
+          simulated Identity Verification walkthrough.
+        </p>
       </div>
 
       <header className="demo-header">

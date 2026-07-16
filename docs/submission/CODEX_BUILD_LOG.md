@@ -153,6 +153,40 @@ Codex implemented the behavior test-first, used the repository impact graph befo
 #### Outcome and follow-up
 
 Issue #4 is implemented and verified on `codex/issue-4-nearby-listing`. Checkout, payment, handover, real accounts, real listings, and real location collection remain intentionally deferred to their own issues.
+### 2026-07-15 - Protected marketplace admission and Seller Activation
+
+- **Session role:** Implementation and testing
+- **Primary Core Build Session:** No - supporting issue slice
+- **Team participants:** Jualokal maintainer and Codex
+- **Codex model:** Not recorded in repository evidence
+- **Model verification:** Not captured; this session is not designated as the Primary Core Build Session
+- **Starting commit:** a6a0e65 - merged issue #2 foundation
+- **Ending commit:** dd3fdc1 - feat: protect marketplace access and activate sellers (#3)
+- **Related issue:** #3
+- **Objective:** Add the admission boundary, simulated Identity Verification, privacy-safe Public Identity, buyer-only Verified Member state, and separate Seller Activation without implementing listing, discovery, Demo expansion, checkout, or transaction behavior.
+
+#### Work completed
+
+- Kept normal marketplace access blocked throughout incomplete verification
+- Added an explicit simulated Identity Verification walkthrough that requests no real identity, credential, payment, contact, or location data
+- Added buyer-only Verified Member access with a limited Public Identity and Trust Summary
+- Added separate Seller Activation gated by protected Home Anchor confirmation, simulated payout confirmation, and acceptance of selling and handover rules
+- Kept Demo Mode credential-free and distinguished its fictional pre-verified accounts from normal admission
+
+#### Verification
+
+- Type checking passed with npm run typecheck
+- Production build passed with Vite output isolated outside the repository
+- All 16 Playwright runs passed across Pixel 5 and desktop browser projects
+- Live browser checks passed at 393 x 851 and 1440 x 900 for registration, verification, membership, Public Identity, Seller Activation, and Demo Mode
+- Browser console inspection reported no errors
+- Privacy checks found no real identity data, contacts, precise locations, Home Anchor values, payout details, or money
+
+#### Deferred by scope
+
+- Listing creation, management, questions, and discovery remain in issue #4
+- Expanded Demo Mode data, switching, reset, and isolation remain in issue #5
+- Checkout, payment, and transaction behavior remain deferred to later tickets
 
 ## Supporting session template
 
