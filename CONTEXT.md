@@ -61,7 +61,7 @@ A Verified Member who has completed Seller Activation and may create listings. D
 _Avoid_: Vendor, merchant, shop
 
 **Home Anchor**:
-The seller's precise private location used only to enforce the Seller Convenience Zone and calculate approximate distance. A consenting real account may use its real location in protected private data; Demo Sellers use fictional locations. A Home Anchor is never committed to the repository or exposed in documentation, screenshots, public demo data, or to other members.
+The seller's precise private location used only to enforce the Seller Convenience Zone, apply the Discovery Radius, derive the buyer-visible Distance Band, and establish the Seller Discovery Marker. A consenting real account may use its real location in protected private data; Demo Sellers use fictional locations. A Home Anchor is never committed to the repository or exposed in documentation, screenshots, public demo data, or to other members.
 _Avoid_: Home address, public location, demo coordinate
 
 **Pilot Area**:
@@ -69,16 +69,52 @@ The deliberately small private seed market selected by the builders. Its exact s
 _Avoid_: Launch city, service region
 
 **Discovery Radius**:
-The maximum straight-line distance from a buyer's current device location within which listings are visible. It is 2 km during the prototype and may vary by market later, but must never exceed 10 km. Buyers see rounded distance rather than a seller's Home Anchor.
-_Avoid_: Delivery radius, Seller Convenience Zone, 20 km radius
+The maximum straight-line distance from a buyer's current Browsing Location within which listings may be visible. It is fixed at 2 km during the prototype; Jualokal may configure a different fixed radius for a future market, but a buyer cannot adjust it and it must never exceed 10 km.
+_Avoid_: Delivery radius, Seller Convenience Zone, buyer-adjustable radius, 20 km radius
+
+**Distance Band**:
+The broad buyer-visible range derived privately from the straight-line distance between the buyer's Browsing Location and the Seller's protected Home Anchor. The prototype uses only **Under 1 km** and **1-2 km**; exact distance and distance from the Seller Discovery Marker are not shown.
+_Avoid_: Exact distance, rounded distance, marker distance, travel distance
 
 **Browsing Location**:
-The buyer's precise current device location read only while the app is in use to apply the Discovery Radius. It is required to view listings, never shown to sellers, and never retained as browsing-location history. Demo accounts use a simulated Browsing Location.
-_Avoid_: Buyer Home Anchor, saved search location, location history
+The point-in-time snapshot of the buyer's precise device location used to apply the Discovery Radius and derive Distance Bands; it is required to view listings, obtained on marketplace entry, and replaced only when the member explicitly refreshes nearby listings. It is never continuously tracked, shown to Sellers, or retained as location history; Demo accounts use a simulated Browsing Location under the same explicit-refresh model.
+_Avoid_: Buyer Home Anchor, live location, continuous tracking, saved search location, location history
 
 **Seller Convenience Zone**:
 The private area within 1 km straight-line distance of the seller's Home Anchor in which the seller may choose a Handover Point. Buyers never see the Home Anchor or zone boundary. If a seller explicitly chooses their front gate for a Trusted Buyer, that exact point is disclosed temporarily for that transaction.
 _Avoid_: Meetup radius, buyer travel range
+
+**Seller Discovery Marker**:
+The stable map marker that represents a Seller in a coarse shared area rather than at a property-level point; it appears to a Verified Member only while that Seller has at least one Discoverable Listing for that member, and selecting it opens a Seller Preview. Its placement is established within the hidden Seller Convenience Zone, is the same for all eligible members who can see it, may share its area with other Sellers, and is neither a Home Anchor, current position, Handover Point, nor promised meeting place; visually it uses the Seller's optional profile picture or, on a stable neutral background, one initial for a mononymous Public Identity or the first-name and verified last initials otherwise, never uses a Listing Photograph or generated likeness, and may carry a small badge counting that Seller's currently filtered Discoverable Listings rather than Sellers.
+_Avoid_: Seller location, home pin, live location, pickup point
+
+**Seller Marker Group**:
+The discovery-map representation used when multiple visible Seller Discovery Markers overlap or share a coarse area. Its badge counts represented Sellers rather than their combined Listings, and its accessible label identifies that meaning without implying that they share a Home Anchor, household, business, or exact location.
+_Avoid_: Seller cluster, shared location, household marker, shop marker
+
+**Seller Preview**:
+The Seller-focused discovery view opened from a Seller Discovery Marker or from the Seller's Public Identity in List View; when opened from Map View, it remains map-anchored and preserves the map context. It shows the Seller's permitted Public Identity, the buyer-specific Distance Band, and only the Seller's Discoverable Listings for that member; selecting a listing opens the full listing.
+_Avoid_: Seller profile, storefront, shop, complete inventory
+
+**Discovery View**:
+The member-selected Map or List presentation of the same Discoverable Listings and Distance Bands; Map organizes discovery around Sellers through Seller Discovery Markers and Seller Previews, while List is listing-first and presents one card per Discoverable Listing with its Seller's Public Identity. Map is the default on the first marketplace entry after Identity Verification and at the start or reset of Demo Mode; after a member explicitly switches views, Jualokal remembers only that choice, while both views still require a Browsing Location and the preference retains neither map position, viewport history, nor location history.
+_Avoid_: Separate marketplace, location-free List, saved map session
+
+**Map Fallback**:
+The session-only use of List View when Map View cannot render while the Browsing Location and discovery results remain valid. It preserves the current Category Filter, Discoverable Listings, and Distance Bands, shows a notice with a map-retry option, does not replace the member's saved Discovery View preference, and never bypasses the Browsing Location requirement.
+_Avoid_: Location fallback, permanent List preference, location-free browsing
+
+**List View Order**:
+The default sequence of Discoverable Listings in List View: **Under 1 km** before **1-2 km**, then Original Publication Time newest first within each Distance Band. It never ranks by exact Home Anchor distance, Seller Discovery Marker geometry, Checkout Hold status, or personalized relevance.
+_Avoid_: Nearest-first feed, recently updated order, personalized feed
+
+**Category Filter**:
+The prototype discovery control that shows all Discoverable Listings or limits both Discovery Views to one approved category: Clothing, Accessories, Small Electronics, Books, Toys, Hobby Equipment, or Portable Household Goods. A Seller remains represented on the map only when the filtered results contain at least one of that Seller's Discoverable Listings; clearing the filter restores all categories.
+_Avoid_: Search, advanced filter, multi-category filter, saved search
+
+**Nearby Empty State**:
+The state shown when the Browsing Location is valid, discovery succeeds with the Category Filter set to **All**, and no Discoverable Listings are found. It says **No nearby listings yet**, offers **Refresh nearby listings** as the primary action and **Sell an item nearby** as a secondary action leading to Seller Activation or listing creation, is not used for category-only empty results or location, service, or map failure, and never widens the Discovery Radius.
+_Avoid_: Category empty state, location error, Map Fallback, expanded-radius results
 
 ### Buyer trust
 
@@ -171,8 +207,16 @@ _Avoid_: Quality score, star rating, seller opinion
 An image of the specific listed item. Every listing requires at least three, including one complete-item view; stock replacements and deceptive edits are prohibited. Known defects require written disclosure, while a defect photograph remains optional.
 _Avoid_: Stock photo, catalogue image, mandatory defect photo
 
+**Original Publication Time**:
+The fixed time when a listing was first published. Editing the listing, answering a Structured Question Request, reactivating it, or placing it under a Checkout Hold does not change this time.
+_Avoid_: Last-updated time, bump time, reactivation time
+
+**Discoverable Listing**:
+A listing that may be shown to a particular Verified Member after Jualokal applies the current access, ownership, Browsing Location, Discovery Radius, and listing-state rules; a Listing published by that same member is never discoverable to them, remains available through seller management, and may have a read-only buyer-view preview with no discovery or transaction actions. Discoverability does not guarantee checkout availability: a listing under a Checkout Hold remains discoverable, while a purchased, deactivated, paused, or removed listing does not.
+_Avoid_: Available Listing, nearby item, active inventory
+
 **Checkout Hold**:
-The five-minute temporary claim created when a buyer starts checkout for a single-item listing. Other buyers cannot begin checkout during the hold. Successful payment converts it into a Purchase Commitment; failed, abandoned, or timed-out checkout returns the listing to sale without taking money or counting as a purchase.
+The five-minute temporary claim created when a buyer who is not the Listing's Seller starts checkout for a single-item listing. Other buyers cannot begin checkout during the hold. Successful payment converts it into a Purchase Commitment; failed, abandoned, or timed-out checkout returns the listing to sale without taking money or counting as a purchase.
 _Avoid_: Reservation, pending purchase, escrow
 
 **Transaction Price**:
