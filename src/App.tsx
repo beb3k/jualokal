@@ -204,8 +204,9 @@ function App() {
           </div>
           <div className="invitation-copy">
             <p>
-              Demo Mode opens immediately with one fictional buyer, seller, and item in an
-              Indonesian setting. Nothing shown is a real account or real marketplace activity.
+              Demo Mode opens immediately with three fictional buyers, five fictional sellers,
+              and 25 simulated listings in an Indonesian setting. Each browser session is
+              isolated and resettable; nothing shown is real marketplace activity.
             </p>
             <button className="button button-light" onClick={() => setDemoOpen(true)}>
               Open the fictional demo
