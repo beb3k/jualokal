@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { demoBuyer, demoListing, demoSeller } from "./demo-data";
+import {
+  demoBuyer,
+  demoBuyers,
+  demoListing,
+  demoListings,
+  demoSeller,
+  demoSellers,
+  type DemoListingSeed,
+} from "./demo-data";
 
 const approvedCategories = [
   "Clothing",
@@ -48,6 +56,21 @@ type PublishedListing = {
 
 type ListingStatus = "active" | "deactivated" | "cross-listed-unavailable";
 
+type SessionListing = DemoListingSeed & {
+  status: ListingStatus;
+  photos: string[];
+  photoPrivacyConfirmed: boolean;
+};
+
+function createInitialSessionListings(): SessionListing[] {
+  return demoListings.map((listing) => ({
+    ...listing,
+    status: "active",
+    photos: ["Complete-item view", "Detail view", "Second detail view"],
+    photoPrivacyConfirmed: true,
+  }));
+}
+
 const initialPublishedListing: PublishedListing = {
   title: demoListing.title,
   category: demoListing.category,
@@ -73,7 +96,13 @@ function formatRoundedDistance(distanceKm: number) {
 }
 
 function DemoExperience({ onExit }: { onExit: () => void }) {
-  const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller">("buyer");
+  const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller" | "inventory">("buyer");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(demoBuyer.id);
+  const [sessionListings, setSessionListings] = useState<SessionListing[]>(
+    createInitialSessionListings,
+  );
+  const [selectedListingId, setSelectedListingId] = useState(demoListing.id);
+  const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [title, setTitle] = useState<string>(demoListing.title);
   const [category, setCategory] = useState<string>(demoListing.category);
   const [conditionGrade, setConditionGrade] = useState<string>(demoListing.condition);
@@ -97,18 +126,89 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [listingStatus, setListingStatus] = useState<ListingStatus>("active");
   const [managementNotice, setManagementNotice] = useState("");
   const [selectedQuestion, setSelectedQuestion] = useState<string>(structuredQuestions[0]);
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    listingId: string;
+    question: string;
+  } | null>(null);
   const [questionUpdateNotice, setQuestionUpdateNotice] = useState("");
   const [browsingLocation, setBrowsingLocation] = useState("0.85");
+  const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
+  const selectedSeller = demoSellers.find(
+    (seller) => seller.id === selectedAccountId,
+  );
+  const selectedSellerListings = selectedSeller
+    ? sessionListings.filter((listing) => listing.sellerId === selectedSeller.id)
+    : [];
+  const selectedSessionListing = sessionListings.find(
+    (listing) => listing.id === selectedListingId,
+  );
+  const selectedListingSeller =
+    demoSellers.find((seller) => seller.id === selectedSessionListing?.sellerId) ?? demoSeller;
+  const activeListingCount = sessionListings.filter(
+    (listing) => listing.status === "active",
+  ).length;
+  const selectedPendingQuestion =
+    pendingQuestion?.listingId === selectedListingId ? pendingQuestion.question : null;
 
   const browsingDistanceKm = Number(browsingLocation);
   const browsingLocationIsAvailable = Number.isFinite(browsingDistanceKm);
+  const selectedListingDistanceKm =
+    browsingLocation === "0.85"
+      ? (selectedSessionListing?.distanceKm ?? browsingDistanceKm)
+      : browsingDistanceKm;
   const listingIsDiscoverable =
     listingStatus === "active" &&
     browsingLocationIsAvailable &&
-    browsingDistanceKm <= prototypeDiscoveryRadiusKm &&
-    browsingDistanceKm <= permanentDiscoveryMaximumKm;
+    selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
+    selectedListingDistanceKm <= permanentDiscoveryMaximumKm;
+  const visibleDemoListings = browsingLocationIsAvailable
+    ? sessionListings.filter((listing) => {
+        const distanceKm =
+          browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
+        return (
+          listing.status === "active" &&
+          distanceKm <= prototypeDiscoveryRadiusKm &&
+          distanceKm <= permanentDiscoveryMaximumKm
+        );
+      })
+    : [];
 
+
+  function loadListingForEditing(listing: SessionListing) {
+    setSelectedListingId(listing.id);
+    setTitle(listing.title);
+    setCategory(listing.category);
+    setConditionGrade(listing.condition);
+    setPrice(String(listing.price));
+    setDescription(listing.description);
+    setSpecifications(listing.specifications);
+    setItemType("One portable item");
+    setHasKnownDefects(
+      !listing.conditionDisclosure.toLowerCase().startsWith("no known defects"),
+    );
+    setConditionDisclosure(listing.conditionDisclosure);
+    setCompletePhotoIncluded(listing.photos.includes("Complete-item view"));
+    setDetailPhotoIncluded(listing.photos.includes("Detail view"));
+    setSecondDetailPhotoIncluded(listing.photos.includes("Second detail view"));
+    setDefectPhotoIncluded(listing.photos.includes("Defect view"));
+    setPhotoPrivacyConfirmed(listing.photoPrivacyConfirmed);
+    setPublishedListing({
+      title: listing.title,
+      category: listing.category,
+      conditionGrade: listing.condition,
+      price: listing.price,
+      description: listing.description,
+      conditionDisclosure: listing.conditionDisclosure,
+      specifications: listing.specifications,
+      photos: listing.photos,
+      photoPrivacyConfirmed: listing.photoPrivacyConfirmed,
+    });
+    setListingStatus(listing.status);
+    setPublicationErrors([]);
+    setPublicationNotice("");
+    setManagementNotice("");
+    setQuestionUpdateNotice("");
+  }
   function publishListing() {
     const errors = [];
 
@@ -194,7 +294,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     };
 
     if (
-      pendingQuestion &&
+      selectedPendingQuestion &&
       JSON.stringify(nextPublishedListing) === JSON.stringify(publishedListing)
     ) {
       setPublicationErrors([
@@ -205,31 +305,100 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
     setPublicationErrors([]);
     setPublishedListing(nextPublishedListing);
+    setSessionListings((currentListings) =>
+      currentListings.map((listing) =>
+        listing.id === selectedListingId
+          ? {
+              ...listing,
+              title: nextPublishedListing.title,
+              category: nextPublishedListing.category as SessionListing["category"],
+              condition: nextPublishedListing.conditionGrade as SessionListing["condition"],
+              price: nextPublishedListing.price,
+              description: nextPublishedListing.description,
+              conditionDisclosure: nextPublishedListing.conditionDisclosure,
+              specifications: nextPublishedListing.specifications,
+              photos: nextPublishedListing.photos,
+              photoPrivacyConfirmed: nextPublishedListing.photoPrivacyConfirmed,
+              status: "active",
+            }
+          : listing,
+      ),
+    );
     setListingStatus("active");
     setManagementNotice("");
-    setPublicationNotice("Listing published");
+    setPublicationNotice("Listing published - simulated activity");
 
-    if (pendingQuestion) {
-      setQuestionUpdateNotice(`Shared listing updated for ${pendingQuestion}`);
+    if (selectedPendingQuestion) {
+      setQuestionUpdateNotice(
+        `Shared listing updated for ${selectedPendingQuestion} - simulated activity`,
+      );
       setPendingQuestion(null);
     }
   }
 
   function deactivateListing() {
     setListingStatus("deactivated");
+    setSessionListings((currentListings) =>
+      currentListings.map((listing) =>
+        listing.id === selectedListingId
+          ? { ...listing, status: "deactivated" }
+          : listing,
+      ),
+    );
     setPublicationNotice("");
-    setManagementNotice("Listing deactivated");
+    setManagementNotice("Listing deactivated - simulated activity");
   }
 
   function markCrossListedUnavailable() {
     setListingStatus("cross-listed-unavailable");
+    setSessionListings((currentListings) =>
+      currentListings.map((listing) =>
+        listing.id === selectedListingId
+          ? { ...listing, status: "cross-listed-unavailable" }
+          : listing,
+      ),
+    );
     setPublicationNotice("");
-    setManagementNotice("Cross-listed item marked unavailable");
+    setManagementNotice("Cross-listed item marked unavailable - simulated activity");
   }
 
   function requestListingUpdate() {
-    setPendingQuestion(selectedQuestion);
+    setPendingQuestion({
+      listingId: selectedListingId,
+      question: selectedQuestion,
+    });
     setQuestionUpdateNotice("");
+  }
+
+  function resetDemo() {
+    setActiveWorkspace("buyer");
+    setSelectedAccountId(demoBuyer.id);
+    setSessionListings(createInitialSessionListings());
+    setSelectedListingId(demoListing.id);
+    setTitle(demoListing.title);
+    setCategory(demoListing.category);
+    setConditionGrade(demoListing.condition);
+    setPrice("185000");
+    setDescription(demoListing.description);
+    setSpecifications(initialPublishedListing.specifications);
+    setItemType("One portable item");
+    setHasKnownDefects(true);
+    setConditionDisclosure(initialPublishedListing.conditionDisclosure);
+    setCompletePhotoIncluded(true);
+    setDetailPhotoIncluded(true);
+    setSecondDetailPhotoIncluded(true);
+    setDefectPhotoIncluded(false);
+    setPhotoPrivacyConfirmed(true);
+    setPublicationErrors([]);
+    setPublicationNotice("");
+    setPublishedListing(initialPublishedListing);
+    setListingStatus("active");
+    setManagementNotice("");
+    setSelectedQuestion(structuredQuestions[0]);
+    setPendingQuestion(null);
+    setQuestionUpdateNotice("");
+    setBrowsingLocation("0.85");
+    setResetConfirmationOpen(false);
   }
 
   return (
@@ -252,24 +421,126 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </span>
           <span>jualokal</span>
         </div>
+        <button
+          className="button button-compact button-outline"
+          onClick={() => setResetConfirmationOpen(true)}
+        >
+          Reset Demo
+        </button>
         <button className="button button-compact button-outline" onClick={onExit}>
           Exit demo
           <span aria-hidden="true">×</span>
         </button>
       </header>
 
+      <section aria-label="Demo marketplace summary" className="demo-summary">
+        <div>
+          <span className="fictional-label">Session-only simulated marketplace</span>
+          <strong>{demoBuyers.length} Demo Buyers</strong>
+          <strong>{demoSellers.length} Demo Sellers</strong>
+          <strong>{activeListingCount} active Demo Listings</strong>
+        </div>
+        <label>
+          Selected fictional account
+          <select
+            aria-label="Selected fictional account"
+            value={selectedAccountId}
+            onChange={(event) => {
+              const nextAccountId = event.target.value;
+              setSelectedAccountId(nextAccountId);
+              if (nextAccountId.startsWith("seller-")) {
+                const firstSellerListing = sessionListings.find(
+                  (listing) => listing.sellerId === nextAccountId,
+                );
+                if (firstSellerListing) {
+                  loadListingForEditing(firstSellerListing);
+                }
+              }
+              setActiveWorkspace(
+                nextAccountId.startsWith("seller-") ? "seller" : "buyer",
+              );
+            }}
+          >
+            <optgroup label="Fictional Demo Buyers (3)">
+              {demoBuyers.map((buyer) => (
+                <option key={buyer.id} value={buyer.id}>
+                  {buyer.publicName} - {buyer.tier} - simulated
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Fictional Demo Sellers (5)">
+              {demoSellers.map((seller) => (
+                <option key={seller.id} value={seller.id}>
+                  {seller.publicName} - Demo Seller - simulated
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+        <section aria-label="Selected simulated identity" className="selected-account-card">
+          {selectedBuyer ? (
+            <>
+              <span className="fictional-label">Fictional Demo Buyer</span>
+              <strong>{selectedBuyer.publicName}</strong>
+              <span>Current role: Buyer discovery</span>
+              <span>Identity status: {selectedBuyer.identityStatus}</span>
+              <span>Buyer Tier: {selectedBuyer.tier}</span>
+              <span>Active Purchase Commitment limit: {selectedBuyer.activePurchaseLimit}</span>
+              <div>
+                <strong>Fictional history</strong>
+                <p>{selectedBuyer.history}</p>
+              </div>
+            </>
+          ) : selectedSeller ? (
+            <>
+              <span className="fictional-label">Fictional Demo Seller</span>
+              <strong>{selectedSeller.publicName}</strong>
+              <span>Current role: Seller workspace</span>
+              <span>Identity status: {selectedSeller.identityStatus}</span>
+              <span>{selectedSeller.activationStatus}</span>
+              <span>{selectedSeller.handovers}</span>
+            </>
+          ) : null}
+        </section>
+        <p className="persistent-privacy-note">
+          No real identity, contact, precise location, or payment information appears in Demo
+          Mode. Protected account records, internal details, Home Anchors, and raw location
+          coordinates stay absent.
+        </p>
+      </section>
+
       <nav aria-label="Demo workspaces" className="workspace-tabs">
         <button
           className="button button-compact button-outline"
-          onClick={() => setActiveWorkspace("buyer")}
+          onClick={() => {
+            setSelectedAccountId(demoBuyer.id);
+            setActiveWorkspace("buyer");
+          }}
         >
           Buyer discovery
         </button>
         <button
           className="button button-compact button-outline"
-          onClick={() => setActiveWorkspace("seller")}
+          onClick={() => {
+            const nextSeller = selectedSeller ?? demoSeller;
+            setSelectedAccountId(nextSeller.id);
+            const nextListing =
+              sessionListings.find(
+                (listing) =>
+                  listing.id === selectedListingId && listing.sellerId === nextSeller.id,
+              ) ??
+              sessionListings.find((listing) => listing.sellerId === nextSeller.id);
+            if (nextListing) loadListingForEditing(nextListing);
+            setActiveWorkspace("seller");
+          }}
         >
           Seller workspace
+        </button>
+        <button
+          className="button button-compact button-outline"
+          onClick={() => setActiveWorkspace("inventory")}
+        >
+          Demo inventory
         </button>
       </nav>
 
@@ -305,6 +576,40 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <span aria-hidden="true">◎</span>
             <strong>2 km</strong>
             <small>simulated area</small>
+          </div>
+        </section>
+
+        <section aria-label="Demo marketplace listings" className="discovery-catalog">
+          <div className="inventory-heading">
+            <p className="eyebrow">Nearby Demo Listings - Simulation</p>
+            <h2>{visibleDemoListings.length} nearby simulated listings</h2>
+            <p>
+              Discovery uses the fixed 2 km radius. Out-of-radius inventory remains hidden
+              here and available only in the complete simulated inventory.
+            </p>
+          </div>
+          <div className="discovery-grid">
+            {visibleDemoListings.map((listing) => {
+              const seller = demoSellers.find(
+                (candidate) => candidate.id === listing.sellerId,
+              );
+              const distanceKm =
+                browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
+              return (
+                <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
+                  <span className="fictional-label">Simulated Demo Listing</span>
+                  <h3>{listing.title}</h3>
+                  <p>{seller?.publicName} - Fictional Demo Seller</p>
+                  <div className="inventory-facts">
+                    <span>{listing.category}</span>
+                    <span>{listing.condition}</span>
+                    <span>{distanceKm < 1 ? "Under 1 km" : "1-2 km"}</span>
+                    <span>{formatRupiah(listing.price)}</span>
+                  </div>
+                  <small>{listing.imageLabel}</small>
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -375,7 +680,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </section>
               <div className="listing-meta">
                 <span>{publishedListing.category}</span>
-                <span>{formatRoundedDistance(browsingDistanceKm)}</span>
+                <span>{selectedListingSeller.publicName} - Fictional Demo Seller</span>
+                <span>{formatRoundedDistance(selectedListingDistanceKm)}</span>
               </div>
               <h2>{publishedListing.title}</h2>
               <p className="listing-description">{publishedListing.description}</p>
@@ -398,7 +704,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 </span>
                 <span>
                   <small>Example handover</small>
-                  <strong>{demoListing.handoverTime}</strong>
+                  <strong>
+                    {selectedSessionListing?.handoverTime ?? demoListing.handoverTime}
+                  </strong>
                 </span>
               </div>
               <div className="listing-footer">
@@ -424,9 +732,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 <button className="button button-outline" onClick={requestListingUpdate}>
                   Request listing update
                 </button>
-                {pendingQuestion ? (
+                {selectedPendingQuestion ? (
                   <p role="status">
-                    Request sent: {pendingQuestion}. The seller must update the shared listing.
+                    Request sent: {selectedPendingQuestion}. Simulated activity; the seller must update the shared listing.
                   </p>
                 ) : null}
                 {questionUpdateNotice ? <p role="status">{questionUpdateNotice}</p> : null}
@@ -440,29 +748,29 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
           <aside className="people-panel" aria-label="Fictional demo accounts">
             <div className="people-heading">
-              <p className="eyebrow">This demo contains</p>
-              <h2>Two fictional people</h2>
+              <p className="eyebrow">Current account references</p>
+              <h2>Selected fictional profiles</h2>
             </div>
             <section aria-label="Demo Buyer" className="person-card">
               <div className="avatar avatar-buyer" aria-hidden="true">
-                AR
+                {(selectedBuyer ?? demoBuyer).initials}
               </div>
               <div>
                 <span className="fictional-label">Fictional Demo Buyer</span>
-                <h3>{demoBuyer.publicName}</h3>
-                <p>{demoBuyer.tier}</p>
-                <small>Identity · {demoBuyer.identityStatus}</small>
+                <h3>{(selectedBuyer ?? demoBuyer).publicName}</h3>
+                <p>{(selectedBuyer ?? demoBuyer).tier}</p>
+                <small>Identity · {(selectedBuyer ?? demoBuyer).identityStatus}</small>
               </div>
             </section>
             <section aria-label="Demo Seller" className="person-card">
               <div className="avatar avatar-seller" aria-hidden="true">
-                DP
+                {selectedListingSeller.initials}
               </div>
               <div>
                 <span className="fictional-label">Fictional Demo Seller</span>
-                <h3>{demoSeller.publicName}</h3>
-                <p>{demoSeller.handovers}</p>
-                <small>Identity · {demoSeller.identityStatus}</small>
+                <h3>{selectedListingSeller.publicName}</h3>
+                <p>{selectedListingSeller.handovers}</p>
+                <small>Identity · {selectedListingSeller.identityStatus}</small>
               </div>
             </section>
             <div className="privacy-note">
@@ -476,6 +784,47 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </aside>
         </div>
         </main>
+      ) : activeWorkspace === "inventory" ? (
+        <main className="demo-main">
+          <section aria-label="Complete simulated inventory" className="demo-inventory">
+            <div className="inventory-heading">
+              <p className="eyebrow">Complete session inventory - Simulation</p>
+              <h1>{activeListingCount} active Demo Listings</h1>
+              <p>
+                Five fictional Demo Sellers each provide five simulated listings. Items
+                outside the Discovery Radius remain here but do not appear in nearby discovery.
+              </p>
+            </div>
+            <div className="inventory-grid">
+              {sessionListings.map((listing) => {
+                const seller = demoSellers.find(
+                  (candidate) => candidate.id === listing.sellerId,
+                );
+                return (
+                  <article aria-label={`Simulated listing: ${listing.title}`} key={listing.id}>
+                    <span className="fictional-label">Simulated Demo Listing</span>
+                    <span>
+                      {listing.status === "active"
+                        ? "Active"
+                        : listing.status === "deactivated"
+                          ? "Deactivated"
+                          : "Cross-listed unavailable"} &middot; simulated
+                    </span>
+                    <h2>{listing.title}</h2>
+                    <p>{seller?.publicName} - Fictional Demo Seller</p>
+                    <div className="inventory-facts">
+                      <span>{listing.category}</span>
+                      <span>{listing.condition}</span>
+                      <span>{formatRupiah(listing.price)}</span>
+                      <span>{listing.handoverTime}</span>
+                    </div>
+                    <small>{listing.imageLabel}</small>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </main>
       ) : (
         <main className="demo-main">
           <section
@@ -484,13 +833,32 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           >
             <p className="eyebrow">Pre-activated Demo Seller · Simulation</p>
             <h1 id="seller-workspace-title">Manage demo listing</h1>
-            {pendingQuestion ? (
+            {selectedPendingQuestion ? (
               <section aria-label="Structured Question Request" className="question-request">
                 <h2>Structured Question Request</h2>
-                <p>{pendingQuestion}</p>
+                <p>{selectedPendingQuestion}</p>
                 <p>Answer by improving the shared listing below. There is no private reply.</p>
               </section>
             ) : null}
+            <label>
+              Selected seller listing
+              <select
+                aria-label="Selected seller listing"
+                value={selectedListingId}
+                onChange={(event) => {
+                  const nextListing = sessionListings.find(
+                    (listing) => listing.id === event.target.value,
+                  );
+                  if (nextListing) loadListingForEditing(nextListing);
+                }}
+              >
+                {selectedSellerListings.map((listing) => (
+                  <option key={listing.id} value={listing.id}>
+                    {listing.title} - {listing.status} - simulated
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Title
               <input value={title} onChange={(event) => setTitle(event.target.value)} />
@@ -617,7 +985,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             {managementNotice ? <p role="status">{managementNotice}</p> : null}
             <div className="listing-actions">
               <button className="button button-primary" onClick={publishListing}>
-                {pendingQuestion ? "Update shared listing" : "Publish listing"}
+                {selectedPendingQuestion ? "Update shared listing" : "Publish listing"}
               </button>
               <button className="button button-outline" onClick={deactivateListing}>
                 Deactivate listing
@@ -630,6 +998,32 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         </main>
       )}
 
+      {resetConfirmationOpen ? (
+        <div className="dialog-backdrop">
+          <section
+            aria-labelledby="reset-demo-title"
+            aria-modal="true"
+            className="registration-panel"
+            role="dialog"
+          >
+            <p className="eyebrow">Demo Mode reset - Simulation</p>
+            <h2 id="reset-demo-title">Reset Demo</h2>
+            <p>
+              Only this browser session's simulated accounts, listings, histories, and locations
+              will return to their original fictional state. Other sessions and non-demo
+              experiences are never affected.
+            </p>
+            <div className="listing-actions">
+              <button className="button button-outline" onClick={() => setResetConfirmationOpen(false)}>
+                Cancel reset
+              </button>
+              <button className="button button-primary" onClick={resetDemo}>
+                Reset this simulated session
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <footer className="demo-footer">
         <p>Everything in this Demo Mode is fictional and exists only to explain Jualokal.</p>
         <button className="text-button" onClick={onExit}>

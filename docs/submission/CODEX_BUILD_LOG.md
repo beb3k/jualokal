@@ -188,6 +188,43 @@ Issue #4 is implemented and verified on `codex/issue-4-nearby-listing`. Checkout
 - Expanded Demo Mode data, switching, reset, and isolation remain in issue #5
 - Checkout, payment, and transaction behavior remain deferred to later tickets
 
+### 2026-07-16 - Isolated representative Demo Mode data
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Project owner and Codex
+- **Codex model:** Not recorded in repository evidence for this supporting task
+- **Model verification:** Not available; do not use this task as the required model proof
+- **Session ID:** Not captured; this is not the Primary Core Build Session
+- **Starting commit:** `24e26ca7b9e01abff096b36cff06873dec240136`
+- **Related issue:** #5
+- **Objective:** Expand Demo Mode into an isolated, resettable representative marketplace without real accounts, private data, transactions, or money movement.
+
+#### Work completed
+
+- Added exactly three fictional buyers, five fictional sellers, and 25 simulated active listings, with five listings owned by each seller.
+- Added account switching with clear fictional identity, role, status, tier, and tier-supporting history labels.
+- Added a complete inventory and default nearby catalogue with 20 in-radius and five out-of-radius examples, preserving the existing discovery boundaries.
+- Kept every change inside the current browser session and added a confirmation-protected reset that restores the original accounts, listings, histories, and simulated location.
+- Kept all imagery visibly synthetic and all identity, status, history, location, and activity labels explicitly simulated.
+- Kept checkout, payments, disputes, money movement, real credentials, and protected member information out of scope.
+
+#### Verification
+
+| Check | Result | Evidence |
+|---|---|---|
+| Type check | Passed | `npm run typecheck` |
+| Automated browser tests | Passed | 50 tests across phone and desktop projects |
+| Production build | Passed | `npm run build` with output isolated outside the repository |
+| Phone visual check | Passed | Live 393 x 851 walkthrough with no horizontal clipping |
+| Desktop visual check | Passed | Live 1440 x 900 walkthrough with no horizontal clipping |
+| Browser console | Passed | No warnings or errors |
+| Independent reviews | Passed after fixes | Separate standards and issue-specification closure audits |
+
+#### Outcome and follow-up
+
+Issue #5 is implemented and verified on `codex/issue-5-isolated-demo-data`. Existing protected admission and listing behavior remains intact, while transaction and money flows remain deferred.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

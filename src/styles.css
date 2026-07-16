@@ -1223,6 +1223,188 @@ footer p {
   border-top: 1px solid rgba(23, 60, 43, 0.12);
 }
 
+
+.demo-header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.demo-header .brand {
+  margin-right: auto;
+}
+
+.demo-summary,
+.demo-inventory,
+.discovery-catalog {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.demo-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(280px, 1.15fr);
+  gap: 20px;
+  border: 1px solid rgba(23, 60, 43, 0.11);
+  border-radius: 24px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 14px 42px rgba(23, 60, 43, 0.06);
+}
+
+.demo-summary > div:first-child {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.demo-summary > div:first-child .fictional-label {
+  grid-column: 1 / -1;
+  width: fit-content;
+}
+
+.demo-summary > div:first-child > strong {
+  border-radius: 14px;
+  padding: 12px;
+  color: #315846;
+  background: #e8ebdf;
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.demo-summary > label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  color: #315846;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.demo-summary select,
+.seller-workspace select {
+  width: 100%;
+  border: 1px solid rgba(23, 60, 43, 0.2);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: #17251e;
+  background: #fffdf8;
+  font: inherit;
+}
+
+.selected-account-card {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  border-top: 1px solid rgba(23, 60, 43, 0.11);
+  padding-top: 17px;
+  color: #52655a;
+  font-size: 0.8rem;
+}
+
+.selected-account-card > strong {
+  color: #173c2b;
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.selected-account-card > div {
+  width: 100%;
+  border-radius: 14px;
+  padding: 13px;
+  background: #f1dfca;
+}
+
+.selected-account-card p,
+.persistent-privacy-note {
+  margin: 5px 0 0;
+  line-height: 1.5;
+}
+
+.persistent-privacy-note {
+  grid-column: 1 / -1;
+  border-radius: 14px;
+  padding: 13px;
+  color: #54675c;
+  background: #e8ebdf;
+  font-size: 0.76rem;
+}
+
+.workspace-tabs {
+  flex-wrap: wrap;
+}
+
+.discovery-catalog,
+.demo-inventory {
+  padding: 34px 0 24px;
+}
+
+.inventory-heading {
+  max-width: 760px;
+  margin-bottom: 22px;
+}
+
+.inventory-heading h1,
+.inventory-heading h2 {
+  margin-bottom: 10px;
+  font-size: clamp(2.1rem, 4vw, 3.8rem);
+}
+
+.inventory-heading p:last-child {
+  color: #65736b;
+  line-height: 1.6;
+}
+
+.inventory-grid,
+.discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inventory-grid article,
+.discovery-grid article {
+  min-width: 0;
+  border: 1px solid rgba(23, 60, 43, 0.11);
+  border-radius: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 12px 32px rgba(46, 62, 52, 0.06);
+}
+
+.inventory-grid h2,
+.discovery-grid h3 {
+  margin: 14px 0 8px;
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.inventory-grid p,
+.discovery-grid p,
+.inventory-grid small,
+.discovery-grid small {
+  color: #65736b;
+  line-height: 1.45;
+}
+
+.inventory-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0;
+}
+
+.inventory-facts span {
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #315846;
+  background: #e8ebdf;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
 @media (min-width: 700px) {
   .dialog-backdrop {
     place-items: center;
@@ -1457,6 +1639,51 @@ footer p {
   }
 }
 
+
+@media (max-width: 900px) {
+  .demo-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-grid,
+  .discovery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .demo-summary,
+  .demo-inventory,
+  .discovery-catalog {
+    width: min(100% - 24px, 1180px);
+  }
+
+  .demo-header .brand {
+    width: 100%;
+  }
+
+  .demo-header .button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 12px;
+  }
+
+  .demo-summary {
+    border-radius: 20px;
+    padding: 18px;
+  }
+
+  .demo-summary > div:first-child,
+  .inventory-grid,
+  .discovery-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-tabs .button {
+    flex: 1 1 145px;
+    padding-inline: 12px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
