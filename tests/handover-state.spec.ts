@@ -12,7 +12,10 @@ import {
   createInitialHandoverState,
   expireScheduling,
   openIncompleteHandoverDispute,
+  raiseMaterialMismatchClaim,
   recordHandoverPresence,
+  resolveMaterialMismatchDispute,
+  respondToMaterialMismatchClaim,
   reportNoShow,
   reportSellerUnavailability,
   sellerApproveScheduleAdjustment,
@@ -1126,4 +1129,232 @@ test("presence is eligible at exact schedule and distance boundaries only", () =
       }),
     ).toMatchObject({ ok: false, reason: "presence-outside-schedule" });
   }
+});
+
+const qualifyingMismatchReasons = [
+  "wrong-item",
+  "undisclosed-defect",
+  "false-description-or-grade",
+  "measurement-or-included-part-mismatch",
+  "suspected-counterfeit",
+] as const;
+
+const excludedMismatchReasons = [
+  "changed-mind",
+  "subjective-dislike",
+  "personal-preference",
+  "fit-without-misdescription",
+] as const;
+
+function raiseMismatch(
+  state = withBothPresence(),
+  reason: (typeof qualifyingMismatchReasons)[number] = "wrong-item",
+) {
+  return raiseMaterialMismatchClaim(state, {
+    actorId: state.buyerId,
+    raisedAtMs: state.schedule!.window.startsAtMs,
+    reason,
+    description: "The item at handover differs from the Purchase Snapshot.",
+    photoLabel: reason === "wrong-item" ? "Optional simulated mismatch photo" : undefined,
+  });
+}
+
+test("each qualifying Material Mismatch reason creates a structured pre-transfer claim", () => {
+  for (const reason of qualifyingMismatchReasons) {
+    const result = raiseMismatch(withBothPresence(), reason);
+    expect(result.ok, reason).toBe(true);
+    if (!result.ok) continue;
+
+    expect(result.state.materialMismatchClaim).toMatchObject({
+      reason,
+      description: "The item at handover differs from the Purchase Snapshot.",
+      raisedAtMs: result.state.schedule!.window.startsAtMs,
+      status: "raised",
+      listingDisposition:
+        reason === "suspected-counterfeit" ? "removed-for-fraud-review" : "unchanged",
+      fraudReviewFlagged: reason === "suspected-counterfeit",
+    });
+    expect(result.state.materialMismatchClaim?.photoLabel).toBe(
+      reason === "wrong-item" ? "Optional simulated mismatch photo" : null,
+    );
+  }
+});
+
+test("excluded reasons and a blank description cannot create a Material Mismatch claim", () => {
+  for (const reason of excludedMismatchReasons) {
+    const state = withBothPresence();
+    const result = raiseMaterialMismatchClaim(state, {
+      actorId: state.buyerId,
+      raisedAtMs: state.schedule!.window.startsAtMs,
+      reason,
+      description: "This is a personal preference, not a listing mismatch.",
+    });
+    expect(result.ok, reason).toBe(false);
+    if (result.ok) continue;
+    expect(result.reason).toBe("material-mismatch-reason-not-qualifying");
+    expect(result.state).toBe(state);
+  }
+
+  const state = withBothPresence();
+  const blankDescription = raiseMaterialMismatchClaim(state, {
+    actorId: state.buyerId,
+    raisedAtMs: state.schedule!.window.startsAtMs,
+    reason: "wrong-item",
+    description: "   ",
+  });
+  expect(blankDescription.ok).toBe(false);
+  if (!blankDescription.ok) {
+    expect(blankDescription.reason).toBe("material-mismatch-description-required");
+    expect(blankDescription.state).toBe(state);
+  }
+});
+
+test("only the buyer can raise before transfer without schedule or presence gates", () => {
+  const unscheduled = initialState();
+  const raised = raiseMaterialMismatchClaim(unscheduled, {
+    actorId: unscheduled.buyerId,
+    raisedAtMs: unscheduled.committedAtMs,
+    reason: "undisclosed-defect",
+    description: "A split seam is not disclosed in the Purchase Snapshot.",
+  });
+  expect(raised.ok).toBe(true);
+
+  const scheduledWithoutPresence = acceptedState();
+  const scheduledClaim = raiseMaterialMismatchClaim(scheduledWithoutPresence, {
+    actorId: scheduledWithoutPresence.buyerId,
+    raisedAtMs: scheduledWithoutPresence.schedule!.window.startsAtMs - 1,
+    reason: "wrong-item",
+    description: "The presented item is not the purchased item.",
+  });
+  expect(scheduledClaim.ok).toBe(true);
+
+  const sellerAttempt = raiseMaterialMismatchClaim(unscheduled, {
+    actorId: unscheduled.sellerId,
+    raisedAtMs: unscheduled.committedAtMs,
+    reason: "wrong-item",
+    description: "The item differs.",
+  });
+  expect(sellerAttempt.ok).toBe(false);
+  if (!sellerAttempt.ok) expect(sellerAttempt.reason).toBe("acting-member-not-authorized");
+});
+
+test("accepting the item closes the ordinary Material Mismatch boundary", () => {
+  const state = withBothPresence();
+  const accepted = must(
+    buyerConfirmHandover(state, {
+      actorId: state.buyerId,
+      confirmedAtMs: state.schedule!.window.startsAtMs,
+    }),
+  );
+
+  const result = raiseMaterialMismatchClaim(accepted, {
+    actorId: accepted.buyerId,
+    raisedAtMs: accepted.schedule!.window.startsAtMs,
+    reason: "wrong-item",
+    description: "Too late after acceptance.",
+  });
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.reason).toBe("material-mismatch-too-late");
+
+  const transferred = must(sellerConfirmHandover(state, {
+    actorId: state.sellerId,
+    confirmedAtMs: state.schedule!.window.startsAtMs,
+  }));
+  const afterTransfer = raiseMaterialMismatchClaim(transferred, {
+    actorId: transferred.buyerId,
+    raisedAtMs: transferred.schedule!.window.startsAtMs,
+    reason: "wrong-item",
+    description: "Too late after transfer.",
+  });
+  expect(afterTransfer.ok).toBe(false);
+  if (!afterTransfer.ok) {
+    expect(afterTransfer.reason).toBe("material-mismatch-too-late");
+  }
+});
+
+test("an open Material Mismatch blocks both confirmations and the incomplete-handover dispute path", () => {
+  const raised = must(raiseMismatch());
+  const confirmedAtMs = raised.schedule!.window.startsAtMs;
+
+  for (const result of [
+    buyerConfirmHandover(raised, { actorId: raised.buyerId, confirmedAtMs }),
+    sellerConfirmHandover(raised, { actorId: raised.sellerId, confirmedAtMs }),
+    openIncompleteHandoverDispute(raised, { actorId: raised.buyerId, openedAtMs: confirmedAtMs }),
+  ]) {
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("material-mismatch-claim-open");
+    expect(result.state).toBe(raised);
+  }
+});
+
+test("seller acknowledgement pauses the ordinary listing and records a full simulated refund", () => {
+  const raised = must(raiseMismatch());
+  const buyerResponse = respondToMaterialMismatchClaim(raised, {
+    actorId: raised.buyerId,
+    respondedAtMs: raised.schedule!.window.startsAtMs + 1,
+    response: "acknowledged",
+  });
+  expect(buyerResponse.ok).toBe(false);
+  if (!buyerResponse.ok) {
+    expect(buyerResponse.reason).toBe("acting-member-not-authorized");
+  }
+  const responded = respondToMaterialMismatchClaim(raised, {
+    actorId: raised.sellerId,
+    respondedAtMs: raised.schedule!.window.startsAtMs + 1,
+    response: "acknowledged",
+  });
+
+  expect(responded.ok).toBe(true);
+  if (!responded.ok) return;
+  expect(responded.state.materialMismatchClaim).toMatchObject({
+    status: "acknowledged",
+    listingDisposition: "paused-for-correction",
+    fraudReviewFlagged: false,
+  });
+  expect(responded.state.activeDispute).toBeNull();
+  expect(responded.state.successRecord).toBeNull();
+});
+
+test("a contested claim holds an Active Dispute until guided prototype review refunds it", () => {
+  const raised = must(raiseMismatch());
+  const contested = must(respondToMaterialMismatchClaim(raised, {
+    actorId: raised.sellerId,
+    respondedAtMs: raised.schedule!.window.startsAtMs + 1,
+    response: "contested",
+  }));
+
+  expect(contested.materialMismatchClaim).toMatchObject({ status: "contested", listingDisposition: "unchanged" });
+  expect(contested.activeDispute).toMatchObject({ status: "Active Dispute" });
+  expect(contested.successRecord).toBeNull();
+
+  const refunded = resolveMaterialMismatchDispute(contested);
+  expect(refunded.ok).toBe(true);
+  if (!refunded.ok) return;
+  expect(refunded.state.materialMismatchClaim).toMatchObject({
+    status: "refunded",
+    listingDisposition: "unchanged",
+  });
+  expect(refunded.state.activeDispute).toBeNull();
+  expect(refunded.state.successRecord).toBeNull();
+});
+
+test("suspected counterfeit immediately removes the listing and keeps the fraud flag through acknowledgement", () => {
+  const raised = must(raiseMismatch(withBothPresence(), "suspected-counterfeit"));
+  expect(raised.materialMismatchClaim).toMatchObject({
+    status: "raised",
+    listingDisposition: "removed-for-fraud-review",
+    fraudReviewFlagged: true,
+  });
+
+  const acknowledged = must(respondToMaterialMismatchClaim(raised, {
+    actorId: raised.sellerId,
+    respondedAtMs: raised.schedule!.window.startsAtMs + 1,
+    response: "acknowledged",
+  }));
+  expect(acknowledged.materialMismatchClaim).toMatchObject({
+    status: "acknowledged",
+    listingDisposition: "removed-for-fraud-review",
+    fraudReviewFlagged: true,
+  });
 });

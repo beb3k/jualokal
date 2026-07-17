@@ -181,21 +181,63 @@ test("a completed purchase no longer consumes the buyer's active capacity", () =
   );
 });
 
-test("a paid purchase can be fully refunded exactly once", () => {
-  const stateWithHold = startHold(createInitialCheckoutState(), "buyer-1", 1_000);
-  const committedState = completeSimulatedPayment(stateWithHold, {
-    buyerId: "buyer-1",
-    sellerId: "seller-1",
-    listingId: "listing-1",
-    nowMs: 2_000,
-    activePurchaseLimit: 1,
+test("a Material Mismatch refund completes the commitment once without a payout", () => {
+  const heldState = completeSimulatedPayment(
+    startHold(createInitialCheckoutState(), "buyer-1", 1_000),
+    {
+      buyerId: "buyer-1",
+      sellerId: "seller-1",
+      listingId: "listing-1",
+      nowMs: 2_000,
+      activePurchaseLimit: 1,
+    },
+  );
+  const commitment = heldState.commitments[0];
+
+  const refundedState = refundPurchaseCommitment(
+    heldState,
+    commitment.id,
+    3_000,
+    "Material mismatch refund",
+  );
+
+  expect(refundedState.commitments[0]).toMatchObject({
+    lifecycleStatus: "Completed",
+    escrowStatus: "Refunded - simulated",
+    payoutStatus: "Not paid - simulated",
+    trustOutcome: "Material mismatch refund",
+    completedAtMs: 3_000,
   });
+  expect(refundedState.commitments[0].snapshot).toBe(commitment.snapshot);
+
+  const repeatedRefund = refundPurchaseCommitment(
+    refundedState,
+    commitment.id,
+    4_000,
+    "Material mismatch refund",
+  );
+  expect(repeatedRefund).toBe(refundedState);
+  expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
+});
+
+test("a failed handover refund completes the commitment once without a payout", () => {
+  const committedState = completeSimulatedPayment(
+    startHold(createInitialCheckoutState(), "buyer-1", 1_000),
+    {
+      buyerId: "buyer-1",
+      sellerId: "seller-1",
+      listingId: "listing-1",
+      nowMs: 2_000,
+      activePurchaseLimit: 1,
+    },
+  );
   const commitment = committedState.commitments[0];
 
   const refundedState = refundPurchaseCommitment(
     committedState,
     commitment.id,
     3_000,
+    "No successful handover",
   );
 
   expect(refundedState.commitments[0]).toMatchObject({
@@ -211,8 +253,8 @@ test("a paid purchase can be fully refunded exactly once", () => {
     refundedState,
     commitment.id,
     4_000,
+    "No successful handover",
   );
-
   expect(repeatedRefund).toBe(refundedState);
   expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
 });

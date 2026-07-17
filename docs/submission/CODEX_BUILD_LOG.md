@@ -304,6 +304,44 @@ Issue #6 was implemented and verified locally on `codex/issue-6-checkout-hold`. 
 
 Issue #8 is implemented and locally verified. No GitHub publication or issue closure was performed in this session.
 
+### 2026-07-17 - Material Mismatch resolution
+
+- **Session role:** Supporting implementation, testing, review, and branch publication
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Model evidence:** Not captured; this supporting session is not the Primary Core Build Session
+- **Starting commit:** `5901ac520d7cb78968face7025dbc92b7bf85c7d`
+- **Ending implementation commit:** `21255e4f42dbe093d64e804692243b1bb018e796`
+- **Related commits:** `21255e4` (feature) and `dce00fa` (workflow safeguards)
+- **Working branch:** `codex/issue-9-material-mismatch`
+- **Related issue:** [#9](https://github.com/beb3k/jualokal/issues/9)
+- **Objective:** Let a buyer raise and resolve a structured Material Mismatch Claim before accepting or taking an item, without presenting prototype handling as final launch policy.
+
+#### Work completed
+
+- Added qualifying and excluded mismatch reasons, a required description, an optional simulated photo label, and comparison against the immutable Purchase Snapshot.
+- Added acknowledged and contested paths with accurate simulated Escrow, payout, refund, Active Dispute, listing-pause, and suspected-counterfeit outcomes.
+- Kept claim evidence private to transaction participants, isolated between browser sessions, and removable through Reset Demo.
+- Preserved the successful handover path and blocked ordinary mismatch claims after buyer acceptance or seller-confirmed transfer.
+- Added an explicit repository rule requiring a dedicated branch for every issue before implementation changes begin.
+
+#### Verification
+
+- Type checking passed.
+- Focused handover-state and refund tests passed: 31/31 on the desktop profile.
+- Complete handover browser tests passed: 38/38 across phone and desktop profiles.
+- Full automated suite passed: 176/176 across phone and desktop profiles.
+- Production build passed.
+- After reconciling issue #9 with the already-merged issue #10 work, the combined state checks passed 76/76, the combined handover browser checks passed 58/58, the full suite passed 208/208 across phone and desktop, and the production build passed.
+- Separate repository-standards and issue-specification reviews passed after all findings were resolved.
+- Final GitNexus feature-scope analysis found only the seven intended implementation/test files. It mapped 17 changed symbols across 11 handover flows and rated the aggregate impact high because the issue spans transaction state, confirmation safety, and the visible handover journey.
+- The project owner completed manual acceptance testing and approved the implementation for commit and push.
+- No real money, identity documents, private coordinates, raw location history, payment details, or real photo uploads were collected or recorded.
+
+#### Outcome
+
+Issue #9 is implemented, automatically verified, manually accepted, and committed on `codex/issue-9-material-mismatch`. Pull-request creation and merge were subsequently authorized; final publication identifiers are preserved in repository history.
+
 ### 2026-07-17 - Transaction deadlines and failed meetings
 
 - **Session role:** Supporting implementation, testing, and review
@@ -358,4 +396,3 @@ Copy this section for every meaningful supporting Codex task.
 - **Where Codex accelerated the work:** TBD
 - **Tests and visual checks:** TBD
 - **Outcome and follow-up:** TBD
-

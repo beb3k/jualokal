@@ -20,6 +20,7 @@ Use the Matt Pocock workflow for product changes. Slash-command phases are user-
 
 - For an unclear new feature or materially changed requirement, use `/grill-with-docs -> /to-spec -> /to-tickets`. Record settled terminology and decisions in `CONTEXT.md` and `docs/adr/`, and track the resulting PRD and tickets in GitHub Issues.
 - For an existing unblocked issue labelled `ready-for-agent`, use a fresh Codex task and `/implement` that issue only. Use `/tdd` during implementation, then run `/code-review` against both repository standards and the issue. Do not repeat planning phases unless the requirements materially changed.
+- For every issue implementation, create and switch to a dedicated issue branch from the intended base branch before modifying files. Use one issue per branch, never make issue changes while `main` is checked out, and use the `codex/issue-<number>-<short-name>` naming pattern unless the project owner specifies another name.
 - The workflow does not override this file's authorization, verification, GitNexus, privacy, or repository-hygiene rules. Define finishing criteria first, keep the change limited to the ticket, and record only completed, verified hackathon evidence in `docs/submission/CODEX_BUILD_LOG.md`.
 - For the Primary Core Build Session, record the starting commit and preserve its model evidence, verification results, commit range, and required `/feedback` Session ID while that task is active.
 
@@ -41,12 +42,14 @@ Verify completed work with the lowest-cost checks that genuinely prove the reque
 3. Direct route, service, database, or migration verification.
 4. Full lint or test suite.
 5. Production build.
-6. Focused live-browser verification.
 
 - Use focused tests for isolated behavior and broader suites for cross-cutting risk.
 - Prefer a type check before a production build when TypeScript is the likely failure mode.
 - Verify database or schema migrations directly against the target database.
-- Visual or interaction changes require a focused browser pass after the final edit, on the relevant phone and desktop layouts.
+- For visual or interaction changes, run the smallest focused automated browser checks needed to prove the behavior. Normally run the complete automated browser suite only once, after the final relevant edit.
+- Do not repeat a passing browser suite unless a later edit could invalidate it or a failure requires confirmation.
+- The project owner performs final live-browser and visual acceptance testing on the relevant phone and desktop layouts. Do not perform live-browser walkthroughs unless the user explicitly requests them or the task is specifically diagnosing a browser-only problem.
+- Provide an exact page-testing checklist and report live-browser acceptance as pending until the project owner confirms it. Do not record live-browser verification as completed evidence before that confirmation.
 - Backend-only, schema-only, mapping, and data-source changes do not require browser verification unless visible output may have changed.
 - After every successful issue implementation, include a short, plain-English "What to test on the page" checklist in the final response. Tailor it to the issue acceptance criteria: state where to start, the actions to take, and the expected result, including relevant privacy boundaries and phone/desktop checks for visible work.
 - Include a local URL in the final response only when a working server remains available.
@@ -56,6 +59,7 @@ Verify completed work with the lowest-cost checks that genuinely prove the reque
 
 - Use the `karpathy-guidelines` skill when writing, reviewing, or refactoring code.
 - Create commits only when the user or active workflow authorizes them. Keep each commit narrow and specifically named.
+- Do not create a commit for an issue implementation until the project owner completes manual acceptance testing and explicitly authorizes the commit. This overrides any skill or workflow instruction that says to commit automatically.
 - Remove task-created screenshots, design dumps, scratch scripts, logs, build caches, and temporary verification folders before reporting completion.
 - Preserve product documentation, ADRs, issue-tracker guidance, and meaningful workflow state unless the task explicitly changes them.
 - When creating a project note, write for a future reader: capture the context, outcome, important decisions and rationale, verified results, evidence links, and any follow-ups. Omit repetitive command output and conversation transcripts; scale detail to the task's risk and complexity.
@@ -71,7 +75,7 @@ Verify completed work with the lowest-cost checks that genuinely prove the reque
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jualokal** (291 symbols, 303 relationships, 0 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jualokal** (581 symbols, 861 relationships, 30 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

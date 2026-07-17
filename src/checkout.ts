@@ -31,9 +31,16 @@ export type PurchaseCommitment = Readonly<{
   createdAtMs: number;
   snapshot: PurchaseSnapshot;
   lifecycleStatus: "Active" | "Completed";
-  escrowStatus: "Held - simulated" | "Released - simulated" | "Refunded - simulated";
+  escrowStatus:
+    | "Held - simulated"
+    | "Released - simulated"
+    | "Refunded - simulated";
   payoutStatus: "Pending - simulated" | "Paid - simulated" | "Not paid - simulated";
-  trustOutcome: "Pending" | "Successful handover" | "No successful handover";
+  trustOutcome:
+    | "Pending"
+    | "Successful handover"
+    | "Material mismatch refund"
+    | "No successful handover";
   completedAtMs: number | null;
 }>;
 
@@ -189,6 +196,7 @@ export function refundPurchaseCommitment(
   state: CheckoutState,
   commitmentId: string,
   completedAtMs: number,
+  trustOutcome: "Material mismatch refund" | "No successful handover",
 ): CheckoutState {
   const commitmentIndex = state.commitments.findIndex(
     (commitment) =>
@@ -202,10 +210,9 @@ export function refundPurchaseCommitment(
     lifecycleStatus: "Completed" as const,
     escrowStatus: "Refunded - simulated" as const,
     payoutStatus: "Not paid - simulated" as const,
-    trustOutcome: "No successful handover" as const,
+    trustOutcome,
     completedAtMs,
   });
-
   return {
     ...state,
     commitments: state.commitments.map((commitment, index) =>

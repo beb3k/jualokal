@@ -6,6 +6,7 @@ import {
   SELLER_PROPOSAL_DEADLINE_MS,
   type HandoverPoint,
   type HandoverState,
+  type MaterialMismatchReason,
   type SellerUnavailabilityReason,
 } from "./handover";
 
@@ -132,6 +133,13 @@ type HandoverPanelProps = {
   onBuyerConfirm: () => void;
   onCloseIncomplete: () => void;
   onOpenDispute: () => void;
+  onRaiseMismatch: (
+    reason: MaterialMismatchReason,
+    description: string,
+    photoLabel?: string,
+  ) => void;
+  onRespondMismatch: (response: "acknowledged" | "contested") => void;
+  onResolveMismatch: () => void;
   onProposeRepeat: () => void;
   onSellerConfirm: () => void;
   onSetBoundaryTime: (boundary: string) => void;
@@ -163,6 +171,9 @@ export default function HandoverPanel({
   onBuyerConfirm,
   onCloseIncomplete,
   onOpenDispute,
+  onRaiseMismatch,
+  onRespondMismatch,
+  onResolveMismatch,
   onProposeRepeat,
   onSellerConfirm,
   onSetBoundaryTime,
@@ -179,6 +190,10 @@ export default function HandoverPanel({
   const [handoverTimeValue, setHandoverTimeValue] = useState<
     "window-start" | "window-end" | "just-after-window"
   >("window-start");
+  const [claimFormOpen, setClaimFormOpen] = useState(false);
+  const [mismatchReason, setMismatchReason] = useState<MaterialMismatchReason | "">("");
+  const [mismatchDescription, setMismatchDescription] = useState("");
+  const [mismatchPhotoIncluded, setMismatchPhotoIncluded] = useState(false);
   const [boundaryTime, setBoundaryTime] = useState("proposal-exact");
   const [unavailabilityReason, setUnavailabilityReason] =
     useState<SellerUnavailabilityReason>("selling elsewhere");
@@ -508,6 +523,174 @@ export default function HandoverPanel({
             </div>
           ) : null}
 
+          {actorRole === "buyer" &&
+          handover.buyerConfirmedAtMs === null &&
+          handover.sellerConfirmedAtMs === null &&
+          !handover.materialMismatchClaim &&
+          !claimFormOpen ? (
+            <div className="checkout-panel">
+              <p>Raise this before confirming acceptance or taking the item.</p>
+              <button className="button button-outline" onClick={() => setClaimFormOpen(true)}>
+                Raise Material Mismatch Claim
+              </button>
+            </div>
+          ) : null}
+
+          {actorRole === "buyer" &&
+          (handover.buyerConfirmedAtMs !== null ||
+            handover.sellerConfirmedAtMs !== null) &&
+          !handover.materialMismatchClaim ? (
+            <p>
+              Material Mismatch Claim unavailable after{" "}
+              {handover.buyerConfirmedAtMs !== null ? "buyer acceptance" : "item transfer"}.
+            </p>
+          ) : null}
+
+          {claimFormOpen && !handover.materialMismatchClaim ? (
+            <section aria-label="Material Mismatch Claim" className="checkout-panel">
+              <h3>Material Mismatch Claim</h3>
+              <p>The Seller keeps the item while this claim is resolved.</p>
+              <div className="handover-controls">
+                <label>
+                  Mismatch reason
+                  <select
+                    aria-label="Mismatch reason"
+                    onChange={(event) =>
+                      setMismatchReason(event.target.value as MaterialMismatchReason | "")
+                    }
+                    value={mismatchReason}
+                  >
+                    <option value="">Select a qualifying reason</option>
+                    <option value="wrong-item">Wrong item</option>
+                    <option value="undisclosed-defect">Undisclosed defect</option>
+                    <option value="false-description-or-grade">
+                      False description or condition grade
+                    </option>
+                    <option value="measurement-or-included-part-mismatch">
+                      Important measurement mismatch
+                    </option>
+                    <option value="measurement-or-included-part-mismatch">
+                      Missing included part
+                    </option>
+                    <option value="suspected-counterfeit">Suspected counterfeit</option>
+                  </select>
+                </label>
+                <label>
+                  Describe how the item differs from the Purchase Snapshot
+                  <textarea
+                    aria-label="Describe how the item differs from the Purchase Snapshot"
+                    onChange={(event) => setMismatchDescription(event.target.value)}
+                    rows={4}
+                    value={mismatchDescription}
+                  />
+                </label>
+                <label>
+                  <input
+                    aria-label="Supporting photo (optional)"
+                    checked={mismatchPhotoIncluded}
+                    onChange={(event) => setMismatchPhotoIncluded(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Supporting photo (optional) - simulated label only
+                </label>
+              </div>
+              <p>
+                Change of mind, subjective dislike, preference, and poor fit without
+                misdescription do not qualify.
+              </p>
+              <p>
+                Purchase Snapshot - unchangeable: {commitment.snapshot.title};{" "}
+                {commitment.snapshot.conditionGrade}; {commitment.snapshot.specifications};{" "}
+                {commitment.snapshot.includedParts}
+              </p>
+              <button
+                className="button button-primary"
+                disabled={!mismatchReason || !mismatchDescription.trim()}
+                onClick={() =>
+                  onRaiseMismatch(
+                    mismatchReason as MaterialMismatchReason,
+                    mismatchDescription,
+                    mismatchPhotoIncluded ? "Optional simulated mismatch photo" : undefined,
+                  )
+                }
+              >
+                Submit Material Mismatch Claim
+              </button>
+            </section>
+          ) : null}
+
+          {handover.materialMismatchClaim ? (
+            <section aria-label="Material Mismatch Claim" className="checkout-panel">
+              <h3>Material Mismatch Claim</h3>
+              <p>Evaluated against the Purchase Snapshot - unchangeable.</p>
+              <p>
+                Structured reason: {handover.materialMismatchClaim.reason.replaceAll("-", " ")}
+              </p>
+              <p>Description: {handover.materialMismatchClaim.description}</p>
+              <p>Seller keeps the item. No transfer or return is required.</p>
+              <p>This is simulated Demo Mode data; no real payment or upload is collected.</p>
+              <p>
+                Listing status:{" "}
+                {handover.materialMismatchClaim.listingDisposition === "removed-for-fraud-review"
+                  ? "Removed"
+                  : handover.materialMismatchClaim.listingDisposition === "paused-for-correction"
+                    ? "Paused for correction"
+                    : "Purchase committed"}
+              </p>
+              {handover.materialMismatchClaim.fraudReviewFlagged ? (
+                <p>Fictional fraud review flagged for suspected counterfeit.</p>
+              ) : null}
+              {handover.materialMismatchClaim.status === "raised" ? (
+                <>
+                  <p>Simulated Escrow: Held</p>
+                  <p>Simulated payout: Pending</p>
+                  <p>Simulated refund: Not issued</p>
+                  {actorRole === "seller" ? (
+                    <div className="listing-actions">
+                      <button
+                        className="button button-primary"
+                        onClick={() => onRespondMismatch("acknowledged")}
+                      >
+                        Acknowledge Material Mismatch
+                      </button>
+                      <button
+                        className="button button-outline"
+                        onClick={() => onRespondMismatch("contested")}
+                      >
+                        Contest Material Mismatch
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              {handover.materialMismatchClaim.status === "contested" ? (
+                <>
+                  <p>Active Dispute - guided prototype review</p>
+                  <p>Simulated Escrow: Held</p>
+                  <p>Simulated payout: Pending</p>
+                  <p>Simulated refund: Not issued</p>
+                  <p>Prototype policy - subject to later launch elaboration.</p>
+                  <button className="button button-primary" onClick={onResolveMismatch}>
+                    Simulate guided-review refund
+                  </button>
+                </>
+              ) : null}
+              {handover.materialMismatchClaim.status === "acknowledged" ||
+              handover.materialMismatchClaim.status === "refunded" ? (
+                <>
+                  {handover.materialMismatchClaim.status === "refunded" ? (
+                    <p>Guided prototype review resolved with a full simulated buyer refund.</p>
+                  ) : null}
+                  <p>Simulated Escrow: Refunded in full</p>
+                  <p>Simulated refund: Full</p>
+                  <p>Simulated payout: Not paid</p>
+                  {handover.materialMismatchClaim.status === "refunded" ? (
+                    <p>Prototype policy - subject to later launch elaboration.</p>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
           {handover.schedule ? (
             <div className="checkout-panel">
               <h3>Independent Handover Confirmations</h3>
@@ -527,7 +710,8 @@ export default function HandoverPanel({
                     !insideAcceptedWindow ||
                     handover.buyerConfirmedAtMs !== null ||
                     handover.meetingClosedAtMs !== null ||
-                    handover.activeDispute !== null
+                    handover.activeDispute !== null ||
+                    handover.materialMismatchClaim !== null
                   }
                   onClick={onBuyerConfirm}
                 >
@@ -542,7 +726,8 @@ export default function HandoverPanel({
                     !insideAcceptedWindow ||
                     handover.sellerConfirmedAtMs !== null ||
                     handover.meetingClosedAtMs !== null ||
-                    handover.activeDispute !== null
+                    handover.activeDispute !== null ||
+                    handover.materialMismatchClaim !== null
                   }
                   onClick={onSellerConfirm}
                 >
