@@ -16,8 +16,8 @@ Record facts and evidence while the work is happening. Do not reconstruct the st
 | Required model | Pending owner-visible verification | GPT-5.6 required; capture visible task metadata before closing this session |
 | `/feedback` Session ID | Pending owner action | Run `/feedback` before leaving this task and record the Session ID |
 | Starting commit | Recorded | `65033becc8c930935a8443cfd956061d20767b5a` |
-| Ending commit | Pending | Record after the issue #7 implementation commit |
-| Core commit range | Pending | `65033becc8c930935a8443cfd956061d20767b5a` through the issue #7 implementation commit |
+| Ending implementation commit | Recorded | `39c28de26b220cdc2d797f0d1f1f1c000e4452d5` |
+| Core implementation range | Recorded | `65033becc8c930935a8443cfd956061d20767b5a..39c28de26b220cdc2d797f0d1f1f1c000e4452d5` |
 | README collaboration summary | Pending | Write from this log |
 | Video explanation of Codex use | Pending | Write from this log |
 
@@ -25,7 +25,7 @@ Record facts and evidence while the work is happening. Do not reconstruct the st
 
 This section must identify the single Codex task in which the majority of Jualokal's core functionality was actually built. Use a fresh, sanitized implementation task running GPT-5.6. Do not designate a planning-only task or a task that merely intended to build the majority.
 
-- **Status:** Active candidate - implementation complete locally; final review, commit, owner visual acceptance, model evidence, and `/feedback` capture remain
+- **Status:** Active candidate - implementation and independent review complete; owner visual acceptance, model evidence, and `/feedback` capture remain
 - **Task title:** Implement issue #7 - Schedule and complete a successful handover
 - **Date:** 2026-07-17
 - **Team participants:** Project owner and Codex
@@ -33,9 +33,10 @@ This section must identify the single Codex task in which the majority of Jualok
 - **Model verification:** Pending - capture visible sanitized task metadata before leaving this task
 - **`/feedback` Session ID:** Pending - project owner must run `/feedback` before leaving this task
 - **Starting commit:** `65033becc8c930935a8443cfd956061d20767b5a`
-- **Ending commit:** Pending implementation commit
-- **Commit range:** Pending ending commit
-- **Why this contains the majority of core functionality:** This task connects protected marketplace access, discovery, checkout, the Purchase Snapshot, and simulated Escrow to seller-led scheduling, location-supported handover, ordered confirmations, final sale, payout release, and recorded success. Final designation remains subject to the completed commit and evidence review.
+- **Ending implementation commit:** `39c28de26b220cdc2d797f0d1f1f1c000e4452d5`
+- **Core implementation range:** `65033becc8c930935a8443cfd956061d20767b5a..39c28de26b220cdc2d797f0d1f1f1c000e4452d5`
+- **Implementation commits:** `69c1ad5` (feature), `68b607e` (review fixes), `ed605c6` (rescheduling safety), and `39c28de` (test formatting)
+- **Why this contains the majority of core functionality:** This task connects protected marketplace access, discovery, checkout, the Purchase Snapshot, and simulated Escrow to seller-led scheduling, location-supported handover, ordered confirmations, final sale, payout release, and recorded success. Final designation remains subject to the owner's evidence review.
 
 ### Intended core journey
 
@@ -83,7 +84,7 @@ Record what was actually completed after the session. Never mark unfinished or s
 
 | Check | Result | Evidence |
 |---|---|---|
-| Automated tests | Passed | `npm test` - 102 checks across phone and desktop projects; `npm run typecheck`; `npm run build` |
+| Automated tests | Passed | Full suite: 102 checks across phone and desktop. Review verification: 7 state checks, 8 complete phone/desktop journeys, and 2 final adjustment checks. Type checking and `npm run build` passed on the final implementation. |
 | Phone-sized visual check | Pending project owner | Live visual acceptance intentionally left to the owner |
 | Desktop visual check | Pending project owner | Live visual acceptance intentionally left to the owner |
 | Successful-handover journey | Automated pass on phone and desktop projects | Proposal, acceptance, Presence Checks, confirmations, sold state, and payout |
@@ -93,8 +94,8 @@ Record what was actually completed after the session. Never mark unfinished or s
 
 ### Session outcome
 
-- **Completed:** Issue #7 implementation, type checking, all 102 automated checks, and the production build are complete locally.
-- **Incomplete or deferred:** Independent review, implementation commit, owner visual acceptance, model proof, and `/feedback` Session ID remain pending.
+- **Completed:** Issue #7 implementation, independent standards/spec review with findings resolved, implementation commits, type checking, all 102 automated checks, focused post-review checks, and the production build are complete locally.
+- **Incomplete or deferred:** Owner visual acceptance, owner-visible model proof, and the `/feedback` Session ID remain pending.
 - **Follow-up sessions required:** Issue #8 owns incomplete confirmation; #9 mismatch; #10 expiry/cancellation/no-show; #12 tier recalculation.
 
 ## Build history
