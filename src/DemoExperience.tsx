@@ -13,8 +13,23 @@ import {
   createInitialCheckoutState,
   endCheckoutHold,
   expireCheckoutHolds,
+  finalizePurchaseCommitment,
   startCheckoutHold,
 } from "./checkout";
+import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
+import {
+  buyerAcceptHandover,
+  buyerConfirmHandover,
+  buyerRequestScheduleAdjustment,
+  createInitialHandoverState,
+  recordHandoverPresence,
+  sellerApproveScheduleAdjustment,
+  sellerConfirmHandover,
+  sellerProposeHandover,
+  type HandoverActionResult,
+  type HandoverPoint,
+  type HandoverState,
+} from "./handover";
 
 const approvedCategories = [
   "Clothing",
@@ -122,6 +137,30 @@ function formatCountdown(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function createDemoHandoverWindows(committedAtMs: number) {
+  const wibDate = new Date(committedAtMs + 7 * 60 * 60 * 1000);
+  const timestamp = (hour: number, minute: number) =>
+    Date.UTC(
+      wibDate.getUTCFullYear(),
+      wibDate.getUTCMonth(),
+      wibDate.getUTCDate() + 1,
+      hour - 7,
+      minute,
+    );
+
+  return {
+    proposed: [
+      { id: "morning", startsAtMs: timestamp(10, 0), endsAtMs: timestamp(10, 30) },
+      { id: "afternoon", startsAtMs: timestamp(17, 0), endsAtMs: timestamp(17, 30) },
+    ],
+    adjustment: {
+      id: "buyer-adjustment",
+      startsAtMs: timestamp(11, 0),
+      endsAtMs: timestamp(11, 30),
+    },
+  } as const;
+}
+
 function DemoExperience({ onExit }: { onExit: () => void }) {
   const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller" | "inventory">("buyer");
   const [selectedAccountId, setSelectedAccountId] = useState<string>(demoBuyer.id);
@@ -130,6 +169,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   );
   const [checkoutState, setCheckoutState] = useState(createInitialCheckoutState);
   const [checkoutNotice, setCheckoutNotice] = useState("");
+  const [handoverStates, setHandoverStates] = useState<Record<string, HandoverState>>({});
+  const [handoverNotices, setHandoverNotices] = useState<Record<string, string>>({});
   const [clockNowMs, setClockNowMs] = useState(Date.now);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [demoClockPaused, setDemoClockPaused] = useState(false);
@@ -212,6 +253,26 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         (commitment) => commitment.buyerId === selectedBuyer.id,
       )
     : [];
+  const selectedBuyerActiveCommitments = selectedBuyerCommitments.filter(
+    (commitment) => commitment.lifecycleStatus === "Active",
+  );
+  const selectedSellerCommitments = selectedSeller
+    ? checkoutState.commitments.filter(
+        (commitment) => commitment.sellerId === selectedSeller.id,
+      )
+    : [];
+  const visibleHandoverCommitment = selectedBuyer
+    ? selectedBuyerCommitments.find(
+        (commitment) => commitment.lifecycleStatus === "Active",
+      ) ?? selectedBuyerCommitments[0]
+    : selectedSeller
+      ? selectedSellerCommitments.find(
+          (commitment) => commitment.listingId === selectedListingId,
+        ) ?? selectedSellerCommitments[0]
+      : undefined;
+  const visibleHandoverState = visibleHandoverCommitment
+    ? handoverStates[visibleHandoverCommitment.id]
+    : undefined;
   const selectedListingCommitment = checkoutState.commitments.find(
     (commitment) => commitment.listingId === selectedListingId,
   );
@@ -493,11 +554,146 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setQuestionUpdateNotice("");
   }
 
+  function currentActionNowMs() {
+    return demoClockPaused ? clockNowMs : Date.now() + clockOffsetMs;
+  }
+
+  function applyHandoverResult(
+    result: HandoverActionResult,
+    successNotice: string,
+  ) {
+    const commitmentId = result.state.commitmentId;
+    if (result.ok) {
+      setHandoverStates((current) => ({ ...current, [commitmentId]: result.state }));
+      setHandoverNotices((current) => ({ ...current, [commitmentId]: successNotice }));
+      return result.state;
+    }
+
+    setHandoverNotices((current) => ({
+      ...current,
+      [commitmentId]: `Action blocked: ${result.reason.replaceAll("-", " ")}.`,
+    }));
+    return null;
+  }
+
+  function proposeVisibleHandover(point: HandoverPoint) {
+    if (!visibleHandoverState) return;
+    const result = sellerProposeHandover(visibleHandoverState, {
+      proposedAtMs: currentActionNowMs(),
+      point,
+      windows: createDemoHandoverWindows(visibleHandoverState.committedAtMs).proposed,
+    });
+    applyHandoverResult(result, "Seller proposal recorded within the simulated two-hour deadline.");
+  }
+
+  function acceptVisibleHandover(windowId: string) {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      buyerAcceptHandover(visibleHandoverState, {
+        windowId,
+        acceptedAtMs: currentActionNowMs(),
+      }),
+      "Handover Schedule accepted by the buyer.",
+    );
+  }
+
+  function requestVisibleAdjustment() {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      buyerRequestScheduleAdjustment(visibleHandoverState, {
+        requestedAtMs: currentActionNowMs(),
+        window: createDemoHandoverWindows(visibleHandoverState.committedAtMs).adjustment,
+      }),
+      "Buyer adjustment requested; the existing schedule remains unchanged until seller approval.",
+    );
+  }
+
+  function approveVisibleAdjustment() {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      sellerApproveScheduleAdjustment(visibleHandoverState, {
+        approvedAtMs: currentActionNowMs(),
+      }),
+      "Seller approved the buyer adjustment. The updated Handover Schedule is accepted.",
+    );
+  }
+
+  function advanceToHandoverWindow(timestampMs: number) {
+    setDemoClockPaused(true);
+    setClockOffsetMs(timestampMs - Date.now());
+    setClockNowMs(timestampMs);
+    if (visibleHandoverCommitment) {
+      setHandoverNotices((current) => ({
+        ...current,
+        [visibleHandoverCommitment.id]: "Demo clock advanced into the accepted Handover Schedule.",
+      }));
+    }
+  }
+
+  function recordVisiblePresence(
+    party: "buyer" | "seller",
+    simulation: PresenceSimulation,
+  ) {
+    if (!visibleHandoverState) return;
+    const result = recordHandoverPresence(visibleHandoverState, {
+      party,
+      timestampMs: currentActionNowMs(),
+      locationAvailable: simulation.locationAvailable,
+      accuracyState: simulation.accuracyState,
+      accuracyM: simulation.accuracyM,
+      distanceFromPointM: simulation.distanceFromPointM,
+    });
+    const partyName = party === "buyer" ? "Buyer" : "Seller";
+    const notice =
+      simulation.value === "boundary" && result.ok && result.state.buyerPresence?.eligible
+        ? "Buyer eligible at the 100 m boundary."
+        : simulation.value === "poor"
+          ? `${partyName} not eligible: reported accuracy is poor.`
+          : simulation.value === "unavailable"
+            ? `${partyName} not eligible: location is unavailable.`
+            : simulation.value === "outside"
+              ? `${partyName} not eligible: outside the 100 m area.`
+              : `${partyName} Presence Check recorded.`;
+    applyHandoverResult(result, notice);
+  }
+
+  function confirmVisibleBuyerHandover() {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      buyerConfirmHandover(visibleHandoverState, {
+        confirmedAtMs: currentActionNowMs(),
+      }),
+      "Buyer confirmation recorded. Simulated Escrow remains held until the Seller confirms.",
+    );
+  }
+
+  function confirmVisibleSellerHandover() {
+    if (!visibleHandoverState || !visibleHandoverCommitment) return;
+    const completed = applyHandoverResult(
+      sellerConfirmHandover(visibleHandoverState, {
+        confirmedAtMs: currentActionNowMs(),
+      }),
+      "Matching confirmations recorded. The sale is final and simulated payout is released.",
+    );
+    const successRecord = completed?.successRecord;
+    if (successRecord) {
+      setCheckoutState((current) =>
+        finalizePurchaseCommitment(
+          current,
+          visibleHandoverCommitment.id,
+          successRecord.completedAtMs,
+        ),
+      );
+    }
+  }
+
   function resetDemo() {
     setActiveWorkspace("buyer");
     setSelectedAccountId(demoBuyer.id);
     setCheckoutState(createInitialCheckoutState());
     setCheckoutNotice("");
+    setHandoverStates({});
+    setHandoverNotices({});
     setClockOffsetMs(0);
     setClockNowMs(Date.now());
     setSessionListings(createInitialSessionListings());
@@ -672,6 +868,24 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         </button>
       </nav>
 
+      {visibleHandoverCommitment && visibleHandoverState ? (
+        <HandoverPanel
+          actorRole={selectedBuyer ? "buyer" : "seller"}
+          commitment={visibleHandoverCommitment}
+          handover={visibleHandoverState}
+          notice={handoverNotices[visibleHandoverCommitment.id] ?? ""}
+          nowMs={clockNowMs}
+          onAccept={acceptVisibleHandover}
+          onAdvance={advanceToHandoverWindow}
+          onApproveAdjustment={approveVisibleAdjustment}
+          onBuyerConfirm={confirmVisibleBuyerHandover}
+          onPropose={proposeVisibleHandover}
+          onRecordPresence={recordVisiblePresence}
+          onRequestAdjustment={requestVisibleAdjustment}
+          onSellerConfirm={confirmVisibleSellerHandover}
+        />
+      ) : null}
+
       {activeWorkspace === "buyer" ? (
         <main className="demo-main">
         <section className="demo-intro">
@@ -710,7 +924,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         <section aria-label="Purchase Commitments" className="registration-panel">
           <p className="eyebrow">Purchase Commitments - Simulation</p>
           <h2>
-            {selectedBuyerCommitments.length} of {selectedBuyer?.activePurchaseLimit ?? 0} active
+            {selectedBuyerActiveCommitments.length} of {selectedBuyer?.activePurchaseLimit ?? 0} active
             Purchase Commitments
           </h2>
           {selectedBuyerCommitments.length ? (
@@ -722,7 +936,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               >
                 <p className="eyebrow">Purchase Commitment - Simulation</p>
                 <h3>{commitment.snapshot.title}</h3>
-                <p>Simulated Escrow: Held</p>
+                <p>Transaction status: {commitment.lifecycleStatus}</p>
+                <p>
+                  Simulated Escrow:{" "}
+                  {commitment.escrowStatus.startsWith("Held") ? "Held" : "Released"}
+                </p>
+                <p>
+                  Simulated payout:{" "}
+                  {commitment.payoutStatus.startsWith("Pending") ? "Pending" : "Paid"}
+                </p>
+                {commitment.trustOutcome === "Successful handover" ? (
+                  <p>Successful handover recorded for private Tier Progress.</p>
+                ) : null}
                 <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
                   <h4>Purchase Snapshot - unchangeable</h4>
                   <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
@@ -976,13 +1201,32 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                             : Date.now() + clockOffsetMs;
                           const nextState = completeSimulatedPayment(checkoutState, {
                             buyerId: selectedBuyerHold.buyerId,
+                            sellerId: selectedSessionListing.sellerId,
                             listingId: selectedBuyerHold.listingId,
                             nowMs: actionNowMs,
                             activePurchaseLimit: selectedBuyer.activePurchaseLimit,
                           });
-                          const commitmentCreated =
-                            nextState.commitments.length > checkoutState.commitments.length;
+                          const createdCommitment = nextState.commitments.find(
+                            (commitment) =>
+                              !checkoutState.commitments.some(
+                                (current) => current.id === commitment.id,
+                              ),
+                          );
+                          const commitmentCreated = Boolean(createdCommitment);
                           setCheckoutState(nextState);
+                          if (createdCommitment) {
+                            setHandoverStates((current) => ({
+                              ...current,
+                              [createdCommitment.id]: createInitialHandoverState({
+                                commitmentId: createdCommitment.id,
+                                buyerId: createdCommitment.buyerId,
+                                sellerId: createdCommitment.sellerId,
+                                listingId: createdCommitment.listingId,
+                                committedAtMs: createdCommitment.createdAtMs,
+                                buyerTier: selectedBuyer.tier,
+                              }),
+                            }));
+                          }
                           setCheckoutNotice(
                             commitmentCreated
                               ? "Simulated payment succeeded. Purchase Commitment, unchangeable Purchase Snapshot, and simulated Escrow created."
@@ -1002,7 +1246,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                       disabled={Boolean(
                         currentBuyerHold ||
                           selectedListingHold ||
-                          selectedBuyerCommitments.length >=
+                          selectedBuyerActiveCommitments.length >=
                             selectedBuyer.activePurchaseLimit,
                       )}
                       onClick={startSelectedCheckoutHold}
@@ -1018,7 +1262,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                         You already have a Checkout Hold for {currentBuyerHold.listingTitle}.
                         Finish or abandon it before starting another.
                       </p>
-                    ) : selectedBuyerCommitments.length >= selectedBuyer.activePurchaseLimit ? (
+                    ) : selectedBuyerActiveCommitments.length >= selectedBuyer.activePurchaseLimit ? (
                       <p>
                         {selectedBuyer.tier} limit of {selectedBuyer.activePurchaseLimit} active {selectedBuyer.activePurchaseLimit === 1
                           ? "Purchase Commitment" : "Purchase Commitments"} reached.
@@ -1113,12 +1357,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                   (candidate) => candidate.id === listing.sellerId,
                 );
                 const isPurchaseCommitted = committedListingIds.has(listing.id);
+                const completedCommitment = checkoutState.commitments.find(
+                  (commitment) =>
+                    commitment.listingId === listing.id &&
+                    commitment.lifecycleStatus === "Completed",
+                );
                 return (
                   <article aria-label={`Simulated listing: ${listing.title}`} key={listing.id}>
                     <span className="fictional-label">Simulated Demo Listing</span>
                     <span>
-                      {isPurchaseCommitted
-                        ? "Purchase committed"
+                      {completedCommitment
+                        ? "Sold"
+                        : isPurchaseCommitted
+                          ? "Purchase committed"
                         : listing.status === "active"
                           ? "Active"
                           : listing.status === "deactivated"
@@ -1183,7 +1434,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             ) : null}
             {selectedListingCommitment ? (
               <p role="status">
-                Purchase Commitment active. This listing is locked for the transaction.
+                {selectedListingCommitment.lifecycleStatus === "Completed"
+                  ? "Sale final. This sold listing remains locked."
+                  : "Purchase Commitment active. This listing is locked for the transaction."}
               </p>
             ) : null}
             <fieldset disabled={selectedListingIsLocked}>

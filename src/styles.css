@@ -1172,6 +1172,47 @@ footer p {
   box-shadow: 0 14px 36px rgba(46, 62, 52, 0.08);
 }
 
+.handover-panel {
+  width: min(1180px, calc(100% - 40px));
+  max-height: none;
+  margin: 22px auto 8px;
+  overflow: visible;
+  box-shadow: 0 14px 36px rgba(46, 62, 52, 0.08);
+}
+
+.handover-controls {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.handover-controls label {
+  display: grid;
+  max-width: 620px;
+  gap: 7px;
+  color: #315846;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.handover-controls select {
+  width: 100%;
+  border: 1px solid rgba(23, 60, 43, 0.2);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: #17251e;
+  background: #fffdf8;
+  font: inherit;
+}
+
+.handover-success {
+  margin-top: 18px;
+  border: 1px solid rgba(28, 105, 72, 0.24);
+  border-radius: 18px;
+  padding: 20px;
+  background: #eef8f1;
+}
+
 .seller-workspace fieldset {
   min-width: 0;
   margin: 0;

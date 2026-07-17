@@ -26,10 +26,15 @@ export type CheckoutHold = Readonly<{
 export type PurchaseCommitment = Readonly<{
   id: string;
   buyerId: string;
+  sellerId: string;
   listingId: string;
   createdAtMs: number;
   snapshot: PurchaseSnapshot;
-  escrowStatus: "Held - simulated";
+  lifecycleStatus: "Active" | "Completed";
+  escrowStatus: "Held - simulated" | "Released - simulated";
+  payoutStatus: "Pending - simulated" | "Paid - simulated";
+  trustOutcome: "Pending" | "Successful handover";
+  completedAtMs: number | null;
 }>;
 
 export type CheckoutState = Readonly<{
@@ -101,6 +106,7 @@ export function completeSimulatedPayment(
   state: CheckoutState,
   input: {
     buyerId: string;
+    sellerId: string;
     listingId: string;
     nowMs: number;
     activePurchaseLimit: number;
@@ -112,7 +118,9 @@ export function completeSimulatedPayment(
       candidate.buyerId === input.buyerId && candidate.listingId === input.listingId,
   );
   const activeCommitments = activeState.commitments.filter(
-    (commitment) => commitment.buyerId === input.buyerId,
+    (commitment) =>
+      commitment.lifecycleStatus === "Active" &&
+      commitment.buyerId === input.buyerId,
   ).length;
   const listingAlreadyCommitted = activeState.commitments.some(
     (commitment) => commitment.listingId === input.listingId,
@@ -134,11 +142,45 @@ export function completeSimulatedPayment(
       Object.freeze({
         id: `commitment-${input.listingId}-${input.nowMs}`,
         buyerId: input.buyerId,
+        sellerId: input.sellerId,
         listingId: input.listingId,
         createdAtMs: input.nowMs,
         snapshot: hold.snapshot,
+        lifecycleStatus: "Active" as const,
         escrowStatus: "Held - simulated" as const,
+        payoutStatus: "Pending - simulated" as const,
+        trustOutcome: "Pending" as const,
+        completedAtMs: null,
       }),
     ],
+  };
+}
+
+export function finalizePurchaseCommitment(
+  state: CheckoutState,
+  commitmentId: string,
+  completedAtMs: number,
+): CheckoutState {
+  const commitmentIndex = state.commitments.findIndex(
+    (commitment) =>
+      commitment.id === commitmentId && commitment.lifecycleStatus === "Active",
+  );
+
+  if (commitmentIndex === -1) return state;
+
+  const completedCommitment = Object.freeze({
+    ...state.commitments[commitmentIndex],
+    lifecycleStatus: "Completed" as const,
+    escrowStatus: "Released - simulated" as const,
+    payoutStatus: "Paid - simulated" as const,
+    trustOutcome: "Successful handover" as const,
+    completedAtMs,
+  });
+
+  return {
+    ...state,
+    commitments: state.commitments.map((commitment, index) =>
+      index === commitmentIndex ? completedCommitment : commitment,
+    ),
   };
 }
