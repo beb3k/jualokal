@@ -1,6 +1,13 @@
 import { useState } from "react";
 import type { PurchaseCommitment } from "./checkout";
-import type { HandoverPoint, HandoverState } from "./handover";
+import {
+  HANDOVER_START_DEADLINE_MS,
+  SCHEDULE_AGREEMENT_DEADLINE_MS,
+  SELLER_PROPOSAL_DEADLINE_MS,
+  type HandoverPoint,
+  type HandoverState,
+  type SellerUnavailabilityReason,
+} from "./handover";
 
 const handoverPoints: readonly HandoverPoint[] = [
   {
@@ -127,7 +134,19 @@ type HandoverPanelProps = {
   onOpenDispute: () => void;
   onProposeRepeat: () => void;
   onSellerConfirm: () => void;
+  onSetBoundaryTime: (boundary: string) => void;
+  onExpireScheduling: (overdueParty: "buyer" | "seller" | null) => void;
+  onCancel: () => void;
+  onReportNoShow: (absentParty: "buyer" | "seller") => void;
+  onReportSellerUnavailability: (reason: SellerUnavailabilityReason) => void;
 };
+
+function formatRemaining(deadlineMs: number, nowMs: number) {
+  const remainingMs = deadlineMs - nowMs;
+  if (remainingMs < 0) return "Passed";
+  const totalMinutes = Math.ceil(remainingMs / 60_000);
+  return String(Math.floor(totalMinutes / 60)) + "h " + String(totalMinutes % 60) + "m remaining";
+}
 
 export default function HandoverPanel({
   actorRole,
@@ -146,6 +165,11 @@ export default function HandoverPanel({
   onOpenDispute,
   onProposeRepeat,
   onSellerConfirm,
+  onSetBoundaryTime,
+  onExpireScheduling,
+  onCancel,
+  onReportNoShow,
+  onReportSellerUnavailability,
 }: HandoverPanelProps) {
   const [selectedPointId, setSelectedPointId] = useState(handoverPoints[0].id);
   const [buyerPresenceValue, setBuyerPresenceValue] =
@@ -155,6 +179,9 @@ export default function HandoverPanel({
   const [handoverTimeValue, setHandoverTimeValue] = useState<
     "window-start" | "window-end" | "just-after-window"
   >("window-start");
+  const [boundaryTime, setBoundaryTime] = useState("proposal-exact");
+  const [unavailabilityReason, setUnavailabilityReason] =
+    useState<SellerUnavailabilityReason>("selling elsewhere");
   const selectedPoint =
     handoverPoints.find((point) => point.id === selectedPointId) ?? handoverPoints[0];
   const buyerPresenceSimulation =
@@ -186,6 +213,10 @@ export default function HandoverPanel({
         ? handover.schedule.window.endsAtMs
         : handover.schedule.window.endsAtMs + 1
     : nowMs;
+  const agreementDeadlineBase =
+    handover.meetingNumber > 1 && handover.proposal
+      ? handover.proposal.proposedAtMs
+      : handover.committedAtMs;
 
   return (
     <section
@@ -199,6 +230,30 @@ export default function HandoverPanel({
         controlled adjustment; changes take effect only after both parties agree.
       </p>
 
+      {!handover.successRecord && !handover.failureRecord ? (
+        <section aria-label="Transaction deadlines" className="checkout-panel">
+          <h3>Transaction deadlines</h3>
+          <p>Seller proposal (2 hours): {formatRemaining(handover.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS, nowMs)}</p>
+          <p>Accepted schedule (6 hours): {formatRemaining(agreementDeadlineBase + SCHEDULE_AGREEMENT_DEADLINE_MS, nowMs)}</p>
+          <p>Latest handover start (48 hours): {formatRemaining(handover.committedAtMs + HANDOVER_START_DEADLINE_MS, nowMs)}</p>
+          <label>
+            Demo time boundary
+            <select aria-label="Demo time boundary" value={boundaryTime} onChange={(event) => setBoundaryTime(event.target.value)}>
+              <option value="proposal-exact">Proposal deadline - exact</option>
+              <option value="proposal-after">Proposal deadline - +1 ms</option>
+              <option value="agreement-exact">Agreement deadline - exact</option>
+              <option value="agreement-after">Agreement deadline - +1 ms</option>
+              <option value="handover-exact">Latest handover start - exact 48 hours</option>
+              <option value="handover-after">Latest handover start - +1 ms</option>
+              {handover.schedule ? <option value="cancel-before">Cancellation - more than 2 hours before</option> : null}
+              {handover.schedule ? <option value="cancel-exact">Cancellation - exactly 2 hours before</option> : null}
+              {handover.schedule ? <option value="no-show-exact">No-show - exactly 15 minutes</option> : null}
+              {handover.schedule ? <option value="no-show-after">No-show - +1 ms after 15 minutes</option> : null}
+            </select>
+          </label>
+          <button className="button button-outline" onClick={() => onSetBoundaryTime(boundaryTime)}>Set demo boundary time</button>
+        </section>
+      ) : null}
       {handover.successRecord ? (
         <div className="handover-success" role="status">
           <h3>Sale final</h3>
@@ -210,6 +265,20 @@ export default function HandoverPanel({
             Snapshot remains with the completed simulated transaction.
           </p>
         </div>
+      ) : handover.failureRecord ? (
+        <section aria-label="Ended transaction outcome" className="handover-success">
+          <h3>{handover.failureRecord.reason}</h3>
+          {actorRole === "seller" && handover.failureRecord.sellerUnavailabilityReason ? <p>Your private seller reason: {handover.failureRecord.sellerUnavailabilityReason}</p> : null}
+          <p>Transaction status: Ended</p>
+          <p>Simulated refund: Full refund issued</p>
+          <p>Simulated payout: Not paid</p>
+          <p>Extra monetary compensation: None</p>
+          <p>Listing status: {handover.failureRecord.listingStatus}</p>
+          <p>Reliability Strikes are private and never shown to the other party.</p>
+          {handover.failureRecord.reliabilityStrikes.map((strike) =>
+            strike.party === actorRole ? <p key={`${strike.party}-${strike.reason}`}>Your private Reliability Strike: {strike.reason}</p> : null,
+          )}
+        </section>
       ) : (
         <>
           {actorRole === "seller" && !handover.proposal && handover.meetingNumber === 1 ? (
@@ -483,6 +552,29 @@ export default function HandoverPanel({
             </div>
           ) : null}
 
+          <section aria-label="Transaction ending actions" className="checkout-panel">
+            <h3>End this transaction</h3>
+            {!handover.schedule ? (
+              <div className="listing-actions">
+                {!handover.proposal || handover.pendingAdjustment ? <button className="button button-outline" onClick={() => onExpireScheduling("seller")}>Expire: seller response overdue</button> : null}
+                {handover.proposal && !handover.pendingAdjustment ? <button className="button button-outline" onClick={() => onExpireScheduling("buyer")}>Expire: buyer response overdue</button> : null}
+                {handover.proposal ? <button className="button button-outline" onClick={() => onExpireScheduling(null)}>Demo both responded: no compatible time within 48 hours</button> : null}
+              </div>
+            ) : (
+              <div className="listing-actions">
+                <button className="button button-outline" onClick={onCancel}>{actorRole === "buyer" ? "Buyer cancels transaction" : "Seller cancels transaction"}</button>
+                <button className="button button-outline" onClick={() => onReportNoShow(actorRole === "buyer" ? "seller" : "buyer")}>Report {actorRole === "buyer" ? "seller" : "buyer"} no-show</button>
+              </div>
+            )}
+            {actorRole === "seller" ? (
+              <div className="handover-controls">
+                <label>Seller unavailability reason<select aria-label="Seller unavailability reason" value={unavailabilityReason} onChange={(event) => setUnavailabilityReason(event.target.value as SellerUnavailabilityReason)}>
+                  <option value="selling elsewhere">Selling elsewhere</option><option value="higher offer">Higher offer</option><option value="loss">Item lost</option><option value="damage">Item damaged</option><option value="withdrawal">Withdrawal</option>
+                </select></label>
+                <button className="button button-outline" onClick={() => onReportSellerUnavailability(unavailabilityReason)}>Report seller unavailability</button>
+              </div>
+            ) : null}
+          </section>
           {handover.confirmationEvidence.length > 0 ? (
             <section aria-label="Preserved confirmation evidence" className="checkout-panel">
               <h3>Preserved confirmation evidence</h3>
