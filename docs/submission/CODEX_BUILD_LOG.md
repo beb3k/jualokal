@@ -272,6 +272,38 @@ Verified, Reliable, and Trusted Demo Buyers are limited to 1, 3, and 5 active Pu
 
 Issue #6 was implemented and verified locally on `codex/issue-6-checkout-hold`. After completing visual acceptance, the project owner authorized the commit, pull request, merge, and issue closure. Final publication identifiers are recorded in the project history after GitHub completes those actions.
 
+### 2026-07-17 - Incomplete Handover Confirmation recovery
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Starting commit:** `bdf20fa066238d420cb77fcd112c02c214a0559e`
+- **Related issue:** [#8](https://github.com/beb3k/jualokal/issues/8)
+- **Objective:** Recover safely from an incomplete handover when only one participant confirms, while preserving privacy, settlement state, repeat-meeting recovery, and dispute access.
+
+#### Work completed
+
+- Added independent, actor-authorized buyer and seller confirmations with privacy-safe confirmation evidence.
+- Kept simulated settlement held after a lone confirmation, added explicit separation, and blocked remote confirmation after separation.
+- Added repeat meetings that require fresh presence and confirmations, with a fresh six-hour agreement window.
+- Kept dispute access available after any unresolved repeat and made successful finalization work symmetrically regardless of confirmation order.
+- Kept Tier Progress visible only to the buyer and preserved independent-session isolation and Reset Demo behavior.
+
+#### Verification
+
+- Type checking passed.
+- Focused handover-state tests passed: 36/36 across phone and desktop profiles.
+- Focused browser tests passed: 24/24 across phone and desktop profiles.
+- Full test suite passed: 142/142 across phone and desktop profiles.
+- Production build passed.
+- Separate repository-standards and issue-specification reviews passed after the privacy and repeat-meeting fixes.
+- Final GitNexus staged-scope analysis mapped 31 changed symbols across 13 expected handover flows. Its aggregate risk was high because the ticket spans proposal, adjustment, presence, confirmation, and recovery UI, with no unrelated staged files.
+- Live browser and visual acceptance remain pending project-owner confirmation under repository policy.
+
+#### Outcome
+
+Issue #8 is implemented and locally verified. No GitHub publication or issue closure was performed in this session.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

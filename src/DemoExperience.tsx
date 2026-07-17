@@ -21,11 +21,14 @@ import {
   buyerAcceptHandover,
   buyerConfirmHandover,
   buyerRequestScheduleAdjustment,
+  closeIncompleteHandoverMeeting,
   createInitialHandoverState,
+  openIncompleteHandoverDispute,
   recordHandoverPresence,
   sellerApproveScheduleAdjustment,
   sellerConfirmHandover,
   sellerProposeHandover,
+  sellerProposeRepeatHandover,
   type HandoverActionResult,
   type HandoverPoint,
   type HandoverState,
@@ -158,6 +161,10 @@ function createDemoHandoverWindows(committedAtMs: number) {
       startsAtMs: timestamp(11, 0),
       endsAtMs: timestamp(11, 30),
     },
+    repeat: [
+      { id: "repeat-early", startsAtMs: timestamp(16, 0), endsAtMs: timestamp(16, 30) },
+      { id: "repeat-late", startsAtMs: timestamp(17, 0), endsAtMs: timestamp(17, 30) },
+    ],
   } as const;
 }
 
@@ -576,6 +583,24 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     return null;
   }
 
+  function applyHandoverResultAndFinalize(
+    result: HandoverActionResult,
+    successNotice: string,
+  ) {
+    const completed = applyHandoverResult(result, successNotice);
+    const successRecord = completed?.successRecord;
+    if (successRecord && visibleHandoverCommitment) {
+      setCheckoutState((current) =>
+        finalizePurchaseCommitment(
+          current,
+          visibleHandoverCommitment.id,
+          successRecord.completedAtMs,
+        ),
+      );
+    }
+    return completed;
+  }
+
   function proposeVisibleHandover(point: HandoverPoint) {
     if (!visibleHandoverState) return;
     const result = sellerProposeHandover(visibleHandoverState, {
@@ -619,15 +644,56 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function advanceToHandoverWindow(timestampMs: number) {
+    const outsideAcceptedWindow = Boolean(
+      visibleHandoverState?.schedule &&
+        timestampMs > visibleHandoverState.schedule.window.endsAtMs,
+    );
     setDemoClockPaused(true);
     setClockOffsetMs(timestampMs - Date.now());
     setClockNowMs(timestampMs);
     if (visibleHandoverCommitment) {
       setHandoverNotices((current) => ({
         ...current,
-        [visibleHandoverCommitment.id]: "Demo clock advanced into the accepted Handover Schedule.",
+        [visibleHandoverCommitment.id]: outsideAcceptedWindow
+          ? "Outside the accepted handover window."
+          : "Demo clock advanced into the accepted Handover Schedule.",
       }));
     }
+  }
+
+  function closeVisibleIncompleteHandover() {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      closeIncompleteHandoverMeeting(visibleHandoverState, {
+        actorId: selectedAccountId,
+        closedAtMs: currentActionNowMs(),
+      }),
+      "Incomplete handover evidence preserved. Remote confirmation is unavailable after separation.",
+    );
+  }
+
+  function proposeVisibleRepeatHandover() {
+    if (!visibleHandoverState?.schedule) return;
+    applyHandoverResult(
+      sellerProposeRepeatHandover(visibleHandoverState, {
+        actorId: selectedAccountId,
+        proposedAtMs: currentActionNowMs(),
+        point: visibleHandoverState.schedule.point,
+        windows: createDemoHandoverWindows(visibleHandoverState.committedAtMs).repeat,
+      }),
+      "Seller proposed a repeat meeting under the same handover rules.",
+    );
+  }
+
+  function openVisibleIncompleteHandoverDispute() {
+    if (!visibleHandoverState) return;
+    applyHandoverResult(
+      openIncompleteHandoverDispute(visibleHandoverState, {
+        actorId: selectedAccountId,
+        openedAtMs: currentActionNowMs(),
+      }),
+      "Active Dispute opened for guided prototype review. Simulated Escrow remains held.",
+    );
   }
 
   function recordVisiblePresence(
@@ -659,32 +725,30 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function confirmVisibleBuyerHandover() {
     if (!visibleHandoverState) return;
-    applyHandoverResult(
-      buyerConfirmHandover(visibleHandoverState, {
-        confirmedAtMs: currentActionNowMs(),
-      }),
-      "Buyer confirmation recorded. Simulated Escrow remains held until the Seller confirms.",
+    const result = buyerConfirmHandover(visibleHandoverState, {
+      actorId: selectedAccountId,
+      confirmedAtMs: currentActionNowMs(),
+    });
+    applyHandoverResultAndFinalize(
+      result,
+      result.ok && result.state.successRecord
+        ? "Matching confirmations recorded. The sale is final and simulated payout is released."
+        : "Buyer confirmation recorded. Simulated Escrow remains held until the Seller confirms.",
     );
   }
 
   function confirmVisibleSellerHandover() {
-    if (!visibleHandoverState || !visibleHandoverCommitment) return;
-    const completed = applyHandoverResult(
-      sellerConfirmHandover(visibleHandoverState, {
-        confirmedAtMs: currentActionNowMs(),
-      }),
-      "Matching confirmations recorded. The sale is final and simulated payout is released.",
+    if (!visibleHandoverState) return;
+    const result = sellerConfirmHandover(visibleHandoverState, {
+      actorId: selectedAccountId,
+      confirmedAtMs: currentActionNowMs(),
+    });
+    applyHandoverResultAndFinalize(
+      result,
+      result.ok && result.state.successRecord
+        ? "Matching confirmations recorded. The sale is final and simulated payout is released."
+        : "Seller confirmation recorded. Simulated Escrow remains held until the Buyer confirms.",
     );
-    const successRecord = completed?.successRecord;
-    if (successRecord) {
-      setCheckoutState((current) =>
-        finalizePurchaseCommitment(
-          current,
-          visibleHandoverCommitment.id,
-          successRecord.completedAtMs,
-        ),
-      );
-    }
   }
 
   function resetDemo() {
@@ -879,7 +943,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           onAdvance={advanceToHandoverWindow}
           onApproveAdjustment={approveVisibleAdjustment}
           onBuyerConfirm={confirmVisibleBuyerHandover}
+          onCloseIncomplete={closeVisibleIncompleteHandover}
+          onOpenDispute={openVisibleIncompleteHandoverDispute}
           onPropose={proposeVisibleHandover}
+          onProposeRepeat={proposeVisibleRepeatHandover}
           onRecordPresence={recordVisiblePresence}
           onRequestAdjustment={requestVisibleAdjustment}
           onSellerConfirm={confirmVisibleSellerHandover}
