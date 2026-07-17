@@ -346,9 +346,23 @@ test("accounts, listings, histories, locations, and activity stay simulated and 
     /private Trust Record|strike reason|safety report detail|dispute detail|payout account/i,
   );
   await expect(page.locator('input[type="password"], input[type="file"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /checkout|pay|dispute|transfer money/i })).toHaveCount(
-    0,
-  );
+
+  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Privacy-labelled demo edit" })
+    .getByRole("button", { name: "View item" })
+    .click();
+  await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
+  const hold = page.getByRole("region", { name: "Checkout Hold" });
+  await expect(hold).toContainText("Simulation only");
+  await expect(hold).toContainText("No real payment information or money is requested");
+  await expect(hold.getByRole("button", { name: "Simulate successful payment" })).toBeVisible();
+  await expect(hold.getByRole("button", { name: "Simulate failed payment" })).toBeVisible();
+  await expect(
+    page.locator(
+      'input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvv" i], input[name*="bank" i]',
+    ),
+  ).toHaveCount(0);
   await expect(page.locator("body")).toContainText(
     "No real identity, contact, precise location, or payment information",
   );

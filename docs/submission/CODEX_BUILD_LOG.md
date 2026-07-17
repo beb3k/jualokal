@@ -225,6 +225,36 @@ Issue #4 is implemented and verified on `codex/issue-4-nearby-listing`. Checkout
 
 Issue #5 is implemented and verified on `codex/issue-5-isolated-demo-data`. Existing protected admission and listing behavior remains intact, while transaction and money flows remain deferred.
 
+### 2026-07-17 - Exact five-minute checkout simulation
+
+- **Starting commit:** `2aba5636a9a4f1812ec95f1d4fd48f3db0f4e186`
+- **Working branch:** `codex/issue-6-checkout-hold`
+- **Related issue:** [#6](https://github.com/beb3k/jualokal/issues/6)
+- **Session role:** Supporting implementation session; this is not the Primary Core Build Session and does not provide its required model evidence or `/feedback` Session ID.
+
+#### Work completed
+
+Issue #6 adds a credential-free, money-free transaction simulation to Demo Mode. A Demo Buyer can place one visible five-minute Checkout Hold; another buyer cannot hold the same item, and the holder's identity stays private. The Seller cannot edit, deactivate, cross-list, or otherwise sell that listing while the hold is active.
+
+Expiry is enforced from the exact hold timestamp. Expired, abandoned, and failed simulated payments release the item without a commitment. A successful simulated payment creates one Purchase Commitment, an unchangeable Purchase Snapshot, and simulated Escrow. The snapshot freezes the public seller identity, item description, disclosure, grade, measurements, included parts, fictional photo records, and Transaction Price. The purchased listing leaves discovery and is labelled purchase committed in inventory and Seller controls.
+
+Verified, Reliable, and Trusted Demo Buyers are limited to 1, 3, and 5 active Purchase Commitments. The buyer total and Seller payout are identical, with no fee. Reset Demo restores the original state, and independent browser sessions remain isolated.
+
+#### Verification
+
+- The complete Playwright suite passed: **78 checks** across phone and desktop projects.
+- Focused exact-boundary, just-after-expiry, and duplicate-purchase checks passed repeatedly on phone and desktop.
+- Type checking passed.
+- The production build passed.
+- On 17 July 2026, the project owner completed the final live-browser acceptance and confirmed the implementation looked good.
+- The accepted walkthrough covered the initial `05:00` timer, inventory and Seller lock states, and the relevant phone and desktop layouts.
+- Independent repository-standards and complete issue-specification reviews found no remaining actionable issue.
+- GitNexus reported LOW change risk, 21 recognized changed symbols, and no affected execution flows. New checkout files are not represented until the repository index is refreshed.
+
+#### Outcome
+
+Issue #6 was implemented and verified locally on `codex/issue-6-checkout-hold`. After completing visual acceptance, the project owner authorized the commit, pull request, merge, and issue closure. Final publication identifiers are recorded in the project history after GitHub completes those actions.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.
