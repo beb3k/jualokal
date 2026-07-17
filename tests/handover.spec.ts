@@ -17,6 +17,18 @@ async function purchaseBasket(page: Page) {
     .click();
 }
 
+async function purchaseNearbyListing(page: Page, title: string) {
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: " + title })
+    .getByRole("button", { name: "View item" })
+    .click();
+  await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
+  await page
+    .getByRole("region", { name: "Checkout Hold" })
+    .getByRole("button", { name: "Simulate successful payment" })
+    .click();
+}
+
 async function switchAccount(page: Page, accountId: string) {
   await page
     .getByRole("combobox", { name: "Selected fictional account" })
@@ -694,4 +706,167 @@ test("ordinary mismatch closes after the seller transfers the item", async ({ pa
 
   await expect(panel.getByRole("button", { name: "Raise Material Mismatch Claim" })).toHaveCount(0);
   await expect(panel).toContainText("Material Mismatch Claim unavailable after item transfer");
+});
+
+test("deadline controls expose exact boundaries and scheduling expiry outcome", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  const panel = basketHandover(page);
+  const deadlines = panel.getByRole("region", { name: "Transaction deadlines" });
+  await expect(deadlines).toContainText("Seller proposal (2 hours)");
+  await expect(deadlines).toContainText("Accepted schedule (6 hours)");
+  await expect(deadlines).toContainText("Latest handover start (48 hours)");
+  await deadlines.getByRole("combobox", { name: "Demo time boundary" }).selectOption("agreement-exact");
+  await deadlines.getByRole("button", { name: "Set demo boundary time" }).click();
+  await expect(deadlines).toContainText("Accepted schedule (6 hours): 0h 0m remaining");
+  await deadlines.getByRole("combobox", { name: "Demo time boundary" }).selectOption("handover-exact");
+  await deadlines.getByRole("button", { name: "Set demo boundary time" }).click();
+  await expect(deadlines).toContainText("Latest handover start (48 hours): 0h 0m remaining");
+  await deadlines.getByRole("combobox", { name: "Demo time boundary" }).selectOption("proposal-exact");
+  await deadlines.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Expire: seller response overdue" }).click();
+  await expect(panel).toContainText("Action blocked: failure not eligible");
+  await deadlines.getByRole("combobox", { name: "Demo time boundary" }).selectOption("proposal-after");
+  await deadlines.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Expire: seller response overdue" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Scheduling Expiry");
+  await expect(panel).toContainText("Full refund issued");
+  await expect(panel).toContainText("Listing status: For Sale");
+});
+
+test("buyer cancellation ends with a full refund and private late strike", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  const panel = basketHandover(page);
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("cancel-exact");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Buyer cancels transaction" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Buyer Cancellation");
+  await expect(panel).toContainText("Your private Reliability Strike: late cancellation");
+});
+
+test("seller cancellation ends without a strike more than two hours before", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  await switchAccount(page, "seller-dimas");
+  const panel = basketHandover(page);
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("cancel-before");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Seller cancels transaction" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Seller Cancellation");
+  await expect(panel).not.toContainText("Your private Reliability Strike");
+});
+
+test("present seller can report buyer no-show only after the grace boundary", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  await switchAccount(page, "seller-dimas");
+  let panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Record seller Presence Check" }).click();
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("no-show-exact");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Report buyer no-show" }).click();
+  await expect(panel).toContainText("Action blocked: failure not eligible");
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("no-show-after");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Report buyer no-show" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Buyer No-Show");
+});
+
+test("present buyer can report seller no-show after the grace period", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Record buyer Presence Check" }).click();
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("no-show-after");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Report seller no-show" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Seller No-Show");
+  await expect(panel).toContainText("Listing status: Paused");
+});
+
+test("seller unavailability removes the listing while hiding the reason from buyer", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await switchAccount(page, "seller-dimas");
+  let panel = basketHandover(page);
+  await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("damage");
+  await panel.getByRole("button", { name: "Report seller unavailability" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText("Seller Unavailability");
+  await expect(panel).toContainText("Your private seller reason: damage");
+  await switchAccount(page, "buyer-ayu"); panel = basketHandover(page);
+  await expect(panel).not.toContainText("damage");
+  await expect(panel).not.toContainText("Your private Reliability Strike");
+  await expect(panel).toContainText("Listing status: Removed");
+  const commitment = page.getByRole("article", {
+    name: "Purchase Commitment: Handwoven rattan market basket",
+  });
+  await expect(commitment).toContainText("Simulated Escrow: Refunded");
+  await expect(commitment).toContainText("Simulated payout: Not paid");
+});
+
+test("buyer overdue expiry strikes only the buyer after the six-hour boundary", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await switchAccount(page, "seller-dimas");
+  let panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Propose two handover windows" }).click();
+  await switchAccount(page, "buyer-ayu");
+  panel = basketHandover(page);
+  await panel.getByRole("combobox", { name: "Demo time boundary" }).selectOption("agreement-after");
+  await panel.getByRole("button", { name: "Set demo boundary time" }).click();
+  await panel.getByRole("button", { name: "Expire: buyer response overdue" }).click();
+  await expect(panel.getByRole("region", { name: "Ended transaction outcome" })).toContainText(
+    "Scheduling Expiry",
+  );
+  await expect(panel).toContainText("Your private Reliability Strike: overdue scheduling response");
+});
+
+test("incompatible availability ends neutrally with the listing for sale", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await switchAccount(page, "seller-dimas");
+  let panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Propose two handover windows" }).click();
+  await switchAccount(page, "buyer-ayu");
+  panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Demo both responded: no compatible time within 48 hours" }).click();
+  const outcome = panel.getByRole("region", { name: "Ended transaction outcome" });
+  await expect(outcome).toContainText("Scheduling Expiry");
+  await expect(outcome).toContainText("Listing status: For Sale");
+  await expect(outcome).not.toContainText("Your private Reliability Strike");
+});
+test("seller keeps separate private outcomes for two refunded listings", async ({ page }) => {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await switchAccount(page, "seller-dimas");
+  let panel = basketHandover(page);
+  await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("damage");
+  await panel.getByRole("button", { name: "Report seller unavailability" }).click();
+
+  await switchAccount(page, "buyer-ayu");
+  await purchaseNearbyListing(page, "Batik cotton overshirt");
+  await switchAccount(page, "seller-dimas");
+  await page
+    .getByRole("combobox", { name: "Selected seller listing" })
+    .selectOption("listing-02");
+  panel = page.getByRole("region", { name: "Handover for Batik cotton overshirt" });
+  await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("loss");
+  await panel.getByRole("button", { name: "Report seller unavailability" }).click();
+
+  await page
+    .getByRole("combobox", { name: "Selected seller listing" })
+    .selectOption("listing-01");
+  await expect(basketHandover(page)).toContainText("Your private seller reason: damage");
+
+  await page
+    .getByRole("combobox", { name: "Selected seller listing" })
+    .selectOption("listing-02");
+  await expect(
+    page.getByRole("region", { name: "Handover for Batik cotton overshirt" }),
+  ).toContainText("Your private seller reason: loss");
 });

@@ -194,7 +194,12 @@ test("a Material Mismatch refund completes the commitment once without a payout"
   );
   const commitment = heldState.commitments[0];
 
-  const refundedState = refundPurchaseCommitment(heldState, commitment.id, 3_000);
+  const refundedState = refundPurchaseCommitment(
+    heldState,
+    commitment.id,
+    3_000,
+    "Material mismatch refund",
+  );
 
   expect(refundedState.commitments[0]).toMatchObject({
     lifecycleStatus: "Completed",
@@ -205,7 +210,51 @@ test("a Material Mismatch refund completes the commitment once without a payout"
   });
   expect(refundedState.commitments[0].snapshot).toBe(commitment.snapshot);
 
-  const repeatedRefund = refundPurchaseCommitment(refundedState, commitment.id, 4_000);
+  const repeatedRefund = refundPurchaseCommitment(
+    refundedState,
+    commitment.id,
+    4_000,
+    "Material mismatch refund",
+  );
+  expect(repeatedRefund).toBe(refundedState);
+  expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
+});
+
+test("a failed handover refund completes the commitment once without a payout", () => {
+  const committedState = completeSimulatedPayment(
+    startHold(createInitialCheckoutState(), "buyer-1", 1_000),
+    {
+      buyerId: "buyer-1",
+      sellerId: "seller-1",
+      listingId: "listing-1",
+      nowMs: 2_000,
+      activePurchaseLimit: 1,
+    },
+  );
+  const commitment = committedState.commitments[0];
+
+  const refundedState = refundPurchaseCommitment(
+    committedState,
+    commitment.id,
+    3_000,
+    "No successful handover",
+  );
+
+  expect(refundedState.commitments[0]).toMatchObject({
+    lifecycleStatus: "Completed",
+    escrowStatus: "Refunded - simulated",
+    payoutStatus: "Not paid - simulated",
+    trustOutcome: "No successful handover",
+    completedAtMs: 3_000,
+  });
+  expect(refundedState.commitments[0].snapshot).toBe(commitment.snapshot);
+
+  const repeatedRefund = refundPurchaseCommitment(
+    refundedState,
+    commitment.id,
+    4_000,
+    "No successful handover",
+  );
   expect(repeatedRefund).toBe(refundedState);
   expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
 });

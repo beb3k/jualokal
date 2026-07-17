@@ -16,24 +16,34 @@ import {
   finalizePurchaseCommitment,
   refundPurchaseCommitment,
   startCheckoutHold,
+  type PurchaseCommitment,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
 import {
   buyerAcceptHandover,
   buyerConfirmHandover,
   buyerRequestScheduleAdjustment,
+  cancelHandover,
   closeIncompleteHandoverMeeting,
   createInitialHandoverState,
+  expireScheduling,
   openIncompleteHandoverDispute,
   raiseMaterialMismatchClaim,
   resolveMaterialMismatchDispute,
   respondToMaterialMismatchClaim,
   recordHandoverPresence,
+  reportNoShow,
+  reportSellerUnavailability,
   sellerApproveScheduleAdjustment,
   sellerConfirmHandover,
   sellerProposeHandover,
   sellerProposeRepeatHandover,
+  HANDOVER_START_DEADLINE_MS,
+  NO_SHOW_GRACE_MS,
+  SCHEDULE_AGREEMENT_DEADLINE_MS,
+  SELLER_PROPOSAL_DEADLINE_MS,
   type HandoverActionResult,
+  type SellerUnavailabilityReason,
   type HandoverPoint,
   type MaterialMismatchReason,
   type HandoverState,
@@ -91,7 +101,13 @@ type ListingStatus =
   | "deactivated"
   | "cross-listed-unavailable"
   | "paused-for-correction"
-  | "removed-fraud-review";
+  | "removed-fraud-review"
+  | "paused"
+  | "removed";
+
+function commitmentRemovesListing(commitment: PurchaseCommitment) {
+  return commitment.trustOutcome !== "No successful handover";
+}
 
 type SessionListing = DemoListingSeed & {
   status: ListingStatus;
@@ -291,13 +307,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     ? handoverStates[visibleHandoverCommitment.id]
     : undefined;
   const selectedListingCommitment = checkoutState.commitments.find(
-    (commitment) => commitment.listingId === selectedListingId,
+    (commitment) =>
+      commitment.listingId === selectedListingId && commitmentRemovesListing(commitment),
   );
   const selectedListingIsLocked = Boolean(
     selectedListingHold || selectedListingCommitment,
   );
   const committedListingIds = new Set(
-    checkoutState.commitments.map((commitment) => commitment.listingId),
+    checkoutState.commitments
+      .filter(commitmentRemovesListing)
+      .map((commitment) => commitment.listingId),
   );
   const selectedHoldRemainingSeconds = selectedBuyerHold
     ? Math.max(0, Math.ceil((selectedBuyerHold.expiresAtMs - clockNowMs) / 1000))
@@ -328,7 +347,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
         return (
           !checkoutState.commitments.some(
-            (commitment) => commitment.listingId === listing.id,
+            (commitment) =>
+              commitment.listingId === listing.id && commitmentRemovesListing(commitment),
           ) &&
           listing.status === "active" &&
           distanceKm <= prototypeDiscoveryRadiusKm &&
@@ -611,6 +631,85 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     return completed;
   }
 
+  function applyHandoverFailure(result: HandoverActionResult, successNotice: string) {
+    const completed = applyHandoverResult(result, successNotice);
+    if (!completed?.failureRecord) return;
+
+    setCheckoutState((current) =>
+      refundPurchaseCommitment(
+        current,
+        completed.commitmentId,
+        completed.failureRecord!.endedAtMs,
+        "No successful handover",
+      ),
+    );
+    const nextListingStatus: ListingStatus =
+      completed.failureRecord.listingStatus === "For Sale"
+        ? "active"
+        : completed.failureRecord.listingStatus === "Paused"
+          ? "paused"
+          : "removed";
+    setSessionListings((current) =>
+      current.map((listing) =>
+        listing.id === completed.listingId ? { ...listing, status: nextListingStatus } : listing,
+      ),
+    );
+    if (completed.listingId === selectedListingId) setListingStatus(nextListingStatus);
+  }
+
+  function setVisibleBoundaryTime(boundary: string) {
+    if (!visibleHandoverState) return;
+    const scheduleStart = visibleHandoverState.schedule?.window.startsAtMs;
+    const agreementDeadlineBase =
+      visibleHandoverState.meetingNumber > 1 && visibleHandoverState.proposal
+        ? visibleHandoverState.proposal.proposedAtMs
+        : visibleHandoverState.committedAtMs;
+    const timestampByBoundary: Record<string, number> = {
+      "proposal-exact": visibleHandoverState.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS,
+      "proposal-after": visibleHandoverState.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS + 1,
+      "agreement-exact": agreementDeadlineBase + SCHEDULE_AGREEMENT_DEADLINE_MS,
+      "agreement-after": agreementDeadlineBase + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+      "handover-exact": visibleHandoverState.committedAtMs + HANDOVER_START_DEADLINE_MS,
+      "handover-after": visibleHandoverState.committedAtMs + HANDOVER_START_DEADLINE_MS + 1,
+      "cancel-before": (scheduleStart ?? 0) - SELLER_PROPOSAL_DEADLINE_MS - 1,
+      "cancel-exact": (scheduleStart ?? 0) - SELLER_PROPOSAL_DEADLINE_MS,
+      "no-show-exact": (scheduleStart ?? 0) + NO_SHOW_GRACE_MS,
+      "no-show-after": (scheduleStart ?? 0) + NO_SHOW_GRACE_MS + 1,
+    };
+    advanceToHandoverWindow(timestampByBoundary[boundary] ?? currentActionNowMs());
+  }
+
+  function expireVisibleScheduling(overdueParty: "buyer" | "seller" | null) {
+    if (!visibleHandoverState) return;
+    applyHandoverFailure(
+      expireScheduling(visibleHandoverState, { expiredAtMs: clockNowMs, overdueParty }),
+      overdueParty ? `Scheduling Expiry: ${overdueParty} response was overdue.` : "Scheduling Expiry: no compatible availability; neither party is penalized.",
+    );
+  }
+
+  function cancelVisibleHandover() {
+    if (!visibleHandoverState) return;
+    applyHandoverFailure(
+      cancelHandover(visibleHandoverState, { party: selectedBuyer ? "buyer" : "seller", cancelledAtMs: clockNowMs }),
+      "Cancellation recorded. A full simulated refund was issued.",
+    );
+  }
+
+  function reportVisibleNoShow(absentParty: "buyer" | "seller") {
+    if (!visibleHandoverState) return;
+    applyHandoverFailure(
+      reportNoShow(visibleHandoverState, { absentParty, reportedAtMs: clockNowMs }),
+      `${absentParty === "buyer" ? "Buyer" : "Seller"} No-Show recorded after the grace period.`,
+    );
+  }
+
+  function reportVisibleSellerUnavailability(reason: SellerUnavailabilityReason) {
+    if (!visibleHandoverState) return;
+    applyHandoverFailure(
+      reportSellerUnavailability(visibleHandoverState, { unavailabilityReason: reason, reportedAtMs: clockNowMs }),
+      "Seller Unavailability recorded. The item was removed and a full simulated refund was issued.",
+    );
+  }
   function proposeVisibleHandover(point: HandoverPoint) {
     if (!visibleHandoverState) return;
     const result = sellerProposeHandover(visibleHandoverState, {
@@ -782,6 +881,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         current,
         visibleHandoverCommitment.id,
         currentActionNowMs(),
+        "Material mismatch refund",
       ),
     );
     applyMismatchListingDisposition(state);
@@ -1035,6 +1135,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           onRecordPresence={recordVisiblePresence}
           onRequestAdjustment={requestVisibleAdjustment}
           onSellerConfirm={confirmVisibleSellerHandover}
+          onSetBoundaryTime={setVisibleBoundaryTime}
+          onExpireScheduling={expireVisibleScheduling}
+          onCancel={cancelVisibleHandover}
+          onReportNoShow={reportVisibleNoShow}
+          onReportSellerUnavailability={reportVisibleSellerUnavailability}
         />
       ) : null}
 
@@ -1520,7 +1625,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 const completedCommitment = checkoutState.commitments.find(
                   (commitment) =>
                     commitment.listingId === listing.id &&
-                    commitment.lifecycleStatus === "Completed",
+                    commitment.lifecycleStatus === "Completed" &&
+                    commitment.trustOutcome === "Successful handover",
                 );
                 return (
                   <article aria-label={`Simulated listing: ${listing.title}`} key={listing.id}>
@@ -1536,9 +1642,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                               ? "Deactivated"
                               : listing.status === "cross-listed-unavailable"
                                 ? "Cross-listed unavailable"
-                                : isPurchaseCommitted
-                                  ? "Purchase committed"
-                                  : "Active"}{" "}
+                                : listing.status === "paused"
+                                  ? "Paused"
+                                  : listing.status === "removed"
+                                    ? "Removed"
+                                    : isPurchaseCommitted
+                                      ? "Purchase committed"
+                                      : "Active"}{" "}
                       &middot; simulated
                     </span>
                     <h2>{listing.title}</h2>
@@ -1586,7 +1696,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 {selectedSellerListings.map((listing) => (
                   <option key={listing.id} value={listing.id}>
                     {listing.title} -{" "}
-                    {committedListingIds.has(listing.id) ? "purchase committed" : listing.status}
+                    {committedListingIds.has(listing.id)
+                        ? "purchase committed"
+                        : listing.status === "paused"
+                          ? "Paused"
+                          : listing.status === "removed"
+                            ? "Removed"
+                            : listing.status}
                     {" "}- simulated
                   </option>
                 ))}

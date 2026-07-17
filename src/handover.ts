@@ -1,6 +1,7 @@
 export const SELLER_PROPOSAL_DEADLINE_MS = 2 * 60 * 60 * 1000;
 export const SCHEDULE_AGREEMENT_DEADLINE_MS = 6 * 60 * 60 * 1000;
 export const HANDOVER_START_DEADLINE_MS = 48 * 60 * 60 * 1000;
+export const NO_SHOW_GRACE_MS = 15 * 60 * 1000;
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const HANDOVER_START_MINUTE = 7 * 60;
@@ -89,6 +90,37 @@ export type HandoverSuccessRecord = Readonly<{
   completedAtMs: number;
 }>;
 
+export type SellerUnavailabilityReason =
+  | "selling elsewhere"
+  | "higher offer"
+  | "loss"
+  | "damage"
+  | "withdrawal";
+
+export type HandoverFailureRecord = Readonly<{
+  reason:
+    | "Scheduling Expiry"
+    | "Buyer Cancellation"
+    | "Seller Cancellation"
+    | "Buyer No-Show"
+    | "Seller No-Show"
+    | "Seller Unavailability";
+  sellerUnavailabilityReason: SellerUnavailabilityReason | null;
+  transactionStatus: "Ended";
+  listingStatus: "For Sale" | "Paused" | "Removed";
+  escrowStatus: "Full refund - simulated";
+  reliabilityStrikes: readonly Readonly<{
+    party: "buyer" | "seller";
+    reason:
+      | "overdue scheduling response"
+      | "late cancellation"
+      | "Buyer No-Show"
+      | "Seller No-Show"
+      | "Seller Unavailability";
+  }>[];
+  compensationStatus: "None";
+  endedAtMs: number;
+}>;
 export type HandoverState = Readonly<{
   commitmentId: string;
   buyerId: string;
@@ -109,6 +141,7 @@ export type HandoverState = Readonly<{
   activeDispute: ActiveHandoverDispute | null;
   successRecord: HandoverSuccessRecord | null;
   materialMismatchClaim: MaterialMismatchClaim | null;
+  failureRecord: HandoverFailureRecord | null;
 }>;
 
 export type HandoverRejection =
@@ -132,7 +165,12 @@ export type HandoverRejection =
   | "material-mismatch-claim-required"
   | "material-mismatch-description-required"
   | "material-mismatch-reason-not-qualifying"
-  | "material-mismatch-too-late";
+  | "material-mismatch-too-late"
+  | "failure-not-eligible"
+  | "present-party-required"
+  | "absent-party-present"
+  | "overdue-party-invalid"
+  | "handover-terminal";
 
 export type HandoverActionResult =
   | Readonly<{ ok: true; state: HandoverState }>
@@ -260,6 +298,14 @@ function completeHandover(state: HandoverState, completedAtMs: number): Handover
   });
 }
 
+function rejectEndedHandover(
+  state: HandoverState,
+): HandoverActionResult | null {
+  return state.failureRecord || state.successRecord || state.activeDispute
+    ? { ok: false, state, reason: "handover-terminal" }
+    : null;
+}
+
 export function createInitialHandoverState(
   input: Pick<
     HandoverState,
@@ -281,6 +327,7 @@ export function createInitialHandoverState(
     activeDispute: null,
     successRecord: null,
     materialMismatchClaim: null,
+    failureRecord: null,
   });
 }
 
@@ -292,6 +339,8 @@ export function sellerProposeHandover(
     windows: readonly HandoverWindow[];
   }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (input.proposedAtMs > state.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS) {
     return { ok: false, state, reason: "seller-proposal-deadline-passed" };
   }
@@ -332,6 +381,8 @@ export function buyerAcceptHandover(
   state: HandoverState,
   input: Readonly<{ windowId: string; acceptedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   const window = state.proposal?.windows.find(
     (candidate) => candidate.id === input.windowId,
   );
@@ -367,6 +418,8 @@ export function buyerRequestScheduleAdjustment(
   state: HandoverState,
   input: Readonly<{ requestedAtMs: number; window: HandoverWindow }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (!state.proposal) {
     return { ok: false, state, reason: "schedule-required" };
   }
@@ -391,6 +444,8 @@ export function sellerApproveScheduleAdjustment(
   state: HandoverState,
   input: Readonly<{ approvedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (!state.proposal || !state.pendingAdjustment) {
     return { ok: false, state, reason: "adjustment-required" };
   }
@@ -428,6 +483,8 @@ export function recordHandoverPresence(
     distanceFromPointM: number | null;
   }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (state.meetingClosedAtMs !== null) {
     return { ok: false, state, reason: "meeting-closed" };
   }
@@ -478,6 +535,8 @@ export function buyerConfirmHandover(
   state: HandoverState,
   input: Readonly<{ actorId: string; confirmedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (input.actorId !== state.buyerId) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
   }
@@ -505,6 +564,8 @@ export function sellerConfirmHandover(
   state: HandoverState,
   input: Readonly<{ actorId: string; confirmedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (input.actorId !== state.sellerId) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
   }
@@ -532,6 +593,8 @@ export function closeIncompleteHandoverMeeting(
   state: HandoverState,
   input: Readonly<{ actorId: string; closedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (!actorParty(state, input.actorId)) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
   }
@@ -557,6 +620,8 @@ export function sellerProposeRepeatHandover(
     windows: readonly HandoverWindow[];
   }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   if (input.actorId !== state.sellerId) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
   }
@@ -612,6 +677,8 @@ export function openIncompleteHandoverDispute(
   state: HandoverState,
   input: Readonly<{ actorId: string; openedAtMs: number }>,
 ): HandoverActionResult {
+  const ended = rejectEndedHandover(state);
+  if (ended) return ended;
   const openedBy = actorParty(state, input.actorId);
   if (!openedBy) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
@@ -668,6 +735,7 @@ export function raiseMaterialMismatchClaim(
     state.buyerConfirmedAtMs !== null ||
     state.sellerConfirmedAtMs !== null ||
     state.successRecord ||
+    state.failureRecord ||
     state.materialMismatchClaim
   ) {
     return { ok: false, state, reason: "material-mismatch-too-late" };
@@ -760,4 +828,207 @@ export function resolveMaterialMismatchDispute(
       activeDispute: null,
     }),
   };
+}
+
+function endHandover(
+  state: HandoverState,
+  input: Readonly<{
+    reason: HandoverFailureRecord["reason"];
+    sellerUnavailabilityReason?: SellerUnavailabilityReason;
+    listingStatus: HandoverFailureRecord["listingStatus"];
+    strikeParty: "buyer" | "seller" | null;
+    strikeReason?: HandoverFailureRecord["reliabilityStrikes"][number]["reason"];
+    endedAtMs: number;
+  }>,
+): HandoverActionResult {
+  if (state.failureRecord) {
+    return { ok: false, state, reason: "handover-terminal" };
+  }
+  if (state.successRecord || state.activeDispute || state.materialMismatchClaim) {
+    return { ok: false, state, reason: "handover-terminal" };
+  }
+
+  const reliabilityStrikes =
+    input.strikeParty && input.strikeReason
+      ? Object.freeze([
+          Object.freeze({
+            party: input.strikeParty,
+            reason: input.strikeReason,
+          }),
+        ])
+      : Object.freeze([]);
+
+  return {
+    ok: true,
+    state: Object.freeze({
+      ...state,
+      failureRecord: Object.freeze({
+        reason: input.reason,
+        sellerUnavailabilityReason: input.sellerUnavailabilityReason ?? null,
+        transactionStatus: "Ended",
+        listingStatus: input.listingStatus,
+        escrowStatus: "Full refund - simulated",
+        reliabilityStrikes,
+        compensationStatus: "None",
+        endedAtMs: input.endedAtMs,
+      }),
+    }),
+  };
+}
+
+export function expireScheduling(
+  state: HandoverState,
+  input: Readonly<{
+    expiredAtMs: number;
+    overdueParty: "buyer" | "seller" | null;
+  }>,
+): HandoverActionResult {
+  if (state.failureRecord) {
+    const sameExpiry =
+      state.failureRecord.reason === "Scheduling Expiry" &&
+      state.failureRecord.endedAtMs === input.expiredAtMs &&
+      (state.failureRecord.reliabilityStrikes[0]?.party ?? null) ===
+        (state.proposal ? input.overdueParty : "seller");
+    return sameExpiry
+      ? { ok: true, state }
+      : { ok: false, state, reason: "handover-terminal" };
+  }
+  if (state.successRecord || state.schedule) {
+    return { ok: false, state, reason: "handover-terminal" };
+  }
+
+  const expectedOverdueParty = !state.proposal
+    ? "seller"
+    : state.pendingAdjustment
+      ? "seller"
+      : "buyer";
+  if (
+    (input.overdueParty === null && !state.proposal) ||
+    (input.overdueParty !== null &&
+      input.overdueParty !== expectedOverdueParty)
+  ) {
+    return { ok: false, state, reason: "overdue-party-invalid" };
+  }
+  const deadlineMs = state.proposal
+    ? scheduleDeadlineFor(state)
+    : state.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS;
+  const incompatibleAvailability =
+    state.proposal !== null && input.overdueParty === null;
+  if (!incompatibleAvailability && input.expiredAtMs <= deadlineMs) {
+    return { ok: false, state, reason: "failure-not-eligible" };
+  }
+
+  const overdueParty = state.proposal ? input.overdueParty : "seller";
+  return endHandover(state, {
+    reason: "Scheduling Expiry",
+    listingStatus: "For Sale",
+    strikeParty: overdueParty,
+    strikeReason: overdueParty ? "overdue scheduling response" : undefined,
+    endedAtMs: input.expiredAtMs,
+  });
+}
+
+export function cancelHandover(
+  state: HandoverState,
+  input: Readonly<{
+    party: "buyer" | "seller";
+    cancelledAtMs: number;
+  }>,
+): HandoverActionResult {
+  if (state.failureRecord) {
+    const sameCancellation =
+      state.failureRecord.reason ===
+      (input.party === "buyer" ? "Buyer Cancellation" : "Seller Cancellation") &&
+      state.failureRecord.endedAtMs === input.cancelledAtMs;
+    return sameCancellation
+      ? { ok: true, state }
+      : { ok: false, state, reason: "handover-terminal" };
+  }
+  if (!state.schedule) return { ok: false, state, reason: "schedule-required" };
+
+  const isLate =
+    input.cancelledAtMs >=
+    state.schedule.window.startsAtMs - SELLER_PROPOSAL_DEADLINE_MS;
+  return endHandover(state, {
+    reason: input.party === "buyer" ? "Buyer Cancellation" : "Seller Cancellation",
+    listingStatus: "For Sale",
+    strikeParty: isLate ? input.party : null,
+    strikeReason: isLate ? "late cancellation" : undefined,
+    endedAtMs: input.cancelledAtMs,
+  });
+}
+
+export function reportNoShow(
+  state: HandoverState,
+  input: Readonly<{
+    absentParty: "buyer" | "seller";
+    reportedAtMs: number;
+  }>,
+): HandoverActionResult {
+  if (state.failureRecord) {
+    const sameNoShow =
+      state.failureRecord.reason ===
+      (input.absentParty === "buyer" ? "Buyer No-Show" : "Seller No-Show") &&
+      state.failureRecord.endedAtMs === input.reportedAtMs;
+    return sameNoShow
+      ? { ok: true, state }
+      : { ok: false, state, reason: "handover-terminal" };
+  }
+  if (!state.schedule) return { ok: false, state, reason: "schedule-required" };
+  if (
+    input.reportedAtMs <=
+    state.schedule.window.startsAtMs + NO_SHOW_GRACE_MS
+  ) {
+    return { ok: false, state, reason: "failure-not-eligible" };
+  }
+
+  const absentPartyPresence =
+    input.absentParty === "buyer" ? state.buyerPresence : state.sellerPresence;
+  if (absentPartyPresence?.eligible) {
+    return { ok: false, state, reason: "absent-party-present" };
+  }
+
+  const reportingPartyPresence =
+    input.absentParty === "buyer" ? state.sellerPresence : state.buyerPresence;
+  if (!reportingPartyPresence?.eligible) {
+    return { ok: false, state, reason: "present-party-required" };
+  }
+
+  const reason =
+    input.absentParty === "buyer" ? "Buyer No-Show" : "Seller No-Show";
+  return endHandover(state, {
+    reason,
+    listingStatus: input.absentParty === "buyer" ? "For Sale" : "Paused",
+    strikeParty: input.absentParty,
+    strikeReason: reason,
+    endedAtMs: input.reportedAtMs,
+  });
+}
+
+export function reportSellerUnavailability(
+  state: HandoverState,
+  input: Readonly<{
+    unavailabilityReason: SellerUnavailabilityReason;
+    reportedAtMs: number;
+  }>,
+): HandoverActionResult {
+  if (state.failureRecord) {
+    const sameUnavailability =
+      state.failureRecord.reason === "Seller Unavailability" &&
+      state.failureRecord.sellerUnavailabilityReason ===
+        input.unavailabilityReason &&
+      state.failureRecord.endedAtMs === input.reportedAtMs;
+    return sameUnavailability
+      ? { ok: true, state }
+      : { ok: false, state, reason: "handover-terminal" };
+  }
+
+  return endHandover(state, {
+    reason: "Seller Unavailability",
+    sellerUnavailabilityReason: input.unavailabilityReason,
+    listingStatus: "Removed",
+    strikeParty: "seller",
+    strikeReason: "Seller Unavailability",
+    endedAtMs: input.reportedAtMs,
+  });
 }

@@ -39,7 +39,8 @@ export type PurchaseCommitment = Readonly<{
   trustOutcome:
     | "Pending"
     | "Successful handover"
-    | "Material mismatch refund";
+    | "Material mismatch refund"
+    | "No successful handover";
   completedAtMs: number | null;
 }>;
 
@@ -195,11 +196,13 @@ export function refundPurchaseCommitment(
   state: CheckoutState,
   commitmentId: string,
   completedAtMs: number,
+  trustOutcome: "Material mismatch refund" | "No successful handover",
 ): CheckoutState {
   const commitmentIndex = state.commitments.findIndex(
     (commitment) =>
       commitment.id === commitmentId && commitment.lifecycleStatus === "Active",
   );
+
   if (commitmentIndex === -1) return state;
 
   const refundedCommitment = Object.freeze({
@@ -207,7 +210,7 @@ export function refundPurchaseCommitment(
     lifecycleStatus: "Completed" as const,
     escrowStatus: "Refunded - simulated" as const,
     payoutStatus: "Not paid - simulated" as const,
-    trustOutcome: "Material mismatch refund" as const,
+    trustOutcome,
     completedAtMs,
   });
   return {

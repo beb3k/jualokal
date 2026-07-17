@@ -1,18 +1,23 @@
 import { expect, test } from "@playwright/test";
 import {
   HANDOVER_START_DEADLINE_MS,
+  NO_SHOW_GRACE_MS,
   SCHEDULE_AGREEMENT_DEADLINE_MS,
   SELLER_PROPOSAL_DEADLINE_MS,
   buyerAcceptHandover,
   buyerConfirmHandover,
   buyerRequestScheduleAdjustment,
+  cancelHandover,
   closeIncompleteHandoverMeeting,
   createInitialHandoverState,
+  expireScheduling,
   openIncompleteHandoverDispute,
   raiseMaterialMismatchClaim,
   recordHandoverPresence,
   resolveMaterialMismatchDispute,
   respondToMaterialMismatchClaim,
+  reportNoShow,
+  reportSellerUnavailability,
   sellerApproveScheduleAdjustment,
   sellerConfirmHandover,
   sellerProposeHandover,
@@ -97,6 +102,21 @@ function must(result: HandoverActionResult): HandoverState {
   return result.state;
 }
 
+function withPartyPresence(
+  party: "buyer" | "seller",
+  state = acceptedState(),
+) {
+  return must(
+    recordHandoverPresence(state, {
+      party,
+      timestampMs: state.schedule!.window.startsAtMs,
+      locationAvailable: true,
+      accuracyState: "usable",
+      accuracyM: 10,
+      distanceFromPointM: 20,
+    }),
+  );
+}
 function withBothPresence(state = acceptedState()) {
   const timestampMs = state.schedule!.window.startsAtMs;
   state = must(
@@ -183,6 +203,285 @@ test("just-after proposal, agreement, and handover-start deadlines are rejected"
   });
 });
 
+test("Scheduling Expiry starts one millisecond after each response deadline", () => {
+  expect(
+    expireScheduling(initialState(), {
+      expiredAtMs: committedAtMs + SELLER_PROPOSAL_DEADLINE_MS,
+      overdueParty: "seller",
+    }),
+  ).toMatchObject({ ok: false, reason: "failure-not-eligible" });
+
+  expect(
+    expireScheduling(initialState(), {
+      expiredAtMs: committedAtMs + SELLER_PROPOSAL_DEADLINE_MS + 1,
+      overdueParty: null,
+    }),
+  ).toMatchObject({ ok: false, reason: "overdue-party-invalid" });
+  expect(
+    expireScheduling(initialState(), {
+      expiredAtMs: committedAtMs + SELLER_PROPOSAL_DEADLINE_MS + 1,
+      overdueParty: "buyer",
+    }),
+  ).toMatchObject({ ok: false, reason: "overdue-party-invalid" });
+  const proposalExpired = expireScheduling(initialState(), {
+    expiredAtMs: committedAtMs + SELLER_PROPOSAL_DEADLINE_MS + 1,
+    overdueParty: "seller",
+  });
+  expect(must(proposalExpired).failureRecord).toEqual({
+    reason: "Scheduling Expiry",
+    sellerUnavailabilityReason: null,
+    transactionStatus: "Ended",
+    listingStatus: "For Sale",
+    escrowStatus: "Full refund - simulated",
+    reliabilityStrikes: [
+      { party: "seller", reason: "overdue scheduling response" },
+    ],
+    compensationStatus: "None",
+    endedAtMs: committedAtMs + SELLER_PROPOSAL_DEADLINE_MS + 1,
+  });
+
+  const proposed = must(
+    sellerProposeHandover(initialState(), {
+      proposedAtMs: committedAtMs,
+      point: publicPoint(),
+      windows: [
+        window("morning", wibTimestamp(1, 10), wibTimestamp(1, 10, 30)),
+        window("afternoon", wibTimestamp(1, 17), wibTimestamp(1, 17, 30)),
+      ],
+    }),
+  );
+  expect(
+    expireScheduling(proposed, {
+      expiredAtMs: committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+      overdueParty: "seller",
+    }),
+  ).toMatchObject({ ok: false, reason: "overdue-party-invalid" });
+
+  const pendingAdjustment = must(
+    buyerRequestScheduleAdjustment(proposed, {
+      requestedAtMs: committedAtMs + 1,
+      window: window(
+        "buyer-request",
+        wibTimestamp(1, 12),
+        wibTimestamp(1, 12, 30),
+      ),
+    }),
+  );
+  expect(
+    expireScheduling(pendingAdjustment, {
+      expiredAtMs: committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+      overdueParty: "buyer",
+    }),
+  ).toMatchObject({ ok: false, reason: "overdue-party-invalid" });
+  expect(
+    must(
+      expireScheduling(pendingAdjustment, {
+        expiredAtMs: committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+        overdueParty: "seller",
+      }),
+    ).failureRecord?.reliabilityStrikes,
+  ).toEqual([{ party: "seller", reason: "overdue scheduling response" }]);
+  expect(
+    expireScheduling(proposed, {
+      expiredAtMs: committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS,
+      overdueParty: "buyer",
+    }),
+  ).toMatchObject({ ok: false, reason: "failure-not-eligible" });
+  expect(
+    must(
+      expireScheduling(proposed, {
+        expiredAtMs: committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+        overdueParty: "buyer",
+      }),
+    ).failureRecord?.reliabilityStrikes,
+  ).toEqual([{ party: "buyer", reason: "overdue scheduling response" }]);
+});
+test("mutually incompatible availability expires without a Reliability Strike", () => {
+  const proposed = must(
+    sellerProposeHandover(initialState(), {
+      proposedAtMs: committedAtMs,
+      point: publicPoint(),
+      windows: [
+        window("morning", wibTimestamp(1, 10), wibTimestamp(1, 10, 30)),
+        window("afternoon", wibTimestamp(1, 17), wibTimestamp(1, 17, 30)),
+      ],
+    }),
+  );
+  const expired = must(
+    expireScheduling(proposed, {
+      expiredAtMs: committedAtMs + 1,
+      overdueParty: null,
+    }),
+  );
+
+  expect(expired.failureRecord).toMatchObject({
+    reason: "Scheduling Expiry",
+    reliabilityStrikes: [],
+  });
+});
+
+test("cancellation strikes start exactly two hours before the accepted schedule", () => {
+  const state = acceptedState();
+  const scheduleStartMs = state.schedule!.window.startsAtMs;
+
+  const early = must(
+    cancelHandover(state, {
+      party: "buyer",
+      cancelledAtMs: scheduleStartMs - SELLER_PROPOSAL_DEADLINE_MS - 1,
+    }),
+  );
+  expect(early.failureRecord).toMatchObject({
+    reason: "Buyer Cancellation",
+    listingStatus: "For Sale",
+    escrowStatus: "Full refund - simulated",
+    reliabilityStrikes: [],
+    compensationStatus: "None",
+  });
+
+  for (const cancelledAtMs of [
+    scheduleStartMs - SELLER_PROPOSAL_DEADLINE_MS,
+    scheduleStartMs - SELLER_PROPOSAL_DEADLINE_MS + 1,
+  ]) {
+    const cancelled = must(
+      cancelHandover(state, { party: "seller", cancelledAtMs }),
+    );
+    expect(cancelled.failureRecord).toMatchObject({
+      reason: "Seller Cancellation",
+      reliabilityStrikes: [
+        { party: "seller", reason: "late cancellation" },
+      ],
+    });
+  }
+});
+
+test("no-show eligibility starts one millisecond after the 15-minute grace period", () => {
+  const state = acceptedState();
+  const sellerPresent = withPartyPresence("seller", state);
+  const buyerPresent = withPartyPresence("buyer", state);
+  const graceEndsAtMs = state.schedule!.window.startsAtMs + NO_SHOW_GRACE_MS;
+
+  expect(
+    reportNoShow(sellerPresent, {
+      absentParty: "buyer",
+      reportedAtMs: graceEndsAtMs,
+    }),
+  ).toMatchObject({ ok: false, reason: "failure-not-eligible" });
+
+  expect(
+    reportNoShow(state, {
+      absentParty: "buyer",
+      reportedAtMs: graceEndsAtMs + 1,
+    }),
+  ).toMatchObject({ ok: false, reason: "present-party-required" });
+  const bothPresent = withBothPresence(state);
+  for (const absentParty of ["buyer", "seller"] as const) {
+    expect(
+      reportNoShow(bothPresent, {
+        absentParty,
+        reportedAtMs: graceEndsAtMs + 1,
+      }),
+    ).toMatchObject({ ok: false, reason: "absent-party-present" });
+  }
+  const buyerNoShow = must(
+    reportNoShow(sellerPresent, {
+      absentParty: "buyer",
+      reportedAtMs: graceEndsAtMs + 1,
+    }),
+  );
+  expect(buyerNoShow.failureRecord).toMatchObject({
+    reason: "Buyer No-Show",
+    listingStatus: "For Sale",
+    escrowStatus: "Full refund - simulated",
+    reliabilityStrikes: [{ party: "buyer", reason: "Buyer No-Show" }],
+    compensationStatus: "None",
+  });
+
+  const sellerNoShow = must(
+    reportNoShow(buyerPresent, {
+      absentParty: "seller",
+      reportedAtMs: graceEndsAtMs + 1,
+    }),
+  );
+  expect(sellerNoShow.failureRecord).toMatchObject({
+    reason: "Seller No-Show",
+    listingStatus: "Paused",
+    reliabilityStrikes: [{ party: "seller", reason: "Seller No-Show" }],
+  });
+
+  expect(
+    reportNoShow(initialState(), {
+      absentParty: "buyer",
+      reportedAtMs: committedAtMs + NO_SHOW_GRACE_MS + 1,
+    }),
+  ).toMatchObject({ ok: false, reason: "schedule-required" });
+});
+
+test("Seller Unavailability removes the listing and strikes only the seller", () => {
+  for (const unavailabilityReason of [
+    "selling elsewhere",
+    "higher offer",
+    "loss",
+    "damage",
+    "withdrawal",
+  ] as const) {
+    const unavailable = must(
+      reportSellerUnavailability(initialState(), {
+        unavailabilityReason,
+        reportedAtMs: committedAtMs + 1,
+      }),
+    );
+    expect(unavailable.failureRecord).toMatchObject({
+      reason: "Seller Unavailability",
+      sellerUnavailabilityReason: unavailabilityReason,
+      listingStatus: "Removed",
+      escrowStatus: "Full refund - simulated",
+      reliabilityStrikes: [
+        { party: "seller", reason: "Seller Unavailability" },
+      ],
+      compensationStatus: "None",
+    });
+  }
+});
+
+test("terminal failure actions are idempotent", () => {
+  const failed = must(
+    reportSellerUnavailability(initialState(), {
+      unavailabilityReason: "withdrawal",
+      reportedAtMs: committedAtMs + 1,
+    }),
+  );
+
+  expect(
+    cancelHandover(failed, {
+      party: "buyer",
+      cancelledAtMs: committedAtMs + 2,
+    }),
+  ).toMatchObject({ ok: false, state: failed, reason: "handover-terminal" });
+  expect(
+    must(
+      reportSellerUnavailability(failed, {
+        unavailabilityReason: "withdrawal",
+        reportedAtMs: committedAtMs + 1,
+      }),
+    ),
+  ).toBe(failed);
+  expect(
+    reportSellerUnavailability(failed, {
+      unavailabilityReason: "withdrawal",
+      reportedAtMs: committedAtMs + 3,
+    }),
+  ).toMatchObject({ ok: false, state: failed, reason: "handover-terminal" });
+  expect(
+    sellerProposeHandover(failed, {
+      proposedAtMs: committedAtMs + 4,
+      point: publicPoint(),
+      windows: [
+        window("morning", wibTimestamp(1, 10), wibTimestamp(1, 10, 30)),
+        window("afternoon", wibTimestamp(1, 17), wibTimestamp(1, 17, 30)),
+      ],
+    }),
+  ).toMatchObject({ ok: false, state: failed, reason: "handover-terminal" });
+});
 test("zone, Handover Hours, evening, and front-gate restrictions are enforced", () => {
   const validWindows = [
     window("morning", wibTimestamp(1, 7), wibTimestamp(1, 8)),
@@ -603,6 +902,26 @@ test("repeat meeting adjustments use the repeat proposal deadline", () => {
   );
 
   expect(proposedAtMs).toBeGreaterThan(committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS);
+  expect(
+    expireScheduling(repeat, {
+      expiredAtMs: proposedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS,
+      overdueParty: "buyer",
+    }),
+  ).toMatchObject({ ok: false, reason: "failure-not-eligible" });
+  expect(
+    must(
+      expireScheduling(repeat, {
+        expiredAtMs: proposedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS + 1,
+        overdueParty: "buyer",
+      }),
+    ).failureRecord,
+  ).toMatchObject({
+    reason: "Scheduling Expiry",
+    reliabilityStrikes: [
+      { party: "buyer", reason: "overdue scheduling response" },
+    ],
+  });
+
   const adjustedWindow = window(
     "repeat-adjustment",
     wibTimestamp(1, 15),
@@ -703,6 +1022,25 @@ for (const actor of [
       openedAtMs: confirmedAtMs + 2,
     });
     expect(disputed.successRecord).toBeNull();
+    expect(
+      reportSellerUnavailability(disputed, {
+        unavailabilityReason: "withdrawal",
+        reportedAtMs: confirmedAtMs + 3,
+      }),
+    ).toMatchObject({
+      ok: false,
+      state: disputed,
+      reason: "handover-terminal",
+    });    expect(
+      buyerAcceptHandover(disputed, {
+        windowId: "morning",
+        acceptedAtMs: confirmedAtMs + 3,
+      }),
+    ).toMatchObject({
+      ok: false,
+      state: disputed,
+      reason: "handover-terminal",
+    });
   });
 }
 
@@ -727,6 +1065,17 @@ for (const firstParty of ["buyer", "seller"] as const) {
           }),
     );
 
+    expect(completed.failureRecord).toBeNull();
+    expect(
+      reportSellerUnavailability(completed, {
+        unavailabilityReason: "withdrawal",
+        reportedAtMs: confirmedAtMs + 2,
+      }),
+    ).toMatchObject({
+      ok: false,
+      state: completed,
+      reason: "handover-terminal",
+    });
     expect(completed.successRecord).toEqual({
       transactionStatus: "Final",
       listingStatus: "Sold",
@@ -743,7 +1092,11 @@ for (const firstParty of ["buyer", "seller"] as const) {
             actorId: "buyer-1",
             confirmedAtMs: confirmedAtMs + 2,
           });
-    expect(must(repeated)).toBe(completed);
+    expect(repeated).toMatchObject({
+      ok: false,
+      state: completed,
+      reason: "handover-terminal",
+    });
   });
 }
 
