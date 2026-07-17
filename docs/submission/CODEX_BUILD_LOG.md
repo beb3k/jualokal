@@ -304,6 +304,39 @@ Issue #6 was implemented and verified locally on `codex/issue-6-checkout-hold`. 
 
 Issue #8 is implemented and locally verified. No GitHub publication or issue closure was performed in this session.
 
+### 2026-07-17 - Transaction deadlines and failed meetings
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Starting commit:** c18d005f82e495c3983959655c01f01d605dd149
+- **Working branch:** codex/issue-10-transaction-failures
+- **Related issue:** [#10](https://github.com/beb3k/jualokal/issues/10)
+- **Objective:** Complete paid-transaction expiry, cancellation, no-show, and Seller Unavailability paths without real waiting, money, or external notifications.
+
+#### Work completed
+
+- Added exact two-hour seller-proposal, six-hour agreement, and 48-hour handover-start boundaries with session-only demo time controls and visible countdowns.
+- Added Scheduling Expiry for the actual overdue party and a neutral incompatible-availability outcome after both parties respond.
+- Added early and late buyer/seller cancellation, presence-backed Buyer No-Show and Seller No-Show, and every specified Seller Unavailability reason.
+- Added full simulated refunds with no payout or extra compensation, plus correct relist, pause, and remove outcomes.
+- Kept Reliability Strike details and seller-unavailability reasons private, including when one seller has multiple refunded transactions.
+- Preserved the earlier successful handover, incomplete-confirmation recovery, dispute protection, Reset Demo, and independent-session behavior.
+
+#### Verification
+
+- Type checking passed.
+- The final complete Playwright suite passed: **174/174 checks** across phone and desktop projects.
+- Exact-boundary and browser-visible coverage includes two hours, six hours, 48 hours, the cancellation threshold, the 15-minute grace period, every requested failure outcome, and the earlier successful path.
+- The production build passed.
+- Independent repository-standards and issue-specification reviews found no remaining actionable issue after fixes.
+- GitNexus reported a CRITICAL aggregate change breadth across 7 expected transaction files and 23 affected symbols because terminal guards touch existing handover flows; every available pre-edit symbol analysis was LOW risk.
+- On 17 July 2026, the project owner completed manual acceptance and confirmed the implementation behaved correctly.
+
+#### Outcome
+
+Issue #10 is implemented, verified, and manually accepted. Publication details are preserved in the repository and pull request history.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

@@ -31,9 +31,9 @@ export type PurchaseCommitment = Readonly<{
   createdAtMs: number;
   snapshot: PurchaseSnapshot;
   lifecycleStatus: "Active" | "Completed";
-  escrowStatus: "Held - simulated" | "Released - simulated";
-  payoutStatus: "Pending - simulated" | "Paid - simulated";
-  trustOutcome: "Pending" | "Successful handover";
+  escrowStatus: "Held - simulated" | "Released - simulated" | "Refunded - simulated";
+  payoutStatus: "Pending - simulated" | "Paid - simulated" | "Not paid - simulated";
+  trustOutcome: "Pending" | "Successful handover" | "No successful handover";
   completedAtMs: number | null;
 }>;
 
@@ -181,6 +181,35 @@ export function finalizePurchaseCommitment(
     ...state,
     commitments: state.commitments.map((commitment, index) =>
       index === commitmentIndex ? completedCommitment : commitment,
+    ),
+  };
+}
+
+export function refundPurchaseCommitment(
+  state: CheckoutState,
+  commitmentId: string,
+  completedAtMs: number,
+): CheckoutState {
+  const commitmentIndex = state.commitments.findIndex(
+    (commitment) =>
+      commitment.id === commitmentId && commitment.lifecycleStatus === "Active",
+  );
+
+  if (commitmentIndex === -1) return state;
+
+  const refundedCommitment = Object.freeze({
+    ...state.commitments[commitmentIndex],
+    lifecycleStatus: "Completed" as const,
+    escrowStatus: "Refunded - simulated" as const,
+    payoutStatus: "Not paid - simulated" as const,
+    trustOutcome: "No successful handover" as const,
+    completedAtMs,
+  });
+
+  return {
+    ...state,
+    commitments: state.commitments.map((commitment, index) =>
+      index === commitmentIndex ? refundedCommitment : commitment,
     ),
   };
 }
