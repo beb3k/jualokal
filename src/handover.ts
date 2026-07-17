@@ -300,6 +300,8 @@ export function sellerApproveScheduleAdjustment(
       pendingAdjustment: null,
       buyerPresence: null,
       sellerPresence: null,
+      buyerConfirmedAtMs: null,
+      sellerConfirmedAtMs: null,
     }),
   };
 }

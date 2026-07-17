@@ -262,6 +262,52 @@ test("buyer adjustment remains pending until the seller accepts it", () => {
   expect(must(approved).schedule?.window).toEqual(adjustedWindow);
   expect(must(approved).pendingAdjustment).toBeNull();
 });
+test("approved schedule change clears earlier presence and buyer confirmation", () => {
+  let state = acceptedState();
+  const originalStart = state.schedule!.window.startsAtMs;
+
+  state = must(
+    recordHandoverPresence(state, {
+      party: "buyer",
+      timestampMs: originalStart,
+      locationAvailable: true,
+      accuracyState: "usable",
+      accuracyM: 10,
+      distanceFromPointM: 20,
+    }),
+  );
+  state = must(
+    recordHandoverPresence(state, {
+      party: "seller",
+      timestampMs: originalStart,
+      locationAvailable: true,
+      accuracyState: "usable",
+      accuracyM: 8,
+      distanceFromPointM: 30,
+    }),
+  );
+  state = must(buyerConfirmHandover(state, { confirmedAtMs: originalStart }));
+
+  state = must(
+    buyerRequestScheduleAdjustment(state, {
+      requestedAtMs: originalStart,
+      window: window(
+        "after-confirmation",
+        wibTimestamp(1, 11),
+        wibTimestamp(1, 11, 30),
+      ),
+    }),
+  );
+  state = must(
+    sellerApproveScheduleAdjustment(state, { approvedAtMs: originalStart }),
+  );
+
+  expect(state.buyerPresence).toBeNull();
+  expect(state.sellerPresence).toBeNull();
+  expect(state.buyerConfirmedAtMs).toBeNull();
+  expect(state.sellerConfirmedAtMs).toBeNull();
+});
+
 
 test("presence at exactly 100 m is eligible and stores no raw location", () => {
   const state = acceptedState();
