@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   demoBuyer,
   demoBuyers,
@@ -8,6 +8,13 @@ import {
   demoSellers,
   type DemoListingSeed,
 } from "./demo-data";
+import {
+  completeSimulatedPayment,
+  createInitialCheckoutState,
+  endCheckoutHold,
+  expireCheckoutHolds,
+  startCheckoutHold,
+} from "./checkout";
 
 const approvedCategories = [
   "Clothing",
@@ -30,6 +37,7 @@ const structuredQuestions = [
 
 const prototypeDiscoveryRadiusKm = 2;
 const permanentDiscoveryMaximumKm = 10;
+const defaultIncludedParts = "Item and all parts shown in the fictional photos.";
 
 const browsingLocations = [
   { value: "0.85", label: "Current simulated location · about 850 m" },
@@ -50,6 +58,7 @@ type PublishedListing = {
   description: string;
   conditionDisclosure: string;
   specifications: string;
+  includedParts: string;
   photos: string[];
   photoPrivacyConfirmed: boolean;
 };
@@ -59,6 +68,7 @@ type ListingStatus = "active" | "deactivated" | "cross-listed-unavailable";
 type SessionListing = DemoListingSeed & {
   status: ListingStatus;
   photos: string[];
+  includedParts: string;
   photoPrivacyConfirmed: boolean;
 };
 
@@ -67,6 +77,7 @@ function createInitialSessionListings(): SessionListing[] {
     ...listing,
     status: "active",
     photos: ["Complete-item view", "Detail view", "Second detail view"],
+    includedParts: defaultIncludedParts,
     photoPrivacyConfirmed: true,
   }));
 }
@@ -77,6 +88,7 @@ const initialPublishedListing: PublishedListing = {
   conditionGrade: demoListing.condition,
   price: 185000,
   description: demoListing.description,
+  includedParts: defaultIncludedParts,
   conditionDisclosure: "Light surface wear near the rim; the handle is secure.",
   specifications: "42 cm wide × 30 cm high; approximately 650 g.",
   photos: ["Complete-item view", "Detail view", "Second detail view"],
@@ -95,12 +107,32 @@ function formatRoundedDistance(distanceKm: number) {
   return `${distanceKm.toFixed(1)} km away`;
 }
 
+function formatWibTime(timestampMs: number) {
+  return `${new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(timestampMs))} WIB`;
+}
+
+function formatCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function DemoExperience({ onExit }: { onExit: () => void }) {
   const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller" | "inventory">("buyer");
   const [selectedAccountId, setSelectedAccountId] = useState<string>(demoBuyer.id);
   const [sessionListings, setSessionListings] = useState<SessionListing[]>(
     createInitialSessionListings,
   );
+  const [checkoutState, setCheckoutState] = useState(createInitialCheckoutState);
+  const [checkoutNotice, setCheckoutNotice] = useState("");
+  const [clockNowMs, setClockNowMs] = useState(Date.now);
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const [demoClockPaused, setDemoClockPaused] = useState(false);
   const [selectedListingId, setSelectedListingId] = useState(demoListing.id);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [title, setTitle] = useState<string>(demoListing.title);
@@ -109,6 +141,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [price, setPrice] = useState("185000");
   const [description, setDescription] = useState<string>(demoListing.description);
   const [specifications, setSpecifications] = useState(initialPublishedListing.specifications);
+  const [includedParts, setIncludedParts] = useState(initialPublishedListing.includedParts);
   const [itemType, setItemType] = useState("One portable item");
   const [hasKnownDefects, setHasKnownDefects] = useState(true);
   const [conditionDisclosure, setConditionDisclosure] = useState(
@@ -132,6 +165,26 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   } | null>(null);
   const [questionUpdateNotice, setQuestionUpdateNotice] = useState("");
   const [browsingLocation, setBrowsingLocation] = useState("0.85");
+
+  useEffect(() => {
+    if (demoClockPaused) return;
+    const clock = window.setInterval(
+      () => setClockNowMs(Date.now() + clockOffsetMs),
+      1000,
+    );
+    return () => window.clearInterval(clock);
+  }, [clockOffsetMs, demoClockPaused]);
+
+  useEffect(() => {
+    setCheckoutState((currentState) => expireCheckoutHolds(currentState, clockNowMs));
+  }, [clockNowMs]);
+
+  useEffect(() => {
+    if (demoClockPaused && checkoutState.holds.length === 0) {
+      setDemoClockPaused(false);
+    }
+  }, [checkoutState.holds.length, demoClockPaused]);
+
   const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
   const selectedSeller = demoSellers.find(
     (seller) => seller.id === selectedAccountId,
@@ -142,10 +195,39 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedSessionListing = sessionListings.find(
     (listing) => listing.id === selectedListingId,
   );
+  const selectedBuyerHold = selectedBuyer
+    ? checkoutState.holds.find(
+        (hold) =>
+          hold.buyerId === selectedBuyer.id && hold.listingId === selectedListingId,
+      )
+    : undefined;
+  const currentBuyerHold = selectedBuyer
+    ? checkoutState.holds.find((hold) => hold.buyerId === selectedBuyer.id)
+    : undefined;
+  const selectedListingHold = checkoutState.holds.find(
+    (hold) => hold.listingId === selectedListingId,
+  );
+  const selectedBuyerCommitments = selectedBuyer
+    ? checkoutState.commitments.filter(
+        (commitment) => commitment.buyerId === selectedBuyer.id,
+      )
+    : [];
+  const selectedListingCommitment = checkoutState.commitments.find(
+    (commitment) => commitment.listingId === selectedListingId,
+  );
+  const selectedListingIsLocked = Boolean(
+    selectedListingHold || selectedListingCommitment,
+  );
+  const committedListingIds = new Set(
+    checkoutState.commitments.map((commitment) => commitment.listingId),
+  );
+  const selectedHoldRemainingSeconds = selectedBuyerHold
+    ? Math.max(0, Math.ceil((selectedBuyerHold.expiresAtMs - clockNowMs) / 1000))
+    : 0;
   const selectedListingSeller =
     demoSellers.find((seller) => seller.id === selectedSessionListing?.sellerId) ?? demoSeller;
   const activeListingCount = sessionListings.filter(
-    (listing) => listing.status === "active",
+    (listing) => listing.status === "active" && !committedListingIds.has(listing.id),
   ).length;
   const selectedPendingQuestion =
     pendingQuestion?.listingId === selectedListingId ? pendingQuestion.question : null;
@@ -158,6 +240,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       : browsingDistanceKm;
   const listingIsDiscoverable =
     listingStatus === "active" &&
+    !selectedListingCommitment &&
     browsingLocationIsAvailable &&
     selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
     selectedListingDistanceKm <= permanentDiscoveryMaximumKm;
@@ -166,6 +249,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         const distanceKm =
           browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
         return (
+          !checkoutState.commitments.some(
+            (commitment) => commitment.listingId === listing.id,
+          ) &&
           listing.status === "active" &&
           distanceKm <= prototypeDiscoveryRadiusKm &&
           distanceKm <= permanentDiscoveryMaximumKm
@@ -182,6 +268,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPrice(String(listing.price));
     setDescription(listing.description);
     setSpecifications(listing.specifications);
+    setIncludedParts(listing.includedParts);
     setItemType("One portable item");
     setHasKnownDefects(
       !listing.conditionDisclosure.toLowerCase().startsWith("no known defects"),
@@ -200,6 +287,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       description: listing.description,
       conditionDisclosure: listing.conditionDisclosure,
       specifications: listing.specifications,
+      includedParts: listing.includedParts,
       photos: listing.photos,
       photoPrivacyConfirmed: listing.photoPrivacyConfirmed,
     });
@@ -209,6 +297,35 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setManagementNotice("");
     setQuestionUpdateNotice("");
   }
+
+  function startSelectedCheckoutHold() {
+    if (!selectedBuyer || !selectedSessionListing) return;
+    const actionNowMs = demoClockPaused ? clockNowMs : Date.now() + clockOffsetMs;
+    setClockNowMs(actionNowMs);
+
+    setCheckoutState((currentState) =>
+      startCheckoutHold(currentState, {
+        buyerId: selectedBuyer.id,
+        listingId: selectedSessionListing.id,
+        listingTitle: selectedSessionListing.title,
+        transactionPrice: selectedSessionListing.price,
+        snapshot: {
+          sellerPublicName: selectedListingSeller.publicName,
+          title: selectedSessionListing.title,
+          category: selectedSessionListing.category,
+          description: selectedSessionListing.description,
+          conditionDisclosure: selectedSessionListing.conditionDisclosure,
+          conditionGrade: selectedSessionListing.condition,
+          specifications: selectedSessionListing.specifications,
+          includedParts: selectedSessionListing.includedParts,
+          photos: selectedSessionListing.photos,
+          transactionPrice: selectedSessionListing.price,
+        },
+        nowMs: actionNowMs,
+      }),
+    );
+  }
+
   function publishListing() {
     const errors = [];
 
@@ -237,6 +354,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
     if (!specifications.trim()) {
       errors.push("Add relevant measurements or specifications");
+    }
+
+    if (!includedParts.trim()) {
+      errors.push("Describe the included parts");
     }
 
     if (!approvedCategories.includes(category as (typeof approvedCategories)[number])) {
@@ -289,6 +410,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       description: description.trim(),
       conditionDisclosure: conditionDisclosure.trim(),
       specifications: specifications.trim(),
+      includedParts: includedParts.trim(),
       photos: selectedPhotos,
       photoPrivacyConfirmed,
     };
@@ -317,6 +439,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               description: nextPublishedListing.description,
               conditionDisclosure: nextPublishedListing.conditionDisclosure,
               specifications: nextPublishedListing.specifications,
+              includedParts: nextPublishedListing.includedParts,
               photos: nextPublishedListing.photos,
               photoPrivacyConfirmed: nextPublishedListing.photoPrivacyConfirmed,
               status: "active",
@@ -373,6 +496,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   function resetDemo() {
     setActiveWorkspace("buyer");
     setSelectedAccountId(demoBuyer.id);
+    setCheckoutState(createInitialCheckoutState());
+    setCheckoutNotice("");
+    setClockOffsetMs(0);
+    setClockNowMs(Date.now());
     setSessionListings(createInitialSessionListings());
     setSelectedListingId(demoListing.id);
     setTitle(demoListing.title);
@@ -381,6 +508,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPrice("185000");
     setDescription(demoListing.description);
     setSpecifications(initialPublishedListing.specifications);
+    setIncludedParts(initialPublishedListing.includedParts);
     setItemType("One portable item");
     setHasKnownDefects(true);
     setConditionDisclosure(initialPublishedListing.conditionDisclosure);
@@ -579,6 +707,49 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </div>
         </section>
 
+        <section aria-label="Purchase Commitments" className="registration-panel">
+          <p className="eyebrow">Purchase Commitments - Simulation</p>
+          <h2>
+            {selectedBuyerCommitments.length} of {selectedBuyer?.activePurchaseLimit ?? 0} active
+            Purchase Commitments
+          </h2>
+          {selectedBuyerCommitments.length ? (
+            selectedBuyerCommitments.map((commitment) => (
+              <article
+                aria-label={`Purchase Commitment: ${commitment.snapshot.title}`}
+                className="checkout-panel"
+                key={commitment.id}
+              >
+                <p className="eyebrow">Purchase Commitment - Simulation</p>
+                <h3>{commitment.snapshot.title}</h3>
+                <p>Simulated Escrow: Held</p>
+                <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
+                  <h4>Purchase Snapshot - unchangeable</h4>
+                  <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
+                  <p><strong>Category:</strong> {commitment.snapshot.category}</p>
+                  <p><strong>Description:</strong> {commitment.snapshot.description}</p>
+                  <p><strong>Condition Disclosure:</strong> {commitment.snapshot.conditionDisclosure}</p>
+                  <p><strong>Condition Grade:</strong> {commitment.snapshot.conditionGrade}</p>
+                  <p><strong>Measurements / specifications:</strong> {commitment.snapshot.specifications}</p>
+                  <p><strong>Included parts:</strong> {commitment.snapshot.includedParts}</p>
+                  <p><strong>Frozen fictional item photos:</strong></p>
+                  <ul>
+                    {commitment.snapshot.photos.map((photo) => <li key={photo}>{photo}</li>)}
+                  </ul>
+                  <p>Buyer total: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                  <p>Seller payout: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                  <p>No platform or payment fee - simulation only.</p>
+                </section>
+              </article>
+            ))
+          ) : (
+            <p>No active Purchase Commitments. Successful simulated payments will appear here.</p>
+          )}
+        </section>
+        {checkoutNotice ? (
+          <p role="status">{checkoutNotice}</p>
+        ) : null}
+
         <section aria-label="Demo marketplace listings" className="discovery-catalog">
           <div className="inventory-heading">
             <p className="eyebrow">Nearby Demo Listings - Simulation</p>
@@ -607,6 +778,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                     <span>{formatRupiah(listing.price)}</span>
                   </div>
                   <small>{listing.imageLabel}</small>
+                  <button
+                    className="button button-outline"
+                    onClick={() => loadListingForEditing(listing)}
+                  >
+                    View item
+                  </button>
                 </article>
               );
             })}
@@ -692,6 +869,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 <strong>Measurements / specifications:</strong> {publishedListing.specifications}
               </p>
               <p className="listing-description">
+                <strong>Included parts:</strong> {publishedListing.includedParts}
+              </p>
+              <p className="listing-description">
                 {publishedListing.photos.length} item photos · complete-item view included ·{" "}
                 {publishedListing.photoPrivacyConfirmed
                   ? "location metadata removed"
@@ -716,6 +896,138 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 </div>
                 <span className="read-only-badge">Shared listing</span>
               </div>
+              {selectedBuyer && selectedSessionListing ? (
+                selectedBuyerHold ? (
+                  <section aria-label="Checkout Hold" className="checkout-panel">
+                    <p className="eyebrow">Checkout Hold - Simulation</p>
+                    <h3>{selectedBuyerHold.listingTitle}</h3>
+                    <strong role="timer">
+                      {formatCountdown(selectedHoldRemainingSeconds)} remaining
+                    </strong>
+                    <p>Expires {formatWibTime(selectedBuyerHold.expiresAtMs)}</p>
+                    <p>Transaction Price: {formatRupiah(selectedBuyerHold.transactionPrice)}</p>
+                    <p>
+                      Simulation only. No real payment information or money is requested.
+                    </p>
+                    <div className="listing-actions">
+                      <button
+                        className="button button-outline"
+                        onClick={() => {
+                          setDemoClockPaused(true);
+                          setClockOffsetMs(
+                            selectedBuyerHold.expiresAtMs - 1000 - Date.now(),
+                          );
+                          setClockNowMs(selectedBuyerHold.expiresAtMs - 1000);
+                        }}
+                      >
+                        Advance to one second before hold expiry
+                      </button>
+                      <button
+                        className="button button-outline"
+                        onClick={() => {
+                          setClockOffsetMs(selectedBuyerHold.expiresAtMs - Date.now());
+                          setClockNowMs(selectedBuyerHold.expiresAtMs);
+                          setDemoClockPaused(false);
+                          setCheckoutState((currentState) =>
+                            expireCheckoutHolds(currentState, selectedBuyerHold.expiresAtMs),
+                          );
+                          setCheckoutNotice(
+                            "Checkout Hold expired. The item returned to sale with no commitment or money movement.",
+                          );
+                        }}
+                      >
+                        Advance to exact hold expiry
+                      </button>
+                      <button
+                        className="button button-outline"
+                        onClick={() => {
+                          setCheckoutState((currentState) =>
+                            endCheckoutHold(
+                              currentState,
+                              selectedBuyerHold.buyerId,
+                              selectedBuyerHold.listingId,
+                            ),
+                          );
+                          setCheckoutNotice("Checkout abandoned. The item returned to sale with no commitment.");
+                        }}
+                      >
+                        Abandon checkout
+                      </button>
+                      <button
+                        className="button button-outline"
+                        onClick={() => {
+                          setCheckoutState((currentState) =>
+                            endCheckoutHold(
+                              currentState,
+                              selectedBuyerHold.buyerId,
+                              selectedBuyerHold.listingId,
+                            ),
+                          );
+                          setCheckoutNotice("Simulated payment failed. The item returned to sale with no commitment.");
+                        }}
+                      >
+                        Simulate failed payment
+                      </button>
+                      <button
+                        className="button button-primary"
+                        onClick={() => {
+                          const actionNowMs = demoClockPaused
+                            ? clockNowMs
+                            : Date.now() + clockOffsetMs;
+                          const nextState = completeSimulatedPayment(checkoutState, {
+                            buyerId: selectedBuyerHold.buyerId,
+                            listingId: selectedBuyerHold.listingId,
+                            nowMs: actionNowMs,
+                            activePurchaseLimit: selectedBuyer.activePurchaseLimit,
+                          });
+                          const commitmentCreated =
+                            nextState.commitments.length > checkoutState.commitments.length;
+                          setCheckoutState(nextState);
+                          setCheckoutNotice(
+                            commitmentCreated
+                              ? "Simulated payment succeeded. Purchase Commitment, unchangeable Purchase Snapshot, and simulated Escrow created."
+                              : "Simulated payment did not complete. The hold expired or the buyer reached the active purchase limit.",
+                          );
+                        }}
+                      >
+                        Simulate successful payment
+                      </button>
+                    </div>
+                  </section>
+                ) : (
+                  <section aria-label="Checkout" className="checkout-panel">
+                    <p className="eyebrow">Single-item checkout - Simulation</p>
+                    <button
+                      className="button button-primary"
+                      disabled={Boolean(
+                        currentBuyerHold ||
+                          selectedListingHold ||
+                          selectedBuyerCommitments.length >=
+                            selectedBuyer.activePurchaseLimit,
+                      )}
+                      onClick={startSelectedCheckoutHold}
+                    >
+                      Start 5-minute Checkout Hold
+                    </button>
+                    {selectedListingHold ? (
+                      <p>
+                        Checkout is already in progress for another buyer. The holder's identity stays private.
+                      </p>
+                    ) : currentBuyerHold ? (
+                      <p>
+                        You already have a Checkout Hold for {currentBuyerHold.listingTitle}.
+                        Finish or abandon it before starting another.
+                      </p>
+                    ) : selectedBuyerCommitments.length >= selectedBuyer.activePurchaseLimit ? (
+                      <p>
+                        {selectedBuyer.tier} limit of {selectedBuyer.activePurchaseLimit} active {selectedBuyer.activePurchaseLimit === 1
+                          ? "Purchase Commitment" : "Purchase Commitments"} reached.
+                      </p>
+                    ) : null}
+                    <p>No real payment information or money is requested.</p>
+                  </section>
+                )
+              ) : null}
               <section aria-label="Structured listing questions" className="listing-questions">
                 <h3>Ask about this item</h3>
                 <label>
@@ -800,15 +1112,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 const seller = demoSellers.find(
                   (candidate) => candidate.id === listing.sellerId,
                 );
+                const isPurchaseCommitted = committedListingIds.has(listing.id);
                 return (
                   <article aria-label={`Simulated listing: ${listing.title}`} key={listing.id}>
                     <span className="fictional-label">Simulated Demo Listing</span>
                     <span>
-                      {listing.status === "active"
-                        ? "Active"
-                        : listing.status === "deactivated"
-                          ? "Deactivated"
-                          : "Cross-listed unavailable"} &middot; simulated
+                      {isPurchaseCommitted
+                        ? "Purchase committed"
+                        : listing.status === "active"
+                          ? "Active"
+                          : listing.status === "deactivated"
+                            ? "Deactivated"
+                            : "Cross-listed unavailable"} &middot; simulated
                     </span>
                     <h2>{listing.title}</h2>
                     <p>{seller?.publicName} - Fictional Demo Seller</p>
@@ -854,11 +1169,25 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               >
                 {selectedSellerListings.map((listing) => (
                   <option key={listing.id} value={listing.id}>
-                    {listing.title} - {listing.status} - simulated
+                    {listing.title} -{" "}
+                    {committedListingIds.has(listing.id) ? "purchase committed" : listing.status}
+                    {" "}- simulated
                   </option>
                 ))}
               </select>
             </label>
+            {selectedListingHold ? (
+              <p role="status">
+                Checkout Hold active. Editing and sale actions are locked until checkout ends.
+              </p>
+            ) : null}
+            {selectedListingCommitment ? (
+              <p role="status">
+                Purchase Commitment active. This listing is locked for the transaction.
+              </p>
+            ) : null}
+            <fieldset disabled={selectedListingIsLocked}>
+              <legend>Listing details and actions</legend>
             <label>
               Title
               <input value={title} onChange={(event) => setTitle(event.target.value)} />
@@ -935,6 +1264,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               />
             </label>
             <label>
+              Included parts
+              <textarea
+                value={includedParts}
+                onChange={(event) => setIncludedParts(event.target.value)}
+              />
+            </label>
+            <label>
               <input
                 checked={completePhotoIncluded}
                 onChange={(event) => setCompletePhotoIncluded(event.target.checked)}
@@ -994,6 +1330,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 Mark cross-listed item unavailable
               </button>
             </div>
+            </fieldset>
           </section>
         </main>
       )}

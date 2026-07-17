@@ -1139,6 +1139,61 @@ footer p {
   margin-top: 18px;
 }
 
+.checkout-panel {
+  margin-top: 20px;
+  border: 1px solid rgba(23, 60, 43, 0.14);
+  border-radius: 18px;
+  padding: 20px;
+  background: #f8f5ed;
+  box-shadow: 0 12px 30px rgba(46, 62, 52, 0.06);
+}
+
+.checkout-panel h3,
+.checkout-panel h4 {
+  margin: 8px 0 12px;
+}
+
+.checkout-panel p,
+.checkout-panel li {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.checkout-panel ul {
+  margin: 6px 0 16px;
+  padding-left: 22px;
+}
+
+.demo-main > [aria-label="Purchase Commitments"] {
+  width: 100%;
+  max-height: none;
+  margin: 22px auto 8px;
+  overflow: visible;
+  box-shadow: 0 14px 36px rgba(46, 62, 52, 0.08);
+}
+
+.seller-workspace fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.seller-workspace fieldset > legend {
+  margin-bottom: 14px;
+  color: #315846;
+  font-weight: 800;
+}
+
+.seller-workspace fieldset label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 17px;
+  color: #315846;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .read-only-badge,
 .fictional-label {
   border-radius: 999px;
@@ -1682,6 +1737,16 @@ footer p {
   .workspace-tabs .button {
     flex: 1 1 145px;
     padding-inline: 12px;
+  }
+
+  .checkout-panel .listing-actions,
+  .checkout-panel .listing-actions .button {
+    width: 100%;
+  }
+
+  .demo-main > [aria-label="Purchase Commitments"] {
+    width: min(100% - 24px, 1180px);
+    padding: 18px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
