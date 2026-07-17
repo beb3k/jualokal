@@ -14,6 +14,7 @@ import {
   endCheckoutHold,
   expireCheckoutHolds,
   finalizePurchaseCommitment,
+  refundPurchaseCommitment,
   startCheckoutHold,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
@@ -24,6 +25,9 @@ import {
   closeIncompleteHandoverMeeting,
   createInitialHandoverState,
   openIncompleteHandoverDispute,
+  raiseMaterialMismatchClaim,
+  resolveMaterialMismatchDispute,
+  respondToMaterialMismatchClaim,
   recordHandoverPresence,
   sellerApproveScheduleAdjustment,
   sellerConfirmHandover,
@@ -31,6 +35,7 @@ import {
   sellerProposeRepeatHandover,
   type HandoverActionResult,
   type HandoverPoint,
+  type MaterialMismatchReason,
   type HandoverState,
 } from "./handover";
 
@@ -81,7 +86,12 @@ type PublishedListing = {
   photoPrivacyConfirmed: boolean;
 };
 
-type ListingStatus = "active" | "deactivated" | "cross-listed-unavailable";
+type ListingStatus =
+  | "active"
+  | "deactivated"
+  | "cross-listed-unavailable"
+  | "paused-for-correction"
+  | "removed-fraud-review";
 
 type SessionListing = DemoListingSeed & {
   status: ListingStatus;
@@ -751,6 +761,78 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     );
   }
 
+  function applyMismatchListingDisposition(state: HandoverState) {
+    const disposition = state.materialMismatchClaim?.listingDisposition;
+    if (!disposition || disposition === "unchanged") return;
+    const status: ListingStatus =
+      disposition === "removed-for-fraud-review"
+        ? "removed-fraud-review"
+        : "paused-for-correction";
+    setSessionListings((current) =>
+      current.map((listing) =>
+        listing.id === state.listingId ? { ...listing, status } : listing,
+      ),
+    );
+  }
+
+  function refundVisibleMismatch(state: HandoverState) {
+    if (!visibleHandoverCommitment) return;
+    setCheckoutState((current) =>
+      refundPurchaseCommitment(
+        current,
+        visibleHandoverCommitment.id,
+        currentActionNowMs(),
+      ),
+    );
+    applyMismatchListingDisposition(state);
+  }
+
+  function raiseVisibleMaterialMismatch(
+    reason: MaterialMismatchReason,
+    description: string,
+    photoLabel?: string,
+  ) {
+    if (!visibleHandoverState) return;
+    const next = applyHandoverResult(
+      raiseMaterialMismatchClaim(visibleHandoverState, {
+        actorId: selectedAccountId,
+        raisedAtMs: currentActionNowMs(),
+        reason,
+        description,
+        photoLabel,
+      }),
+      "Material Mismatch Claim recorded against the immutable Purchase Snapshot.",
+    );
+    if (next) applyMismatchListingDisposition(next);
+  }
+
+  function respondToVisibleMaterialMismatch(
+    response: "acknowledged" | "contested",
+  ) {
+    if (!visibleHandoverState) return;
+    const next = applyHandoverResult(
+      respondToMaterialMismatchClaim(visibleHandoverState, {
+        actorId: selectedAccountId,
+        respondedAtMs: currentActionNowMs(),
+        response,
+      }),
+      response === "acknowledged"
+        ? "Seller acknowledged the Material Mismatch; a full simulated refund was recorded."
+        : "Seller contested the Material Mismatch; simulated Escrow remains held in an Active Dispute.",
+    );
+    if (!next) return;
+    if (response === "acknowledged") refundVisibleMismatch(next);
+    else applyMismatchListingDisposition(next);
+  }
+
+  function resolveVisibleMaterialMismatch() {
+    if (!visibleHandoverState) return;
+    const next = applyHandoverResult(
+      resolveMaterialMismatchDispute(visibleHandoverState),
+      "Guided prototype review recorded a full simulated refund.",
+    );
+    if (next) refundVisibleMismatch(next);
+  }
   function resetDemo() {
     setActiveWorkspace("buyer");
     setSelectedAccountId(demoBuyer.id);
@@ -945,6 +1027,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           onBuyerConfirm={confirmVisibleBuyerHandover}
           onCloseIncomplete={closeVisibleIncompleteHandover}
           onOpenDispute={openVisibleIncompleteHandoverDispute}
+          onRaiseMismatch={raiseVisibleMaterialMismatch}
+          onRespondMismatch={respondToVisibleMaterialMismatch}
+          onResolveMismatch={resolveVisibleMaterialMismatch}
           onPropose={proposeVisibleHandover}
           onProposeRepeat={proposeVisibleRepeatHandover}
           onRecordPresence={recordVisiblePresence}
@@ -1006,11 +1091,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 <p>Transaction status: {commitment.lifecycleStatus}</p>
                 <p>
                   Simulated Escrow:{" "}
-                  {commitment.escrowStatus.startsWith("Held") ? "Held" : "Released"}
+                  {commitment.escrowStatus === "Held - simulated"
+                    ? "Held"
+                    : commitment.escrowStatus === "Refunded - simulated"
+                      ? "Refunded in full"
+                      : "Released"}
                 </p>
                 <p>
                   Simulated payout:{" "}
-                  {commitment.payoutStatus.startsWith("Pending") ? "Pending" : "Paid"}
+                  {commitment.payoutStatus === "Pending - simulated"
+                    ? "Pending"
+                    : commitment.payoutStatus === "Not paid - simulated"
+                      ? "Not paid"
+                      : "Paid"}
                 </p>
                 {commitment.trustOutcome === "Successful handover" ? (
                   <p>Successful handover recorded for private Tier Progress.</p>
@@ -1433,15 +1526,20 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                   <article aria-label={`Simulated listing: ${listing.title}`} key={listing.id}>
                     <span className="fictional-label">Simulated Demo Listing</span>
                     <span>
-                      {completedCommitment
+                      {completedCommitment?.trustOutcome === "Successful handover"
                         ? "Sold"
-                        : isPurchaseCommitted
-                          ? "Purchase committed"
-                        : listing.status === "active"
-                          ? "Active"
-                          : listing.status === "deactivated"
-                            ? "Deactivated"
-                            : "Cross-listed unavailable"} &middot; simulated
+                        : listing.status === "paused-for-correction"
+                          ? "Paused for correction"
+                          : listing.status === "removed-fraud-review"
+                            ? "Removed - fictional fraud review"
+                            : listing.status === "deactivated"
+                              ? "Deactivated"
+                              : listing.status === "cross-listed-unavailable"
+                                ? "Cross-listed unavailable"
+                                : isPurchaseCommitted
+                                  ? "Purchase committed"
+                                  : "Active"}{" "}
+                      &middot; simulated
                     </span>
                     <h2>{listing.title}</h2>
                     <p>{seller?.publicName} - Fictional Demo Seller</p>

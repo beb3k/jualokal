@@ -4,6 +4,7 @@ import {
   completeSimulatedPayment,
   createInitialCheckoutState,
   finalizePurchaseCommitment,
+  refundPurchaseCommitment,
   startCheckoutHold,
   type CheckoutState,
 } from "../src/checkout";
@@ -178,4 +179,33 @@ test("a completed purchase no longer consumes the buyer's active capacity", () =
   expect(secondPurchase.commitments[0].snapshot).toBe(
     completedPurchase.commitments[0].snapshot,
   );
+});
+
+test("a Material Mismatch refund completes the commitment once without a payout", () => {
+  const heldState = completeSimulatedPayment(
+    startHold(createInitialCheckoutState(), "buyer-1", 1_000),
+    {
+      buyerId: "buyer-1",
+      sellerId: "seller-1",
+      listingId: "listing-1",
+      nowMs: 2_000,
+      activePurchaseLimit: 1,
+    },
+  );
+  const commitment = heldState.commitments[0];
+
+  const refundedState = refundPurchaseCommitment(heldState, commitment.id, 3_000);
+
+  expect(refundedState.commitments[0]).toMatchObject({
+    lifecycleStatus: "Completed",
+    escrowStatus: "Refunded - simulated",
+    payoutStatus: "Not paid - simulated",
+    trustOutcome: "Material mismatch refund",
+    completedAtMs: 3_000,
+  });
+  expect(refundedState.commitments[0].snapshot).toBe(commitment.snapshot);
+
+  const repeatedRefund = refundPurchaseCommitment(refundedState, commitment.id, 4_000);
+  expect(repeatedRefund).toBe(refundedState);
+  expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
 });

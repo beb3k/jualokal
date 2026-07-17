@@ -65,6 +65,31 @@ async function recordBothPartiesPresent(
   await panel.getByRole("button", { name: "Record seller Presence Check" }).click();
 }
 
+async function prepareMismatchHandover(page: Page) {
+  await openDemo(page);
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  await recordBothPartiesPresent(page);
+  await switchAccount(page, "buyer-ayu");
+}
+
+async function submitMismatchClaim(
+  page: Page,
+  reason: string,
+  description: string,
+) {
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Raise Material Mismatch Claim" }).click();
+  const claim = panel.getByRole("region", { name: "Material Mismatch Claim" });
+  await claim.getByRole("combobox", { name: "Mismatch reason" }).selectOption(reason);
+  await claim
+    .getByRole("textbox", {
+      name: "Describe how the item differs from the Purchase Snapshot",
+    })
+    .fill(description);
+  await claim.getByRole("button", { name: "Submit Material Mismatch Claim" }).click();
+}
+
 async function expectIncompleteSettlement(
   panel: ReturnType<typeof basketHandover>,
   actorRole: "buyer" | "seller",
@@ -479,4 +504,194 @@ test("Reset Demo clears an incomplete handover and its preserved evidence", asyn
       name: "Nearby simulated listing: Handwoven rattan market basket",
     }),
   ).toBeVisible();
+});
+
+test("Material Mismatch offers only qualifying reasons and requires a description", async ({
+  page,
+}) => {
+  await prepareMismatchHandover(page);
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Raise Material Mismatch Claim" }).click();
+  const claim = panel.getByRole("region", { name: "Material Mismatch Claim" });
+  const reason = claim.getByRole("combobox", { name: "Mismatch reason" });
+  const submit = claim.getByRole("button", { name: "Submit Material Mismatch Claim" });
+
+  for (const qualifyingReason of [
+    "Wrong item",
+    "Undisclosed defect",
+    "False description or condition grade",
+    "Important measurement mismatch",
+    "Missing included part",
+    "Suspected counterfeit",
+  ]) {
+    await expect(reason.getByRole("option", { name: qualifyingReason, exact: true })).toHaveCount(1);
+  }
+  for (const excludedReason of ["Changed my mind", "Subjective dislike", "Preference", "Poor fit"]) {
+    await expect(reason.getByRole("option", { name: excludedReason, exact: true })).toHaveCount(0);
+  }
+
+  await expect(submit).toBeDisabled();
+  await reason.selectOption("wrong-item");
+  await expect(submit).toBeDisabled();
+  await claim
+    .getByRole("textbox", {
+      name: "Describe how the item differs from the Purchase Snapshot",
+    })
+    .fill("The item presented is not the basket shown in the Purchase Snapshot.");
+  await expect(submit).toBeEnabled();
+  await expect(claim.getByLabel("Supporting photo (optional)")).toHaveCount(1);
+  await expect(claim).toContainText("Change of mind, subjective dislike, preference, and poor fit without misdescription do not qualify");
+});
+
+test("ordinary mismatch closes after the buyer accepts or takes the item", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  const panel = basketHandover(page);
+  await expect(panel.getByRole("button", { name: "Raise Material Mismatch Claim" })).toBeVisible();
+  await expect(panel).toContainText("Raise this before confirming acceptance or taking the item");
+
+  await panel.getByRole("button", { name: "Buyer confirms inspected and accepted" }).click();
+
+  await expect(panel.getByRole("button", { name: "Raise Material Mismatch Claim" })).toHaveCount(0);
+  await expect(panel).toContainText("Material Mismatch Claim unavailable after buyer acceptance");
+});
+
+test("seller acknowledgement refunds the buyer and pauses the listing", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  await submitMismatchClaim(
+    page,
+    "wrong-item",
+    "The item presented is not the basket shown in the Purchase Snapshot.",
+  );
+  await switchAccount(page, "seller-dimas");
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Acknowledge Material Mismatch" }).click();
+
+  await expect(panel).toContainText("Seller keeps the item");
+  await expect(panel).toContainText("Simulated Escrow: Refunded in full");
+  await expect(panel).toContainText("Simulated refund: Full");
+  await expect(panel).toContainText("Simulated payout: Not paid");
+  await expect(panel).toContainText("Listing status: Paused for correction");
+  await page.getByRole("button", { name: "Demo inventory" }).click();
+  await expect(
+    page.getByRole("article", { name: "Simulated listing: Handwoven rattan market basket" }),
+  ).toContainText("Paused for correction");
+});
+
+test("contested mismatch stays held as an Active Dispute until guided refund", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  await submitMismatchClaim(
+    page,
+    "undisclosed-defect",
+    "The base has a split that is absent from the Purchase Snapshot.",
+  );
+  await switchAccount(page, "seller-dimas");
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Contest Material Mismatch" }).click();
+
+  await expect(panel).toContainText("Active Dispute");
+  await expect(panel).toContainText("Seller keeps the item");
+  await expect(panel).toContainText("Simulated Escrow: Held");
+  await expect(panel).toContainText("Simulated payout: Pending");
+  await expect(panel).toContainText("Simulated refund: Not issued");
+  await expect(panel).toContainText(/Prototype policy .* subject to later launch elaboration/);
+
+  await panel.getByRole("button", { name: "Simulate guided-review refund" }).click();
+  await expect(panel).toContainText("Guided prototype review resolved with a full simulated buyer refund");
+  await expect(panel).toContainText("Simulated Escrow: Refunded in full");
+  await expect(panel).toContainText("Simulated payout: Not paid");
+});
+
+test("suspected counterfeit removes the listing for fictional fraud review", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  await submitMismatchClaim(
+    page,
+    "suspected-counterfeit",
+    "The maker mark differs from the mark shown in the Purchase Snapshot.",
+  );
+  const panel = basketHandover(page);
+
+  await expect(panel).toContainText("Seller keeps the item");
+  await expect(panel).toContainText("Listing status: Removed");
+  await expect(panel).toContainText("Fictional fraud review");
+  await expect(panel).toContainText("This is simulated Demo Mode data");
+  await page.getByRole("button", { name: "Demo inventory" }).click();
+  await expect(
+    page.getByRole("article", { name: "Simulated listing: Handwoven rattan market basket" }),
+  ).toContainText("Removed");
+});
+
+test("Material Mismatch details stay isolated between demo sessions", async ({
+  browser,
+  page: sessionAPage,
+}) => {
+  const privateDescription = "Private mismatch detail unique to session A";
+  await prepareMismatchHandover(sessionAPage);
+  await submitMismatchClaim(sessionAPage, "wrong-item", privateDescription);
+  await expect(basketHandover(sessionAPage)).toContainText(privateDescription);
+  await switchAccount(sessionAPage, "buyer-naufal");
+  await expect(sessionAPage.getByText(privateDescription)).toHaveCount(0);
+  await expect(basketHandover(sessionAPage)).toHaveCount(0);
+  await switchAccount(sessionAPage, "buyer-ayu");
+  await expect(basketHandover(sessionAPage)).toContainText(privateDescription);
+
+  const sessionBContext = await browser.newContext({
+    viewport: sessionAPage.viewportSize() ?? { width: 1280, height: 720 },
+  });
+  const sessionBPage = await sessionBContext.newPage();
+  try {
+    await openDemo(sessionBPage);
+    await expect(sessionBPage.getByRole("region", { name: "Purchase Commitments" })).toContainText(
+      "No active Purchase Commitments",
+    );
+    await expect(sessionBPage.getByText(privateDescription)).toHaveCount(0);
+    await expect(basketHandover(sessionBPage)).toHaveCount(0);
+  } finally {
+    await sessionBContext.close();
+  }
+});
+
+test("Reset Demo clears a mismatch and permits a fresh successful handover", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  await submitMismatchClaim(
+    page,
+    "wrong-item",
+    "The item presented is not the basket shown in the Purchase Snapshot.",
+  );
+  await switchAccount(page, "seller-dimas");
+  await basketHandover(page)
+    .getByRole("button", { name: "Acknowledge Material Mismatch" })
+    .click();
+  await page.getByRole("button", { name: "Reset Demo" }).click();
+  await page
+    .getByRole("dialog", { name: "Reset Demo" })
+    .getByRole("button", { name: "Reset this simulated session" })
+    .click();
+
+  await purchaseBasket(page);
+  await arrangeHandover(page);
+  await recordBothPartiesPresent(page);
+  await switchAccount(page, "buyer-ayu");
+  await basketHandover(page)
+    .getByRole("button", { name: "Buyer confirms inspected and accepted" })
+    .click();
+  await switchAccount(page, "seller-dimas");
+  const panel = basketHandover(page);
+  await panel.getByRole("button", { name: "Seller confirms handover" }).click();
+
+  await expect(panel).toContainText("Sale final");
+  await expect(panel).toContainText("Simulated Escrow: Released");
+  await expect(panel).toContainText("Simulated payout: Paid");
+});
+
+test("ordinary mismatch closes after the seller transfers the item", async ({ page }) => {
+  await prepareMismatchHandover(page);
+  await switchAccount(page, "seller-dimas");
+  await basketHandover(page)
+    .getByRole("button", { name: "Seller confirms handover" })
+    .click();
+  await switchAccount(page, "buyer-ayu");
+  const panel = basketHandover(page);
+
+  await expect(panel.getByRole("button", { name: "Raise Material Mismatch Claim" })).toHaveCount(0);
+  await expect(panel).toContainText("Material Mismatch Claim unavailable after item transfer");
 });

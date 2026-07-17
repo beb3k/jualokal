@@ -56,6 +56,32 @@ export type ActiveHandoverDispute = Readonly<{
   openedAtMs: number;
 }>;
 
+export type MaterialMismatchReason =
+  | "wrong-item"
+  | "undisclosed-defect"
+  | "false-description-or-grade"
+  | "measurement-or-included-part-mismatch"
+  | "suspected-counterfeit";
+
+export type MaterialMismatchReasonInput =
+  | MaterialMismatchReason
+  | "changed-mind"
+  | "subjective-dislike"
+  | "personal-preference"
+  | "fit-without-misdescription";
+
+export type MaterialMismatchClaim = Readonly<{
+  reason: MaterialMismatchReason;
+  description: string;
+  photoLabel: string | null;
+  raisedAtMs: number;
+  status: "raised" | "acknowledged" | "contested" | "refunded";
+  listingDisposition:
+    | "unchanged"
+    | "paused-for-correction"
+    | "removed-for-fraud-review";
+  fraudReviewFlagged: boolean;
+}>;
 export type HandoverSuccessRecord = Readonly<{
   transactionStatus: "Final";
   listingStatus: "Sold";
@@ -82,6 +108,7 @@ export type HandoverState = Readonly<{
   confirmationEvidence: readonly HandoverConfirmationEvidence[];
   activeDispute: ActiveHandoverDispute | null;
   successRecord: HandoverSuccessRecord | null;
+  materialMismatchClaim: MaterialMismatchClaim | null;
 }>;
 
 export type HandoverRejection =
@@ -100,7 +127,12 @@ export type HandoverRejection =
   | "incomplete-confirmation-required"
   | "meeting-not-closed"
   | "meeting-closed"
-  | "active-dispute-open";
+  | "active-dispute-open"
+  | "material-mismatch-claim-open"
+  | "material-mismatch-claim-required"
+  | "material-mismatch-description-required"
+  | "material-mismatch-reason-not-qualifying"
+  | "material-mismatch-too-late";
 
 export type HandoverActionResult =
   | Readonly<{ ok: true; state: HandoverState }>
@@ -248,6 +280,7 @@ export function createInitialHandoverState(
     confirmationEvidence: Object.freeze([]),
     activeDispute: null,
     successRecord: null,
+    materialMismatchClaim: null,
   });
 }
 
@@ -429,6 +462,7 @@ function confirmationRejection(
   state: HandoverState,
   confirmedAtMs: number,
 ): HandoverRejection | null {
+  if (state.materialMismatchClaim) return "material-mismatch-claim-open";
   if (state.meetingClosedAtMs !== null) return "meeting-closed";
   if (!state.schedule) return "schedule-required";
   if (!duringSchedule(state, confirmedAtMs)) {
@@ -582,6 +616,9 @@ export function openIncompleteHandoverDispute(
   if (!openedBy) {
     return { ok: false, state, reason: "acting-member-not-authorized" };
   }
+  if (state.materialMismatchClaim) {
+    return { ok: false, state, reason: "material-mismatch-claim-open" };
+  }
   if (state.activeDispute) return { ok: true, state };
   if (state.successRecord || state.confirmationEvidence.length === 0) {
     return { ok: false, state, reason: "incomplete-confirmation-required" };
@@ -597,6 +634,130 @@ export function openIncompleteHandoverDispute(
         openedBy,
         openedAtMs: input.openedAtMs,
       }),
+    }),
+  };
+}
+
+const qualifyingMismatchReasons: readonly MaterialMismatchReason[] = [
+  "wrong-item",
+  "undisclosed-defect",
+  "false-description-or-grade",
+  "measurement-or-included-part-mismatch",
+  "suspected-counterfeit",
+];
+function isQualifyingMismatchReason(
+  reason: MaterialMismatchReasonInput,
+): reason is MaterialMismatchReason {
+  return qualifyingMismatchReasons.some((candidate) => candidate === reason);
+}
+
+export function raiseMaterialMismatchClaim(
+  state: HandoverState,
+  input: Readonly<{
+    actorId: string;
+    raisedAtMs: number;
+    reason: MaterialMismatchReasonInput;
+    description: string;
+    photoLabel?: string;
+  }>,
+): HandoverActionResult {
+  if (input.actorId !== state.buyerId) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  if (
+    state.buyerConfirmedAtMs !== null ||
+    state.sellerConfirmedAtMs !== null ||
+    state.successRecord ||
+    state.materialMismatchClaim
+  ) {
+    return { ok: false, state, reason: "material-mismatch-too-late" };
+  }
+  if (!isQualifyingMismatchReason(input.reason)) {
+    return { ok: false, state, reason: "material-mismatch-reason-not-qualifying" };
+  }
+  const description = input.description.trim();
+  if (!description) {
+    return { ok: false, state, reason: "material-mismatch-description-required" };
+  }
+  const fraudReviewFlagged = input.reason === "suspected-counterfeit";
+  return {
+    ok: true,
+    state: Object.freeze({
+      ...state,
+      materialMismatchClaim: Object.freeze({
+        reason: input.reason,
+        description,
+        photoLabel: input.photoLabel?.trim() || null,
+        raisedAtMs: input.raisedAtMs,
+        status: "raised" as const,
+        listingDisposition: fraudReviewFlagged
+          ? ("removed-for-fraud-review" as const)
+          : ("unchanged" as const),
+        fraudReviewFlagged,
+      }),
+    }),
+  };
+}
+
+export function respondToMaterialMismatchClaim(
+  state: HandoverState,
+  input: Readonly<{
+    actorId: string;
+    respondedAtMs: number;
+    response: "acknowledged" | "contested";
+  }>,
+): HandoverActionResult {
+  if (input.actorId !== state.sellerId) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  const claim = state.materialMismatchClaim;
+  if (!claim || claim.status !== "raised") {
+    return { ok: false, state, reason: "material-mismatch-claim-required" };
+  }
+  const contested = input.response === "contested";
+  return {
+    ok: true,
+    state: Object.freeze({
+      ...state,
+      materialMismatchClaim: Object.freeze({
+        ...claim,
+        status: input.response,
+        listingDisposition: claim.fraudReviewFlagged
+          ? "removed-for-fraud-review"
+          : contested
+            ? "unchanged"
+            : "paused-for-correction",
+      }),
+      activeDispute: contested
+        ? Object.freeze({
+            status: "Active Dispute" as const,
+            openedBy: "buyer" as const,
+            openedAtMs: input.respondedAtMs,
+          })
+        : null,
+    }),
+  };
+}
+
+export function resolveMaterialMismatchDispute(
+  state: HandoverState,
+): HandoverActionResult {
+  const claim = state.materialMismatchClaim;
+  if (!claim || claim.status !== "contested" || !state.activeDispute) {
+    return { ok: false, state, reason: "material-mismatch-claim-required" };
+  }
+  return {
+    ok: true,
+    state: Object.freeze({
+      ...state,
+      materialMismatchClaim: Object.freeze({
+        ...claim,
+        status: "refunded" as const,
+        listingDisposition: claim.fraudReviewFlagged
+          ? ("removed-for-fraud-review" as const)
+          : ("unchanged" as const),
+      }),
+      activeDispute: null,
     }),
   };
 }
