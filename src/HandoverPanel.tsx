@@ -98,6 +98,15 @@ function formatWibWindow(startsAtMs: number, endsAtMs: number) {
   return `${date}, ${time(startsAtMs)}-${time(endsAtMs)} WIB`;
 }
 
+function formatWibTime(timestampMs: number) {
+  return `${new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(timestampMs))} WIB`;
+}
+
 type HandoverPanelProps = {
   actorRole: "buyer" | "seller";
   commitment: PurchaseCommitment;
@@ -114,6 +123,9 @@ type HandoverPanelProps = {
     simulation: PresenceSimulation,
   ) => void;
   onBuyerConfirm: () => void;
+  onCloseIncomplete: () => void;
+  onOpenDispute: () => void;
+  onProposeRepeat: () => void;
   onSellerConfirm: () => void;
 };
 
@@ -130,6 +142,9 @@ export default function HandoverPanel({
   onAdvance,
   onRecordPresence,
   onBuyerConfirm,
+  onCloseIncomplete,
+  onOpenDispute,
+  onProposeRepeat,
   onSellerConfirm,
 }: HandoverPanelProps) {
   const [selectedPointId, setSelectedPointId] = useState(handoverPoints[0].id);
@@ -137,6 +152,9 @@ export default function HandoverPanel({
     useState<PresenceSimulation["value"]>("boundary");
   const [sellerPresenceValue, setSellerPresenceValue] =
     useState<PresenceSimulation["value"]>("inside");
+  const [handoverTimeValue, setHandoverTimeValue] = useState<
+    "window-start" | "window-end" | "just-after-window"
+  >("window-start");
   const selectedPoint =
     handoverPoints.find((point) => point.id === selectedPointId) ?? handoverPoints[0];
   const buyerPresenceSimulation =
@@ -153,6 +171,21 @@ export default function HandoverPanel({
       nowMs >= handover.schedule.window.startsAtMs &&
       nowMs <= handover.schedule.window.endsAtMs,
   );
+  const exactlyOneConfirmation =
+    (handover.buyerConfirmedAtMs === null) !== (handover.sellerConfirmedAtMs === null);
+  const buyerEvidence = handover.confirmationEvidence
+    .filter((evidence) => evidence.party === "buyer")
+    .at(-1);
+  const sellerEvidence = handover.confirmationEvidence
+    .filter((evidence) => evidence.party === "seller")
+    .at(-1);
+  const selectedHandoverTime = handover.schedule
+    ? handoverTimeValue === "window-start"
+      ? handover.schedule.window.startsAtMs
+      : handoverTimeValue === "window-end"
+        ? handover.schedule.window.endsAtMs
+        : handover.schedule.window.endsAtMs + 1
+    : nowMs;
 
   return (
     <section
@@ -179,7 +212,7 @@ export default function HandoverPanel({
         </div>
       ) : (
         <>
-          {actorRole === "seller" && !handover.proposal ? (
+          {actorRole === "seller" && !handover.proposal && handover.meetingNumber === 1 ? (
             <div className="handover-controls">
               <label>
                 Seller-selected Handover Point
@@ -229,7 +262,9 @@ export default function HandoverPanel({
                       className="button button-primary"
                       onClick={() => onAccept(handover.proposal!.windows[0].id)}
                     >
-                      Accept first proposed window
+                      {handover.meetingNumber > 1
+                        ? "Buyer accepts repeat meeting"
+                        : "Accept first proposed window"}
                     </button>
                   ) : null}
                   <button
@@ -284,8 +319,40 @@ export default function HandoverPanel({
                 className="button button-outline"
                 onClick={() => onAdvance(handover.schedule!.window.startsAtMs)}
               >
-                Advance to accepted handover window
+                {handover.meetingNumber > 1
+                  ? "Advance to repeat handover window"
+                  : "Advance to accepted handover window"}
               </button>
+              <div className="handover-controls">
+                <label>
+                  Simulated handover time
+                  <select
+                    aria-label="Simulated handover time"
+                    onChange={(event) =>
+                      setHandoverTimeValue(
+                        event.target.value as
+                          | "window-start"
+                          | "window-end"
+                          | "just-after-window",
+                      )
+                    }
+                    value={handoverTimeValue}
+                  >
+                    <option value="window-start">Accepted window start</option>
+                    <option value="window-end">Accepted window end — eligible</option>
+                    <option value="just-after-window">Just after accepted window — blocked</option>
+                  </select>
+                </label>
+                <button
+                  className="button button-outline"
+                  onClick={() => onAdvance(selectedHandoverTime)}
+                >
+                  Set simulated handover time
+                </button>
+              </div>
+              {handover.meetingNumber > 1 && !bothEligible ? (
+                <p>Fresh Presence Checks required for this repeat meeting.</p>
+              ) : null}
             </section>
           ) : null}
 
@@ -374,49 +441,114 @@ export default function HandoverPanel({
 
           {handover.schedule ? (
             <div className="checkout-panel">
-              <h3>Ordered Handover Confirmations</h3>
+              <h3>Independent Handover Confirmations</h3>
               <p>
-                The buyer inspects against the Purchase Snapshot while the Seller retains
-                the item. The buyer confirms first; the Seller transfers and confirms
-                afterward.
+                Each party records only their own declaration against the Purchase Snapshot.
+                One confirmation is evidence, never completion.
               </p>
               <p>
                 Simulated Escrow:{" "}
                 {commitment.escrowStatus.startsWith("Held") ? "Held" : "Released"}
               </p>
-              {handover.buyerConfirmedAtMs ? <p>Buyer confirmation recorded.</p> : null}
               {actorRole === "buyer" ? (
                 <button
                   className="button button-primary"
                   disabled={
                     !bothEligible ||
                     !insideAcceptedWindow ||
-                    handover.buyerConfirmedAtMs !== null
+                    handover.buyerConfirmedAtMs !== null ||
+                    handover.meetingClosedAtMs !== null ||
+                    handover.activeDispute !== null
                   }
                   onClick={onBuyerConfirm}
                 >
                   Buyer confirms inspected and accepted
                 </button>
-              ) : (
+              ) : null}
+              {actorRole === "seller" ? (
                 <button
                   className="button button-primary"
                   disabled={
                     !bothEligible ||
                     !insideAcceptedWindow ||
-                    handover.buyerConfirmedAtMs === null
+                    handover.sellerConfirmedAtMs !== null ||
+                    handover.meetingClosedAtMs !== null ||
+                    handover.activeDispute !== null
                   }
                   onClick={onSellerConfirm}
                 >
                   Seller confirms handover
                 </button>
-              )}
-              {handover.buyerConfirmedAtMs && !handover.sellerConfirmedAtMs ? (
-                <p>
-                  One-sided confirmation is evidence only. The transaction remains
-                  incomplete and simulated Escrow stays held.
-                </p>
               ) : null}
             </div>
+          ) : null}
+
+          {handover.confirmationEvidence.length > 0 ? (
+            <section aria-label="Preserved confirmation evidence" className="checkout-panel">
+              <h3>Preserved confirmation evidence</h3>
+              <p>Buyer confirmation {buyerEvidence ? "recorded" : "not recorded"}.</p>
+              {buyerEvidence ? (
+                <p>
+                  Buyer presence {buyerEvidence.buyerPresence.eligible ? "eligible" : "not eligible"};
+                  reported accuracy {buyerEvidence.buyerPresence.accuracyM ?? "unavailable"} m.
+                  Recorded at {formatWibTime(buyerEvidence.confirmedAtMs)}.
+                </p>
+              ) : null}
+              <p>Seller confirmation {sellerEvidence ? "recorded" : "not recorded"}.</p>
+              {sellerEvidence ? (
+                <p>
+                  Seller presence {sellerEvidence.sellerPresence.eligible ? "eligible" : "not eligible"};
+                  reported accuracy {sellerEvidence.sellerPresence.accuracyM ?? "unavailable"} m.
+                  Recorded at {formatWibTime(sellerEvidence.confirmedAtMs)}.
+                </p>
+              ) : null}
+              <p>Only eligibility, timestamp, and reported accuracy are preserved.</p>
+            </section>
+          ) : null}
+
+          {handover.confirmationEvidence.length > 0 ? (
+            <section aria-label="Incomplete Handover" className="checkout-panel">
+              <h3>Incomplete Handover</h3>
+              <p>Simulated Escrow: Held</p>
+              <p>Simulated payout: Pending</p>
+              <p>Simulated refund: Not issued</p>
+              <p>Listing status: Purchased — not sold</p>
+              {actorRole === "buyer" ? (
+                <p>Tier Progress: Not advanced</p>
+              ) : null}
+              {handover.meetingClosedAtMs !== null ? (
+                <p>Remote confirmation unavailable after separation.</p>
+              ) : null}
+              {handover.activeDispute ? (
+                <>
+                  <p>Active Dispute — guided prototype review</p>
+                  <p>
+                    Jualokal authority is limited to incomplete, inconsistent, or disputed
+                    transaction states.
+                  </p>
+                  <p>Prototype policy — subject to later launch elaboration.</p>
+                </>
+              ) : null}
+              {!handover.activeDispute ? (
+                <div className="listing-actions">
+                  {exactlyOneConfirmation && handover.meetingClosedAtMs === null ? (
+                    <button className="button button-outline" onClick={onCloseIncomplete}>
+                      End this handover attempt and separate
+                    </button>
+                  ) : null}
+                  {exactlyOneConfirmation &&
+                  actorRole === "seller" &&
+                  handover.meetingClosedAtMs !== null ? (
+                    <button className="button button-primary" onClick={onProposeRepeat}>
+                      Seller proposes repeat meeting
+                    </button>
+                  ) : null}
+                  <button className="button button-outline" onClick={onOpenDispute}>
+                    Open Active Dispute
+                  </button>
+                </div>
+              ) : null}
+            </section>
           ) : null}
         </>
       )}

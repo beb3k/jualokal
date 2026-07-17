@@ -6,11 +6,14 @@ import {
   buyerAcceptHandover,
   buyerConfirmHandover,
   buyerRequestScheduleAdjustment,
+  closeIncompleteHandoverMeeting,
   createInitialHandoverState,
+  openIncompleteHandoverDispute,
   recordHandoverPresence,
   sellerApproveScheduleAdjustment,
   sellerConfirmHandover,
   sellerProposeHandover,
+  sellerProposeRepeatHandover,
   type BuyerTier,
   type HandoverActionResult,
   type HandoverPoint,
@@ -89,6 +92,30 @@ function acceptedState(point = publicPoint()) {
 function must(result: HandoverActionResult): HandoverState {
   if (!result.ok) throw new Error(`Expected success, received ${result.reason}`);
   return result.state;
+}
+
+function withBothPresence(state = acceptedState()) {
+  const timestampMs = state.schedule!.window.startsAtMs;
+  state = must(
+    recordHandoverPresence(state, {
+      party: "buyer",
+      timestampMs,
+      locationAvailable: true,
+      accuracyState: "usable",
+      accuracyM: 10,
+      distanceFromPointM: 20,
+    }),
+  );
+  return must(
+    recordHandoverPresence(state, {
+      party: "seller",
+      timestampMs,
+      locationAvailable: true,
+      accuracyState: "usable",
+      accuracyM: 8,
+      distanceFromPointM: 30,
+    }),
+  );
 }
 
 test("exact proposal, agreement, and 48-hour boundaries remain eligible", () => {
@@ -287,7 +314,9 @@ test("approved schedule change clears earlier presence and buyer confirmation", 
       distanceFromPointM: 30,
     }),
   );
-  state = must(buyerConfirmHandover(state, { confirmedAtMs: originalStart }));
+  state = must(
+    buyerConfirmHandover(state, { actorId: "buyer-1", confirmedAtMs: originalStart }),
+  );
 
   state = must(
     buyerRequestScheduleAdjustment(state, {
@@ -381,52 +410,367 @@ test("presence at exactly 100 m is eligible and stores no raw location", () => {
   });
 });
 
-test("buyer confirms first and matching confirmations complete exactly once", () => {
-  let state = acceptedState();
-  const withinWindow = state.schedule!.window.startsAtMs;
+for (const firstParty of ["buyer", "seller"] as const) {
+  test(`${firstParty}-only confirmation remains evidence without completing`, () => {
+    const present = withBothPresence();
+    const confirmedAtMs = present.schedule!.window.startsAtMs;
+    const state = must(
+      firstParty === "buyer"
+        ? buyerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs })
+        : sellerConfirmHandover(present, { actorId: "seller-1", confirmedAtMs }),
+    );
 
-  const sellerFirst = sellerConfirmHandover(state, { confirmedAtMs: withinWindow });
-  expect(sellerFirst).toMatchObject({
+    expect(state.successRecord).toBeNull();
+    expect(state.confirmationEvidence).toEqual([
+      {
+        party: firstParty,
+        confirmedAtMs,
+        meetingNumber: 1,
+        buyerPresence: { eligible: true, timestampMs: confirmedAtMs, accuracyM: 10 },
+        sellerPresence: { eligible: true, timestampMs: confirmedAtMs, accuracyM: 8 },
+      },
+    ]);
+    expect(Object.keys(state.confirmationEvidence[0])).toEqual([
+      "party",
+      "confirmedAtMs",
+      "meetingNumber",
+      "buyerPresence",
+      "sellerPresence",
+    ]);
+    expect(JSON.stringify(state.confirmationEvidence)).not.toMatch(/distance|location/i);
+  });
+}
+
+test("only the acting participant can perform incomplete-handover actions", () => {
+  const present = withBothPresence();
+  const confirmedAtMs = present.schedule!.window.startsAtMs;
+
+  expect(
+    buyerConfirmHandover(present, { actorId: "seller-1", confirmedAtMs }),
+  ).toMatchObject({
     ok: false,
-    reason: "buyer-confirmation-required",
+    state: present,
+    reason: "acting-member-not-authorized",
+  });
+  expect(
+    sellerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs }),
+  ).toMatchObject({
+    ok: false,
+    state: present,
+    reason: "acting-member-not-authorized",
   });
 
-  state = must(
-    recordHandoverPresence(state, {
-      party: "buyer",
-      timestampMs: withinWindow,
-      locationAvailable: true,
-      accuracyState: "usable",
-      accuracyM: 10,
-      distanceFromPointM: 100,
+  const incomplete = must(
+    buyerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs }),
+  );
+  expect(
+    closeIncompleteHandoverMeeting(incomplete, {
+      actorId: "other-member",
+      closedAtMs: confirmedAtMs + 1,
+    }),
+  ).toMatchObject({
+    ok: false,
+    state: incomplete,
+    reason: "acting-member-not-authorized",
+  });
+});
+
+test("closing an incomplete meeting blocks the missing remote confirmation", () => {
+  const present = withBothPresence();
+  const confirmedAtMs = present.schedule!.window.startsAtMs;
+  const incomplete = must(
+    buyerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs }),
+  );
+  const closed = must(
+    closeIncompleteHandoverMeeting(incomplete, {
+      actorId: "seller-1",
+      closedAtMs: confirmedAtMs + 1,
     }),
   );
-  state = must(
-    recordHandoverPresence(state, {
-      party: "seller",
-      timestampMs: withinWindow,
-      locationAvailable: true,
-      accuracyState: "usable",
-      accuracyM: 8,
-      distanceFromPointM: 30,
+
+  expect(closed.meetingClosedAtMs).toBe(confirmedAtMs + 1);
+  expect(
+    sellerConfirmHandover(closed, {
+      actorId: "seller-1",
+      confirmedAtMs: confirmedAtMs + 2,
+    }),
+  ).toMatchObject({ ok: false, state: closed, reason: "meeting-closed" });
+});
+
+test("a repeat meeting needs a fresh mutual schedule, presence, and confirmations", () => {
+  const present = withBothPresence();
+  const firstConfirmedAtMs = present.schedule!.window.startsAtMs;
+  const incomplete = must(
+    buyerConfirmHandover(present, {
+      actorId: "buyer-1",
+      confirmedAtMs: firstConfirmedAtMs,
     }),
   );
-  state = must(buyerConfirmHandover(state, { confirmedAtMs: withinWindow }));
-  expect(state.successRecord).toBeNull();
+  const oldEvidence = incomplete.confirmationEvidence[0];
+  const closed = must(
+    closeIncompleteHandoverMeeting(incomplete, {
+      actorId: "buyer-1",
+      closedAtMs: firstConfirmedAtMs + 1,
+    }),
+  );
+  const repeat = must(
+    sellerProposeRepeatHandover(closed, {
+      actorId: "seller-1",
+      proposedAtMs: firstConfirmedAtMs + 2,
+      point: publicPoint(),
+      windows: [
+        window("repeat-morning", wibTimestamp(1, 11), wibTimestamp(1, 11, 30)),
+        window("repeat-afternoon", wibTimestamp(1, 16), wibTimestamp(1, 16, 30)),
+      ],
+    }),
+  );
 
-  const completed = sellerConfirmHandover(state, {
-    confirmedAtMs: withinWindow + 1,
+  expect(repeat).toMatchObject({
+    meetingNumber: 2,
+    schedule: null,
+    buyerPresence: null,
+    sellerPresence: null,
+    buyerConfirmedAtMs: null,
+    sellerConfirmedAtMs: null,
+    meetingClosedAtMs: null,
   });
-  const finalState = must(completed);
-  expect(finalState.successRecord).toEqual({
-    transactionStatus: "Final",
-    listingStatus: "Sold",
-    escrowStatus: "Released - simulated",
-    completedAtMs: withinWindow + 1,
-  });
+  expect(repeat.confirmationEvidence).toEqual([oldEvidence]);
 
-  const repeated = sellerConfirmHandover(finalState, {
-    confirmedAtMs: withinWindow + 2,
+  const accepted = must(
+    buyerAcceptHandover(repeat, {
+      windowId: "repeat-morning",
+      acceptedAtMs: firstConfirmedAtMs + 3,
+    }),
+  );
+  expect(
+    sellerConfirmHandover(accepted, {
+      actorId: "seller-1",
+      confirmedAtMs: accepted.schedule!.window.startsAtMs,
+    }),
+  ).toMatchObject({ ok: false, reason: "both-presence-checks-required" });
+
+  let repeatMeeting = withBothPresence(accepted);
+  const repeatConfirmedAtMs = repeatMeeting.schedule!.window.startsAtMs;
+  repeatMeeting = must(
+    buyerConfirmHandover(repeatMeeting, {
+      actorId: "buyer-1",
+      confirmedAtMs: repeatConfirmedAtMs,
+    }),
+  );
+  const completed = must(
+    sellerConfirmHandover(repeatMeeting, {
+      actorId: "seller-1",
+      confirmedAtMs: repeatConfirmedAtMs + 1,
+    }),
+  );
+
+  expect(completed.successRecord).not.toBeNull();
+  expect(completed.confirmationEvidence[0]).toBe(oldEvidence);
+  expect(completed.confirmationEvidence.map((evidence) => evidence.meetingNumber)).toEqual([
+    1, 2, 2,
+  ]);
+});
+
+test("repeat meeting adjustments use the repeat proposal deadline", () => {
+  const present = withBothPresence();
+  const firstConfirmedAtMs = present.schedule!.window.startsAtMs;
+  const incomplete = must(
+    buyerConfirmHandover(present, {
+      actorId: "buyer-1",
+      confirmedAtMs: firstConfirmedAtMs,
+    }),
+  );
+  const closed = must(
+    closeIncompleteHandoverMeeting(incomplete, {
+      actorId: "buyer-1",
+      closedAtMs: firstConfirmedAtMs + 1,
+    }),
+  );
+  const proposedAtMs = firstConfirmedAtMs + 2;
+  const repeat = must(
+    sellerProposeRepeatHandover(closed, {
+      actorId: "seller-1",
+      proposedAtMs,
+      point: publicPoint(),
+      windows: [
+        window("repeat-morning", wibTimestamp(1, 11), wibTimestamp(1, 11, 30)),
+        window("repeat-afternoon", wibTimestamp(1, 16), wibTimestamp(1, 16, 30)),
+      ],
+    }),
+  );
+
+  expect(proposedAtMs).toBeGreaterThan(committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS);
+  const adjustedWindow = window(
+    "repeat-adjustment",
+    wibTimestamp(1, 15),
+    wibTimestamp(1, 15, 30),
+  );
+  const requested = must(
+    buyerRequestScheduleAdjustment(repeat, {
+      requestedAtMs: proposedAtMs + 1,
+      window: adjustedWindow,
+    }),
+  );
+  const approved = must(
+    sellerApproveScheduleAdjustment(requested, {
+      approvedAtMs: proposedAtMs + 2,
+    }),
+  );
+
+  expect(approved.schedule?.window).toEqual(adjustedWindow);
+});
+
+test("preserved evidence can enter dispute after a repeat proposal clears confirmations", () => {
+  const present = withBothPresence();
+  const firstConfirmedAtMs = present.schedule!.window.startsAtMs;
+  const incomplete = must(
+    buyerConfirmHandover(present, {
+      actorId: "buyer-1",
+      confirmedAtMs: firstConfirmedAtMs,
+    }),
+  );
+  const oldEvidence = incomplete.confirmationEvidence[0];
+  const closed = must(
+    closeIncompleteHandoverMeeting(incomplete, {
+      actorId: "seller-1",
+      closedAtMs: firstConfirmedAtMs + 1,
+    }),
+  );
+  const repeat = must(
+    sellerProposeRepeatHandover(closed, {
+      actorId: "seller-1",
+      proposedAtMs: firstConfirmedAtMs + 2,
+      point: publicPoint(),
+      windows: [
+        window("repeat-morning", wibTimestamp(1, 11), wibTimestamp(1, 11, 30)),
+        window("repeat-afternoon", wibTimestamp(1, 16), wibTimestamp(1, 16, 30)),
+      ],
+    }),
+  );
+
+  expect(repeat).toMatchObject({
+    buyerConfirmedAtMs: null,
+    sellerConfirmedAtMs: null,
+    meetingClosedAtMs: null,
   });
-  expect(must(repeated)).toBe(finalState);
+  const openedAtMs = firstConfirmedAtMs + 3;
+  const disputed = must(
+    openIncompleteHandoverDispute(repeat, {
+      actorId: "buyer-1",
+      openedAtMs,
+    }),
+  );
+
+  expect(disputed.activeDispute).toEqual({
+    status: "Active Dispute",
+    openedBy: "buyer",
+    openedAtMs,
+  });
+  expect(disputed.meetingClosedAtMs).toBe(openedAtMs);
+  expect(disputed.confirmationEvidence).toEqual([oldEvidence]);
+  expect(disputed.successRecord).toBeNull();
+});
+
+for (const actor of [
+  { actorId: "buyer-1", openedBy: "buyer" },
+  { actorId: "seller-1", openedBy: "seller" },
+] as const) {
+  test(`${actor.openedBy} can open an Active Dispute after an incomplete meeting`, () => {
+    const present = withBothPresence();
+    const confirmedAtMs = present.schedule!.window.startsAtMs;
+    const incomplete = must(
+      buyerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs }),
+    );
+    const closed = must(
+      closeIncompleteHandoverMeeting(incomplete, {
+        actorId: actor.actorId,
+        closedAtMs: confirmedAtMs + 1,
+      }),
+    );
+    const disputed = must(
+      openIncompleteHandoverDispute(closed, {
+        actorId: actor.actorId,
+        openedAtMs: confirmedAtMs + 2,
+      }),
+    );
+
+    expect(disputed.activeDispute).toEqual({
+      status: "Active Dispute",
+      openedBy: actor.openedBy,
+      openedAtMs: confirmedAtMs + 2,
+    });
+    expect(disputed.successRecord).toBeNull();
+  });
+}
+
+for (const firstParty of ["buyer", "seller"] as const) {
+  test(`later matching ${firstParty}-first confirmations complete exactly once`, () => {
+    const present = withBothPresence();
+    const confirmedAtMs = present.schedule!.window.startsAtMs;
+    const first = must(
+      firstParty === "buyer"
+        ? buyerConfirmHandover(present, { actorId: "buyer-1", confirmedAtMs })
+        : sellerConfirmHandover(present, { actorId: "seller-1", confirmedAtMs }),
+    );
+    const completed = must(
+      firstParty === "buyer"
+        ? sellerConfirmHandover(first, {
+            actorId: "seller-1",
+            confirmedAtMs: confirmedAtMs + 1,
+          })
+        : buyerConfirmHandover(first, {
+            actorId: "buyer-1",
+            confirmedAtMs: confirmedAtMs + 1,
+          }),
+    );
+
+    expect(completed.successRecord).toEqual({
+      transactionStatus: "Final",
+      listingStatus: "Sold",
+      escrowStatus: "Released - simulated",
+      completedAtMs: confirmedAtMs + 1,
+    });
+    const repeated =
+      firstParty === "buyer"
+        ? sellerConfirmHandover(completed, {
+            actorId: "seller-1",
+            confirmedAtMs: confirmedAtMs + 2,
+          })
+        : buyerConfirmHandover(completed, {
+            actorId: "buyer-1",
+            confirmedAtMs: confirmedAtMs + 2,
+          });
+    expect(must(repeated)).toBe(completed);
+  });
+}
+
+test("presence is eligible at exact schedule and distance boundaries only", () => {
+  const state = acceptedState();
+  const start = state.schedule!.window.startsAtMs;
+  const end = state.schedule!.window.endsAtMs;
+
+  for (const timestampMs of [start, end]) {
+    expect(
+      recordHandoverPresence(state, {
+        party: "buyer",
+        timestampMs,
+        locationAvailable: true,
+        accuracyState: "usable",
+        accuracyM: 5,
+        distanceFromPointM: 100,
+      }),
+    ).toMatchObject({ ok: true, state: { buyerPresence: { eligible: true } } });
+  }
+  for (const timestampMs of [start - 1, end + 1]) {
+    expect(
+      recordHandoverPresence(state, {
+        party: "buyer",
+        timestampMs,
+        locationAvailable: true,
+        accuracyState: "usable",
+        accuracyM: 5,
+        distanceFromPointM: 100,
+      }),
+    ).toMatchObject({ ok: false, reason: "presence-outside-schedule" });
+  }
 });

@@ -42,6 +42,20 @@ export type PresenceEvidence = Readonly<{
   accuracyM: number | null;
 }>;
 
+export type HandoverConfirmationEvidence = Readonly<{
+  party: "buyer" | "seller";
+  confirmedAtMs: number;
+  meetingNumber: number;
+  buyerPresence: PresenceEvidence;
+  sellerPresence: PresenceEvidence;
+}>;
+
+export type ActiveHandoverDispute = Readonly<{
+  status: "Active Dispute";
+  openedBy: "buyer" | "seller";
+  openedAtMs: number;
+}>;
+
 export type HandoverSuccessRecord = Readonly<{
   transactionStatus: "Final";
   listingStatus: "Sold";
@@ -63,6 +77,10 @@ export type HandoverState = Readonly<{
   sellerPresence: PresenceEvidence | null;
   buyerConfirmedAtMs: number | null;
   sellerConfirmedAtMs: number | null;
+  meetingNumber: number;
+  meetingClosedAtMs: number | null;
+  confirmationEvidence: readonly HandoverConfirmationEvidence[];
+  activeDispute: ActiveHandoverDispute | null;
   successRecord: HandoverSuccessRecord | null;
 }>;
 
@@ -78,7 +96,11 @@ export type HandoverRejection =
   | "adjustment-required"
   | "presence-outside-schedule"
   | "both-presence-checks-required"
-  | "buyer-confirmation-required";
+  | "acting-member-not-authorized"
+  | "incomplete-confirmation-required"
+  | "meeting-not-closed"
+  | "meeting-closed"
+  | "active-dispute-open";
 
 export type HandoverActionResult =
   | Readonly<{ ok: true; state: HandoverState }>
@@ -90,6 +112,14 @@ function freezePoint(point: HandoverPoint): HandoverPoint {
 
 function freezeWindow(window: HandoverWindow): HandoverWindow {
   return Object.freeze({ ...window });
+}
+
+function freezePresenceEvidence(evidence: PresenceEvidence): PresenceEvidence {
+  return Object.freeze({
+    eligible: evidence.eligible,
+    timestampMs: evidence.timestampMs,
+    accuracyM: evidence.accuracyM,
+  });
 }
 
 function wibMinuteOfDay(timestampMs: number) {
@@ -145,8 +175,9 @@ function windowRejection(
 }
 
 function scheduleDeadlineFor(state: HandoverState) {
-  return state.schedule
-    ? state.schedule.window.startsAtMs
+  if (state.schedule) return state.schedule.window.startsAtMs;
+  return state.meetingNumber > 1 && state.proposal
+    ? state.proposal.proposedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS
     : state.committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS;
 }
 
@@ -156,6 +187,45 @@ function duringSchedule(state: HandoverState, timestampMs: number) {
       timestampMs >= state.schedule.window.startsAtMs &&
       timestampMs <= state.schedule.window.endsAtMs,
   );
+}
+
+function actorParty(state: HandoverState, actorId: string) {
+  if (actorId === state.buyerId) return "buyer" as const;
+  if (actorId === state.sellerId) return "seller" as const;
+  return null;
+}
+
+function hasExactlyOneConfirmation(state: HandoverState) {
+  return (state.buyerConfirmedAtMs === null) !== (state.sellerConfirmedAtMs === null);
+}
+
+function appendConfirmationEvidence(
+  state: HandoverState,
+  party: "buyer" | "seller",
+  confirmedAtMs: number,
+) {
+  const buyerPresence = state.buyerPresence!;
+  const sellerPresence = state.sellerPresence!;
+  const evidence: HandoverConfirmationEvidence = Object.freeze({
+    party,
+    confirmedAtMs,
+    meetingNumber: state.meetingNumber,
+    buyerPresence: freezePresenceEvidence(buyerPresence),
+    sellerPresence: freezePresenceEvidence(sellerPresence),
+  });
+  return Object.freeze([...state.confirmationEvidence, evidence]);
+}
+
+function completeHandover(state: HandoverState, completedAtMs: number): HandoverState {
+  return Object.freeze({
+    ...state,
+    successRecord: Object.freeze({
+      transactionStatus: "Final",
+      listingStatus: "Sold",
+      escrowStatus: "Released - simulated",
+      completedAtMs,
+    }),
+  });
 }
 
 export function createInitialHandoverState(
@@ -173,6 +243,10 @@ export function createInitialHandoverState(
     sellerPresence: null,
     buyerConfirmedAtMs: null,
     sellerConfirmedAtMs: null,
+    meetingNumber: 1,
+    meetingClosedAtMs: null,
+    confirmationEvidence: Object.freeze([]),
+    activeDispute: null,
     successRecord: null,
   });
 }
@@ -225,15 +299,19 @@ export function buyerAcceptHandover(
   state: HandoverState,
   input: Readonly<{ windowId: string; acceptedAtMs: number }>,
 ): HandoverActionResult {
-  if (input.acceptedAtMs > state.committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS) {
-    return { ok: false, state, reason: "schedule-agreement-deadline-passed" };
-  }
-
   const window = state.proposal?.windows.find(
     (candidate) => candidate.id === input.windowId,
   );
   if (!state.proposal || !window) {
     return { ok: false, state, reason: "proposed-window-not-found" };
+  }
+
+  const agreementDeadline =
+    state.meetingNumber === 1
+      ? state.committedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS
+      : state.proposal.proposedAtMs + SCHEDULE_AGREEMENT_DEADLINE_MS;
+  if (input.acceptedAtMs > agreementDeadline) {
+    return { ok: false, state, reason: "schedule-agreement-deadline-passed" };
   }
 
   return {
@@ -317,6 +395,9 @@ export function recordHandoverPresence(
     distanceFromPointM: number | null;
   }>,
 ): HandoverActionResult {
+  if (state.meetingClosedAtMs !== null) {
+    return { ok: false, state, reason: "meeting-closed" };
+  }
   if (!state.schedule) return { ok: false, state, reason: "schedule-required" };
   if (!duringSchedule(state, input.timestampMs)) {
     return { ok: false, state, reason: "presence-outside-schedule" };
@@ -348,6 +429,7 @@ function confirmationRejection(
   state: HandoverState,
   confirmedAtMs: number,
 ): HandoverRejection | null {
+  if (state.meetingClosedAtMs !== null) return "meeting-closed";
   if (!state.schedule) return "schedule-required";
   if (!duringSchedule(state, confirmedAtMs)) {
     return "presence-outside-schedule";
@@ -360,41 +442,160 @@ function confirmationRejection(
 
 export function buyerConfirmHandover(
   state: HandoverState,
-  input: Readonly<{ confirmedAtMs: number }>,
+  input: Readonly<{ actorId: string; confirmedAtMs: number }>,
 ): HandoverActionResult {
+  if (input.actorId !== state.buyerId) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
   if (state.successRecord || state.buyerConfirmedAtMs !== null) {
     return { ok: true, state };
   }
   const rejection = confirmationRejection(state, input.confirmedAtMs);
   if (rejection) return { ok: false, state, reason: rejection };
 
+  const confirmedState = Object.freeze({
+    ...state,
+    buyerConfirmedAtMs: input.confirmedAtMs,
+    confirmationEvidence: appendConfirmationEvidence(state, "buyer", input.confirmedAtMs),
+  });
   return {
     ok: true,
-    state: Object.freeze({ ...state, buyerConfirmedAtMs: input.confirmedAtMs }),
+    state:
+      confirmedState.sellerConfirmedAtMs === null
+        ? confirmedState
+        : completeHandover(confirmedState, input.confirmedAtMs),
   };
 }
 
 export function sellerConfirmHandover(
   state: HandoverState,
-  input: Readonly<{ confirmedAtMs: number }>,
+  input: Readonly<{ actorId: string; confirmedAtMs: number }>,
 ): HandoverActionResult {
-  if (state.successRecord) return { ok: true, state };
-  if (state.buyerConfirmedAtMs === null) {
-    return { ok: false, state, reason: "buyer-confirmation-required" };
+  if (input.actorId !== state.sellerId) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  if (state.successRecord || state.sellerConfirmedAtMs !== null) {
+    return { ok: true, state };
   }
   const rejection = confirmationRejection(state, input.confirmedAtMs);
   if (rejection) return { ok: false, state, reason: rejection };
+
+  const confirmedState = Object.freeze({
+    ...state,
+    sellerConfirmedAtMs: input.confirmedAtMs,
+    confirmationEvidence: appendConfirmationEvidence(state, "seller", input.confirmedAtMs),
+  });
+  return {
+    ok: true,
+    state:
+      confirmedState.buyerConfirmedAtMs === null
+        ? confirmedState
+        : completeHandover(confirmedState, input.confirmedAtMs),
+  };
+}
+
+export function closeIncompleteHandoverMeeting(
+  state: HandoverState,
+  input: Readonly<{ actorId: string; closedAtMs: number }>,
+): HandoverActionResult {
+  if (!actorParty(state, input.actorId)) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  if (!hasExactlyOneConfirmation(state)) {
+    return { ok: false, state, reason: "incomplete-confirmation-required" };
+  }
+  if (state.meetingClosedAtMs !== null) {
+    return { ok: false, state, reason: "meeting-closed" };
+  }
+
+  return {
+    ok: true,
+    state: Object.freeze({ ...state, meetingClosedAtMs: input.closedAtMs }),
+  };
+}
+
+export function sellerProposeRepeatHandover(
+  state: HandoverState,
+  input: Readonly<{
+    actorId: string;
+    proposedAtMs: number;
+    point: HandoverPoint;
+    windows: readonly HandoverWindow[];
+  }>,
+): HandoverActionResult {
+  if (input.actorId !== state.sellerId) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  if (!hasExactlyOneConfirmation(state)) {
+    return { ok: false, state, reason: "incomplete-confirmation-required" };
+  }
+  if (state.meetingClosedAtMs === null) {
+    return { ok: false, state, reason: "meeting-not-closed" };
+  }
+  if (state.activeDispute) {
+    return { ok: false, state, reason: "active-dispute-open" };
+  }
+  if (!input.point.sellerZoneEligible) {
+    return { ok: false, state, reason: "handover-point-outside-zone" };
+  }
+
+  if (
+    input.windows.length < 2 ||
+    input.windows.some((window) => windowRejection(state, input.point, window))
+  ) {
+    const firstRejection = input.windows
+      .map((window) => windowRejection(state, input.point, window))
+      .find((reason): reason is HandoverRejection => reason !== null);
+    return {
+      ok: false,
+      state,
+      reason: firstRejection ?? "handover-window-invalid",
+    };
+  }
 
   return {
     ok: true,
     state: Object.freeze({
       ...state,
-      sellerConfirmedAtMs: input.confirmedAtMs,
-      successRecord: Object.freeze({
-        transactionStatus: "Final",
-        listingStatus: "Sold",
-        escrowStatus: "Released - simulated",
-        completedAtMs: input.confirmedAtMs,
+      proposal: Object.freeze({
+        point: freezePoint(input.point),
+        windows: Object.freeze(input.windows.map(freezeWindow)),
+        proposedAtMs: input.proposedAtMs,
+      }),
+      schedule: null,
+      pendingAdjustment: null,
+      buyerPresence: null,
+      sellerPresence: null,
+      buyerConfirmedAtMs: null,
+      sellerConfirmedAtMs: null,
+      meetingNumber: state.meetingNumber + 1,
+      meetingClosedAtMs: null,
+    }),
+  };
+}
+
+export function openIncompleteHandoverDispute(
+  state: HandoverState,
+  input: Readonly<{ actorId: string; openedAtMs: number }>,
+): HandoverActionResult {
+  const openedBy = actorParty(state, input.actorId);
+  if (!openedBy) {
+    return { ok: false, state, reason: "acting-member-not-authorized" };
+  }
+  if (state.activeDispute) return { ok: true, state };
+  if (state.successRecord || state.confirmationEvidence.length === 0) {
+    return { ok: false, state, reason: "incomplete-confirmation-required" };
+  }
+
+  return {
+    ok: true,
+    state: Object.freeze({
+      ...state,
+      meetingClosedAtMs: state.meetingClosedAtMs ?? input.openedAtMs,
+      activeDispute: Object.freeze({
+        status: "Active Dispute",
+        openedBy,
+        openedAtMs: input.openedAtMs,
       }),
     }),
   };
