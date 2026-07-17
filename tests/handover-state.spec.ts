@@ -262,6 +262,7 @@ test("buyer adjustment remains pending until the seller accepts it", () => {
   expect(must(approved).schedule?.window).toEqual(adjustedWindow);
   expect(must(approved).pendingAdjustment).toBeNull();
 });
+
 test("approved schedule change clears earlier presence and buyer confirmation", () => {
   let state = acceptedState();
   const originalStart = state.schedule!.window.startsAtMs;
@@ -307,7 +308,6 @@ test("approved schedule change clears earlier presence and buyer confirmation", 
   expect(state.buyerConfirmedAtMs).toBeNull();
   expect(state.sellerConfirmedAtMs).toBeNull();
 });
-
 
 test("presence at exactly 100 m is eligible and stores no raw location", () => {
   const state = acceptedState();
