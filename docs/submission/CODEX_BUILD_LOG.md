@@ -12,12 +12,12 @@ Record facts and evidence while the work is happening. Do not reconstruct the st
 
 | Evidence | Status | Recorded value |
 |---|---|---|
-| Primary Core Build Session | TBD | Core implementation has not started |
-| Required model | Pending verification | GPT-5.6 |
-| `/feedback` Session ID | TBD | Capture before leaving the Primary Core Build Session |
-| Starting commit | TBD | Capture immediately before core implementation |
-| Ending commit | TBD | Capture after the primary session is complete |
-| Core commit range | TBD | Starting commit through ending commit |
+| Primary Core Build Session | Active candidate | Issue #7 successful-handover implementation |
+| Required model | Pending owner-visible verification | GPT-5.6 required; capture visible task metadata before closing this session |
+| `/feedback` Session ID | Pending owner action | Run `/feedback` before leaving this task and record the Session ID |
+| Starting commit | Recorded | `65033becc8c930935a8443cfd956061d20767b5a` |
+| Ending commit | Pending | Record after the issue #7 implementation commit |
+| Core commit range | Pending | `65033becc8c930935a8443cfd956061d20767b5a` through the issue #7 implementation commit |
 | README collaboration summary | Pending | Write from this log |
 | Video explanation of Codex use | Pending | Write from this log |
 
@@ -25,17 +25,17 @@ Record facts and evidence while the work is happening. Do not reconstruct the st
 
 This section must identify the single Codex task in which the majority of Jualokal's core functionality was actually built. Use a fresh, sanitized implementation task running GPT-5.6. Do not designate a planning-only task or a task that merely intended to build the majority.
 
-- **Status:** TBD - core implementation has not started
-- **Task title:** TBD
-- **Date:** TBD
-- **Team participants:** TBD
-- **Codex model:** GPT-5.6 required; verification pending
-- **Model verification:** TBD - record visible task metadata or another sanitized source
-- **`/feedback` Session ID:** TBD - run `/feedback` before leaving the task
-- **Starting commit:** TBD
-- **Ending commit:** TBD
-- **Commit range:** TBD
-- **Why this contains the majority of core functionality:** TBD
+- **Status:** Active candidate - implementation complete locally; final review, commit, owner visual acceptance, model evidence, and `/feedback` capture remain
+- **Task title:** Implement issue #7 - Schedule and complete a successful handover
+- **Date:** 2026-07-17
+- **Team participants:** Project owner and Codex
+- **Codex model:** GPT-5.6 required; owner-visible verification pending
+- **Model verification:** Pending - capture visible sanitized task metadata before leaving this task
+- **`/feedback` Session ID:** Pending - project owner must run `/feedback` before leaving this task
+- **Starting commit:** `65033becc8c930935a8443cfd956061d20767b5a`
+- **Ending commit:** Pending implementation commit
+- **Commit range:** Pending ending commit
+- **Why this contains the majority of core functionality:** This task connects protected marketplace access, discovery, checkout, the Purchase Snapshot, and simulated Escrow to seller-led scheduling, location-supported handover, ordered confirmations, final sale, payout release, and recorded success. Final designation remains subject to the completed commit and evidence review.
 
 ### Intended core journey
 
@@ -53,33 +53,49 @@ Record what was actually completed after the session. Never mark unfinished or s
 
 ### Core functionality actually completed
 
-- TBD
+- Added seller-proposed Handover Points and two time windows after payment.
+- Added buyer acceptance and a controlled adjustment that takes effect only after seller approval.
+- Enforced proposal, agreement, 48-hour start, Handover Hours, evening, private-zone, and Trusted Buyer front-gate rules.
+- Added two session-only Presence Checks with exact 100 m, unavailable, poor-accuracy, and privacy-safe evidence states.
+- Enforced buyer-first and seller-second confirmations; one-sided confirmation keeps simulated Escrow held.
+- Matching confirmations mark the item sold, release simulated Escrow and payout once, preserve the Purchase Snapshot, and record private trust success.
+- Reset Demo removes the transaction and restores a fresh journey.
+- Kept issue #8, #9, #10, and #12 recovery and policy behavior outside this ticket.
 
 ### Team decisions made during the session
 
-- TBD
+- Exact two-hour, six-hour, and 48-hour boundaries are valid; one millisecond later is invalid.
+- Poor accuracy is an explicit ineligible simulator state rather than an invented numeric production threshold.
+- A window reaching 18:00 requires a public, well-lit point; a front gate must finish before 18:00.
+- Seller-zone eligibility is an abstract private result; no Home Anchor, coordinates, address, zone boundary, or marker geometry enters demo state.
+- Buyer adjustments preserve the seller-selected point and remain pending until seller approval.
+- Tier recalculation remains owned by issue #12.
 
 ### Where Codex accelerated the work
 
-- TBD
+- Mapped checkout, Demo Mode, privacy rules, ADRs, and issue boundaries in parallel before editing.
+- Used impact analysis to keep edits limited to low-risk seams.
+- Built exact boundary and privacy tests with a pure handover state model.
+- Connected buyer/seller switching, simulated time, location evidence, confirmation order, and finalization into one resettable journey.
+- Diagnosed Windows GitNexus and patch-tool conflicts without deleting or overwriting shared data.
 
 ### Tests and visual checks
 
 | Check | Result | Evidence |
 |---|---|---|
-| Automated tests | TBD | Command, report, or commit |
-| Phone-sized visual check | TBD | Sanitized screenshot or notes |
-| Desktop visual check | TBD | Sanitized screenshot or notes |
-| Successful-handover journey | TBD | Test notes or recording |
-| Contested-mismatch journey | TBD | Test notes or recording |
-| Fresh Demo Mode and Reset Demo | TBD | Test notes or recording |
-| Privacy and sample-data check | TBD | Test notes |
+| Automated tests | Passed | `npm test` - 102 checks across phone and desktop projects; `npm run typecheck`; `npm run build` |
+| Phone-sized visual check | Pending project owner | Live visual acceptance intentionally left to the owner |
+| Desktop visual check | Pending project owner | Live visual acceptance intentionally left to the owner |
+| Successful-handover journey | Automated pass on phone and desktop projects | Proposal, acceptance, Presence Checks, confirmations, sold state, and payout |
+| Contested-mismatch journey | Deferred | Owned by issue #9 |
+| Fresh Demo Mode and Reset Demo | Automated pass on phone and desktop projects | Completed handover resets to a fresh discoverable listing |
+| Privacy and sample-data check | Focused automated pass | No raw location, coordinates, home-address inputs, or Home Anchor data |
 
 ### Session outcome
 
-- **Completed:** TBD
-- **Incomplete or deferred:** TBD
-- **Follow-up sessions required:** TBD
+- **Completed:** Issue #7 implementation, type checking, all 102 automated checks, and the production build are complete locally.
+- **Incomplete or deferred:** Independent review, implementation commit, owner visual acceptance, model proof, and `/feedback` Session ID remain pending.
+- **Follow-up sessions required:** Issue #8 owns incomplete confirmation; #9 mismatch; #10 expiry/cancellation/no-show; #12 tier recalculation.
 
 ## Build history
 
