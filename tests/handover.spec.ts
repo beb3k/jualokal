@@ -103,17 +103,22 @@ test("buyer adjustment changes the schedule only after seller approval", async (
   panel = page.getByRole("region", {
     name: "Handover for Handwoven rattan market basket",
   });
+  await panel.getByRole("button", { name: "Accept first proposed window" }).click();
+  const acceptedSchedule = panel.getByRole("region", { name: "Accepted Handover Schedule" });
+  await expect(acceptedSchedule).toBeVisible();
+  await expect(acceptedSchedule).toContainText("10:00-10:30 WIB");
   await panel.getByRole("button", { name: "Request 11:00-11:30 WIB adjustment" }).click();
   await expect(panel).toContainText("pending seller approval");
-  await expect(panel.getByRole("heading", { name: "Accepted Handover Schedule" })).toHaveCount(0);
+  await expect(acceptedSchedule).toContainText("10:00-10:30 WIB");
 
   await switchAccount(page, "seller-dimas");
   panel = page.getByRole("region", {
     name: "Handover for Handwoven rattan market basket",
   });
   await panel.getByRole("button", { name: "Seller approves requested adjustment" }).click();
-  await expect(panel.getByRole("heading", { name: "Accepted Handover Schedule" })).toBeVisible();
-  await expect(panel).toContainText("11:00-11:30 WIB");
+  await expect(
+    panel.getByRole("region", { name: "Accepted Handover Schedule" }),
+  ).toContainText("11:00-11:30 WIB");
 });
 
 test("poor or unavailable location stays blocked without retaining raw location", async ({

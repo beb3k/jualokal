@@ -189,6 +189,17 @@ test("zone, Handover Hours, evening, and front-gate restrictions are enforced", 
     }),
   ).toMatchObject({ ok: false, reason: "handover-window-invalid" });
 
+  expect(
+    sellerProposeHandover(initialState(), {
+      proposedAtMs: committedAtMs,
+      point: publicPoint(),
+      windows: [
+        window("morning", wibTimestamp(1, 10), wibTimestamp(1, 10, 30)),
+        window("overnight", wibTimestamp(1, 21), wibTimestamp(2, 7)),
+      ],
+    }),
+  ).toMatchObject({ ok: false, reason: "handover-window-invalid" });
+
   const frontGateWindows = [
     window("morning", wibTimestamp(1, 10), wibTimestamp(1, 10, 30)),
     window("before-evening", wibTimestamp(1, 17), wibTimestamp(1, 17, 59)),

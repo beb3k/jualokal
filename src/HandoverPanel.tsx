@@ -222,14 +222,16 @@ export default function HandoverPanel({
                   </li>
                 ))}
               </ul>
-              {actorRole === "buyer" && !handover.schedule ? (
+              {actorRole === "buyer" ? (
                 <div className="listing-actions">
-                  <button
-                    className="button button-primary"
-                    onClick={() => onAccept(handover.proposal!.windows[0].id)}
-                  >
-                    Accept first proposed window
-                  </button>
+                  {!handover.schedule ? (
+                    <button
+                      className="button button-primary"
+                      onClick={() => onAccept(handover.proposal!.windows[0].id)}
+                    >
+                      Accept first proposed window
+                    </button>
+                  ) : null}
                   <button
                     className="button button-outline"
                     onClick={onRequestAdjustment}
@@ -261,7 +263,7 @@ export default function HandoverPanel({
           ) : null}
 
           {handover.schedule ? (
-            <div className="checkout-panel">
+            <section aria-label="Accepted Handover Schedule" className="checkout-panel">
               <h3>Accepted Handover Schedule</h3>
               <p>
                 {handover.schedule.point.kind === "front-gate"
@@ -284,7 +286,7 @@ export default function HandoverPanel({
               >
                 Advance to accepted handover window
               </button>
-            </div>
+            </section>
           ) : null}
 
           {handover.schedule && actorRole === "buyer" ? (

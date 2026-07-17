@@ -97,6 +97,11 @@ function wibMinuteOfDay(timestampMs: number) {
   return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
 }
 
+function wibDateKey(timestampMs: number) {
+  const shifted = new Date(timestampMs + WIB_OFFSET_MS);
+  return `${shifted.getUTCFullYear()}-${shifted.getUTCMonth()}-${shifted.getUTCDate()}`;
+}
+
 function windowRejection(
   state: HandoverState,
   point: HandoverPoint,
@@ -109,6 +114,7 @@ function windowRejection(
     window.startsAtMs < state.committedAtMs ||
     window.startsAtMs > state.committedAtMs + HANDOVER_START_DEADLINE_MS ||
     window.endsAtMs <= window.startsAtMs ||
+    wibDateKey(window.startsAtMs) !== wibDateKey(window.endsAtMs) ||
     startsAtMinute < HANDOVER_START_MINUTE ||
     endsAtMinute > HANDOVER_END_MINUTE
   ) {
@@ -336,6 +342,20 @@ export function recordHandoverPresence(
   };
 }
 
+function confirmationRejection(
+  state: HandoverState,
+  confirmedAtMs: number,
+): HandoverRejection | null {
+  if (!state.schedule) return "schedule-required";
+  if (!duringSchedule(state, confirmedAtMs)) {
+    return "presence-outside-schedule";
+  }
+  if (!state.buyerPresence?.eligible || !state.sellerPresence?.eligible) {
+    return "both-presence-checks-required";
+  }
+  return null;
+}
+
 export function buyerConfirmHandover(
   state: HandoverState,
   input: Readonly<{ confirmedAtMs: number }>,
@@ -343,13 +363,8 @@ export function buyerConfirmHandover(
   if (state.successRecord || state.buyerConfirmedAtMs !== null) {
     return { ok: true, state };
   }
-  if (!state.schedule) return { ok: false, state, reason: "schedule-required" };
-  if (!duringSchedule(state, input.confirmedAtMs)) {
-    return { ok: false, state, reason: "presence-outside-schedule" };
-  }
-  if (!state.buyerPresence?.eligible || !state.sellerPresence?.eligible) {
-    return { ok: false, state, reason: "both-presence-checks-required" };
-  }
+  const rejection = confirmationRejection(state, input.confirmedAtMs);
+  if (rejection) return { ok: false, state, reason: rejection };
 
   return {
     ok: true,
@@ -365,13 +380,8 @@ export function sellerConfirmHandover(
   if (state.buyerConfirmedAtMs === null) {
     return { ok: false, state, reason: "buyer-confirmation-required" };
   }
-  if (!state.schedule) return { ok: false, state, reason: "schedule-required" };
-  if (!duringSchedule(state, input.confirmedAtMs)) {
-    return { ok: false, state, reason: "presence-outside-schedule" };
-  }
-  if (!state.buyerPresence?.eligible || !state.sellerPresence?.eligible) {
-    return { ok: false, state, reason: "both-presence-checks-required" };
-  }
+  const rejection = confirmationRejection(state, input.confirmedAtMs);
+  if (rejection) return { ok: false, state, reason: rejection };
 
   return {
     ok: true,
