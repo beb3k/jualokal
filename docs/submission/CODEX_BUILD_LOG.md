@@ -471,6 +471,39 @@ Issue #12 is implemented, automatically verified, and manually accepted. On 2026
 
 Issue #17 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner authorized publication. Feature commit `1eca8eeb29df9943a3467c51d21d478d5e17147b` was pushed on `codex/issue-17-privacy-safe-list-discovery` and merged as `ff5095d2f37c0ebdf7bde09ea00139589579d16b`; the merge is present on `origin/main`. No pull request was created.
 
+### 2026-07-18 - Map-first Seller discovery
+
+- **Session role:** Supporting implementation, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Kiro
+- **Environment:** Kiro IDE using GPT 5.6 Sol; this entry documents project work but does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `4b160d260b7f0efc349cd0f51b27cb3d195ed223`
+- **Working branch:** `codex/issue-18-map-seller-discovery`
+- **Related issue:** [#18](https://github.com/beb3k/jualokal/issues/18)
+- **Objective:** Deliver the first complete privacy-preserving Map View journey using the shared discovery result, stable coarse Seller markers, responsive Seller Preview, and the existing full-listing experience.
+
+#### Work completed
+
+- Made Map View the default marketplace entry while retaining an explicit Map/List preference and leaving Browsing Location, filters, pan, zoom, and viewport history session-only.
+- Added deterministic anchor-version Seller markers projected against each buyer snapshot, with initials and filtered Listing counts but no Seller names, prices, Distance Bands, exact distances, listing photos, Home Anchors, or private geometry on markers.
+- Reused the complete shared discovery result in Map and List, preserving all 20 eligible listings and category-filter alignment without adding marker groups, overlap choosers, or issue #20 behavior.
+- Added a private buyer-location marker, viewport-only pan/zoom/recenter controls, computed 2 km or 3 km framing, and denied/unavailable location gating.
+- Added responsive Seller Preview as a phone bottom sheet and desktop side panel with permitted Public Identity, Trust Summary, buyer-specific Distance Band, filtered listings, keyboard focus containment, Escape handling, and focus restoration.
+- Kept issue #19 refresh/fallback recovery and issue #20 grouping/chooser behavior out of scope.
+
+#### Verification
+
+- The complete Playwright suite passed: **294/294 checks** across phone and desktop projects.
+- The production TypeScript and Vite build passed.
+- Focused browser checks covered Map/List parity, deterministic projection, 2 km-to-3 km framing, invalid-location gating, responsive preview geometry, keyboard behavior, persistence boundaries, and privacy-safe marker output.
+- Independent repository-standards and issue-specification reviews passed after all findings were resolved, with no remaining actionable findings.
+- Git diff hygiene passed; the only reported warning was the preserved pre-existing `AGENTS.md` line-ending notice.
+- The project owner completed manual acceptance on 2026-07-18 and authorized commit, push, merge, issue closure, branch removal, and project-note publication.
+
+#### Outcome and follow-up
+
+Issue #18 is implemented, automatically verified, independently reviewed, and manually accepted. Issue #19 remains responsible for location refresh and map-failure recovery; issue #20 remains responsible for overlap grouping, group zoom, and chooser behavior.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

@@ -125,3 +125,88 @@ test("discovery orders by band, then original publication time, then listing id"
     "far-new",
   ]);
 });
+
+test("one Seller marker is stable, anchor-dependent, and cannot alter discovery", async () => {
+  const { createSellerDiscoveryMarker } = await import("../src/discovery");
+  const results = discoverListings({
+    viewer: eligibleViewer,
+    listings: [
+      activeListing({ id: "seller-one-a" }),
+      activeListing({ id: "seller-one-b", distanceKm: 1.2 }),
+      activeListing({ id: "other-seller", sellerId: "seller-2" }),
+    ],
+  });
+  const originalResults = structuredClone(results);
+
+  const first = createSellerDiscoveryMarker({
+    sellerId: "seller-1",
+    homeAnchorVersion: "fictional-anchor-v1",
+    sellerListingIds: ["seller-one-a", "seller-one-b"],
+    discoveryResults: results,
+  });
+  const repeat = createSellerDiscoveryMarker({
+    sellerId: "seller-1",
+    homeAnchorVersion: "fictional-anchor-v1",
+    sellerListingIds: ["seller-one-a", "seller-one-b"],
+    discoveryResults: results,
+  });
+  const movedAnchor = createSellerDiscoveryMarker({
+    sellerId: "seller-1",
+    homeAnchorVersion: "fictional-anchor-v2",
+    sellerListingIds: ["seller-one-a", "seller-one-b"],
+    discoveryResults: results,
+  });
+
+  expect(first).toEqual(repeat);
+  expect(first).toMatchObject({ sellerId: "seller-1", listingCount: 2 });
+  expect(movedAnchor).not.toEqual(first);
+  expect(Math.hypot(first!.offsetXKm, first!.offsetYKm)).toBeLessThanOrEqual(1);
+  expect(results).toEqual(originalResults);
+});
+
+test("a Seller without filtered Discoverable Listings has no marker", async () => {
+  const { createSellerDiscoveryMarker } = await import("../src/discovery");
+
+  expect(
+    createSellerDiscoveryMarker({
+      sellerId: "seller-absent",
+      homeAnchorVersion: "fictional-anchor-v1",
+      sellerListingIds: [],
+      discoveryResults: discoverListings({
+        viewer: eligibleViewer,
+        listings: [activeListing()],
+      }),
+    }),
+  ).toBeNull();
+});
+
+test("marker projection keeps one stable point while framing each buyer snapshot", async () => {
+  const { createSellerDiscoveryMarker, projectSellerDiscoveryMarker } = await import(
+    "../src/discovery"
+  );
+  const marker = createSellerDiscoveryMarker({
+    sellerId: "seller-1",
+    homeAnchorVersion: "fictional-anchor-v1",
+    sellerListingIds: ["seller-one"],
+    discoveryResults: discoverListings({
+      viewer: eligibleViewer,
+      listings: [activeListing({ id: "seller-one" })],
+    }),
+  });
+
+  expect(marker).not.toBeNull();
+  const nearby = projectSellerDiscoveryMarker(marker!, 0.85);
+  const edge = projectSellerDiscoveryMarker(marker!, 2);
+
+  expect(nearby.stableMarkerKey).toBe(edge.stableMarkerKey);
+  expect(nearby).not.toMatchObject({ offsetXKm: edge.offsetXKm, offsetYKm: edge.offsetYKm });
+  expect(nearby.frameKm).toBe(2);
+  expect(edge.frameKm).toBe(3);
+});
+
+test("Seller marker initials support mononymous and verified-last-initial identities", async () => {
+  const { getSellerMarkerInitials } = await import("../src/discovery");
+
+  expect(getSellerMarkerInitials("Sukarno")).toBe("S");
+  expect(getSellerMarkerInitials("Dimas P.")).toBe("DP");
+});

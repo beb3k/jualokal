@@ -3,6 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
 }
 
 async function switchAccount(page: Page, accountId: string) {
