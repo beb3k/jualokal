@@ -407,6 +407,38 @@ Issue #10 is implemented, verified, and manually accepted. Publication details a
 
 Issue #11 is implemented, verified, and manually accepted. Publication identifiers are preserved in repository and pull request history.
 
+### 2026-07-18 - Buyer trust tiers and reliability controls
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Starting commit:** `03080744c8120b44fbde5c7602aff782d10584f0`
+- **Working branch:** `codex/issue-12-buyer-tiers`
+- **Related issue:** [#12](https://github.com/beb3k/jualokal/issues/12)
+- **Objective:** Add private buyer trust progression, capacity controls, seller-controlled Trusted-buyer access, and reversible reliability consequences in Demo Mode.
+
+#### Work completed
+
+- Added Verified, Reliable, and Trusted buyer progression from successful handovers with different sellers, with concurrent-purchase limits of one, three, and five.
+- Added a private Tier Progress view and a deliberately limited public Trust Summary that excludes strike, report, dispute, appeal, and restriction details.
+- Added seller-controlled Trusted-buyer listing access based on the buyer's current tier.
+- Added immediate tier resets for active disputes, payment reversals, ordinary reliability strikes, and safety findings while preserving existing commitments and blocking excess new checkout.
+- Added exact 30-day ordinary-strike expiry, seven-day buying-and-selling suspension after a second overlapping strike, re-earning, permanent higher-tier blocks, and appeal restoration.
+- Kept all accounts, outcomes, clocks, and controls fictional, simulated, session-only, and resettable.
+
+#### Verification
+
+- Type checking and the production build passed.
+- The complete Playwright suite passed: **264/264 checks** across phone and desktop projects.
+- Focused state coverage verifies tier thresholds, distinct-seller counting, privacy, capacity, resets, re-earning, permanent blocks, appeals, and exact strike/suspension boundaries.
+- Focused browser coverage verifies the private/public views, checkout limits, preserved commitments, seller front-gate control, phone and desktop behavior, and the second-overlapping-strike restriction.
+- Independent repository-standards and issue-specification reviews passed after all findings were resolved.
+- Refreshed staged-scope analysis rated aggregate breadth CRITICAL across shared Demo handover and trust flows; the six-file scope was expected and covered by all 264 phone and desktop checks plus manual acceptance.
+
+#### Outcome
+
+Issue #12 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner completed manual acceptance and authorized commit, push, and merge.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

@@ -60,6 +60,21 @@ import {
   type SafetyCategory,
   type SafetyState,
 } from "./safety";
+import {
+  activateTrustBlocker,
+  addReliabilityStrike,
+  clearReliabilityStrike,
+  clearTrustBlocker,
+  clearOverturnedPermanentTierBlock,
+  permanentlyBlockHigherTiers,
+  createInitialTrustState,
+  getCheckoutAllowance,
+  getPrivateTierProgress,
+  getPublicTrustSummary,
+  getTradingAvailability,
+  recordSuccessfulHandover,
+  type TrustState,
+} from "./trust";
 
 const approvedCategories = [
   "Clothing",
@@ -138,6 +153,28 @@ function createInitialSessionListings(): SessionListing[] {
   }));
 }
 
+
+function createInitialTrustStates(): Record<string, TrustState> {
+  const buyerStates = demoBuyers.map((buyer) => [
+    buyer.id,
+    createInitialTrustState({
+      identityVerified: true,
+      successfulSellerIds: demoSellers
+        .slice(0, buyer.differentPartners)
+        .map((seller) => seller.id),
+    }),
+  ] as const);
+  const sellerStates = demoSellers.map((seller) => [
+    seller.id,
+    createInitialTrustState({ identityVerified: true }),
+  ] as const);
+
+  return Object.fromEntries([...buyerStates, ...sellerStates]);
+}
+
+function buyerTierLabel(tier: "Verified" | "Reliable" | "Trusted") {
+  return `${tier} Buyer` as const;
+}
 const initialPublishedListing: PublishedListing = {
   title: demoListing.title,
   category: demoListing.category,
@@ -217,6 +254,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [handoverStates, setHandoverStates] = useState<Record<string, HandoverState>>({});
   const [handoverNotices, setHandoverNotices] = useState<Record<string, string>>({});
   const [safetyStates, setSafetyStates] = useState<Record<string, SafetyState>>({});
+  const [trustStates, setTrustStates] = useState<Record<string, TrustState>>(
+    createInitialTrustStates,
+  );
+  const [selectedQualifyingSellerId, setSelectedQualifyingSellerId] = useState<string>(
+    demoSellers[0].id,
+  );
   const [clockNowMs, setClockNowMs] = useState(Date.now);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [demoClockPaused, setDemoClockPaused] = useState(false);
@@ -306,6 +349,28 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedBuyerActiveCommitments = selectedBuyerCommitments.filter(
     (commitment) => commitment.lifecycleStatus === "Active",
   );
+  const selectedTrustState = selectedBuyer
+    ? trustStates[selectedBuyer.id]
+    : undefined;
+  const selectedTierProgress = selectedTrustState
+    ? getPrivateTierProgress(selectedTrustState, clockNowMs)
+    : undefined;
+  const selectedPublicTrustSummary = selectedTrustState
+    ? getPublicTrustSummary(selectedTrustState, clockNowMs)
+    : undefined;
+  const selectedTradingAvailability = selectedTrustState
+    ? getTradingAvailability(selectedTrustState, clockNowMs)
+    : undefined;
+  const selectedCheckoutAllowance = selectedTrustState
+    ? getCheckoutAllowance(selectedTrustState, {
+        nowMs: clockNowMs,
+        activeCommitmentCount: selectedBuyerActiveCommitments.length,
+        hasActiveCheckoutHold: Boolean(currentBuyerHold),
+      })
+    : undefined;
+  const selectedActiveStrikes = selectedTrustState
+    ? selectedTrustState.strikes.filter((strike) => strike.expiresAtMs > clockNowMs)
+    : [];
   const selectedSellerCommitments = selectedSeller
     ? checkoutState.commitments.filter(
         (commitment) => commitment.sellerId === selectedSeller.id,
@@ -320,9 +385,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           (commitment) => commitment.listingId === selectedListingId,
         ) ?? selectedSellerCommitments[0]
       : undefined;
-  const visibleHandoverState = visibleHandoverCommitment
+  const storedVisibleHandoverState = visibleHandoverCommitment
     ? handoverStates[visibleHandoverCommitment.id]
     : undefined;
+  const visibleBuyerTrustState = visibleHandoverCommitment
+    ? trustStates[visibleHandoverCommitment.buyerId]
+    : undefined;
+  const visibleBuyerTier = visibleBuyerTrustState
+    ? getPrivateTierProgress(visibleBuyerTrustState, clockNowMs).tier
+    : undefined;
+  const visibleHandoverState = storedVisibleHandoverState && visibleBuyerTier
+    ? Object.freeze({ ...storedVisibleHandoverState, buyerTier: buyerTierLabel(visibleBuyerTier) })
+    : storedVisibleHandoverState;
   const visibleSafetyState = visibleHandoverCommitment
     ? safetyStates[visibleHandoverCommitment.id]
     : undefined;
@@ -345,6 +419,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       .filter((memberId): memberId is string => Boolean(memberId)),
   );
   const selectedAccountRestricted = restrictedAccountIds.has(selectedAccountId);
+  const selectedAccountTrustState = trustStates[selectedAccountId];
+  const selectedAccountTradingAvailability = selectedAccountTrustState
+    ? getTradingAvailability(selectedAccountTrustState, clockNowMs)
+    : undefined;
+  const selectedAccountSuspended = Boolean(
+    selectedAccountTradingAvailability &&
+      (!selectedAccountTradingAvailability.canBuy || !selectedAccountTradingAvailability.canSell),
+  );
   const selectedListingCommitment = checkoutState.commitments.find(
     (commitment) =>
       commitment.listingId === selectedListingId && commitmentRemovesListing(commitment),
@@ -438,6 +520,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function startSelectedCheckoutHold() {
+    if (!selectedCheckoutAllowance?.allowed) return;
     if (!selectedBuyer || !selectedSessionListing) return;
     const actionNowMs = demoClockPaused ? clockNowMs : Date.now() + clockOffsetMs;
     setClockNowMs(actionNowMs);
@@ -636,6 +719,71 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     return demoClockPaused ? clockNowMs : Date.now() + clockOffsetMs;
   }
 
+
+  function updateBuyerTrust(
+    buyerId: string,
+    update: (state: TrustState) => TrustState,
+  ) {
+    setTrustStates((current) =>
+      current[buyerId]
+        ? { ...current, [buyerId]: update(current[buyerId]) }
+        : current,
+    );
+  }
+  function updateSelectedBuyerTrust(
+    update: (state: TrustState) => TrustState,
+  ) {
+    if (!selectedBuyer) return;
+    setTrustStates((current) => ({
+      ...current,
+      [selectedBuyer.id]: update(current[selectedBuyer.id]),
+    }));
+  }
+
+  function recordGuidedSuccessfulHandover() {
+    const nowMs = currentActionNowMs();
+    updateSelectedBuyerTrust((state) =>
+      recordSuccessfulHandover(state, {
+        sellerId: selectedQualifyingSellerId,
+        nowMs,
+      }),
+    );
+  }
+
+  function addGuidedReliabilityStrike() {
+    const nowMs = currentActionNowMs();
+    updateSelectedBuyerTrust((state) =>
+      addReliabilityStrike(state, {
+        id: `guided-strike-${state.strikes.length + 1}-${nowMs}`,
+        reason: "Private simulated Reliability Strike",
+        issuedAtMs: nowMs,
+      }),
+    );
+  }
+
+  function clearGuidedOrdinaryIssue() {
+    const nowMs = currentActionNowMs();
+    updateSelectedBuyerTrust((state) => {
+      let next = state.strikes
+        .filter((strike) => strike.expiresAtMs > nowMs)
+        .reduce(
+          (current, strike) => clearReliabilityStrike(current, strike.id, nowMs),
+          state,
+        );
+      next = clearTrustBlocker(next, "active-dispute");
+      next = clearTrustBlocker(next, "payment-reversal");
+      return clearTrustBlocker(next, "confirmed-safety-finding");
+    });
+  }
+
+  function setGuidedStrikeBoundary(offsetMs: number) {
+    if (!selectedTierProgress?.strikeExpiresAtMs) return;
+    const timestampMs = selectedTierProgress.strikeExpiresAtMs + offsetMs;
+    setDemoClockPaused(true);
+    setClockOffsetMs(timestampMs - Date.now());
+    setClockNowMs(timestampMs);
+  }
+
   function applyHandoverResult(
     result: HandoverActionResult,
     successNotice: string,
@@ -650,6 +798,23 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       return null;
     }
     if (result.ok) {
+      const previousHandoverState = handoverStates[commitmentId];
+      if (result.state.activeDispute && !previousHandoverState?.activeDispute) {
+        updateBuyerTrust(result.state.buyerId, (state) =>
+          activateTrustBlocker(state, {
+            kind: "active-dispute",
+            reason: "Private simulated Active Dispute",
+            appealPath: "Open the private dispute review",
+          }),
+        );
+      } else if (
+        previousHandoverState?.activeDispute &&
+        !result.state.activeDispute
+      ) {
+        updateBuyerTrust(result.state.buyerId, (state) =>
+          clearTrustBlocker(state, "active-dispute"),
+        );
+      }
       setHandoverStates((current) => ({ ...current, [commitmentId]: result.state }));
       setHandoverNotices((current) => ({ ...current, [commitmentId]: successNotice }));
       return result.state;
@@ -669,6 +834,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     const completed = applyHandoverResult(result, successNotice);
     const successRecord = completed?.successRecord;
     if (successRecord && visibleHandoverCommitment) {
+      updateBuyerTrust(completed.buyerId, (state) =>
+        recordSuccessfulHandover(state, {
+          sellerId: completed.sellerId,
+          nowMs: successRecord.completedAtMs,
+        }),
+      );
       setCheckoutState((current) =>
         finalizePurchaseCommitment(
           current,
@@ -683,6 +854,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   function applyHandoverFailure(result: HandoverActionResult, successNotice: string) {
     const completed = applyHandoverResult(result, successNotice);
     if (!completed?.failureRecord) return;
+    const reliabilityStrike = completed.failureRecord.reliabilityStrikes[0];
+    if (reliabilityStrike) {
+      const struckMemberId =
+        reliabilityStrike.party === "buyer" ? completed.buyerId : completed.sellerId;
+      updateBuyerTrust(struckMemberId, (state) =>
+        addReliabilityStrike(state, {
+          id: `handover-${completed.commitmentId}-${reliabilityStrike.party}`,
+          reason: reliabilityStrike.reason,
+          issuedAtMs: completed.failureRecord!.endedAtMs,
+        }),
+      );
+    }
 
     setCheckoutState((current) =>
       refundPurchaseCommitment(
@@ -786,6 +969,21 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ? "Written confirmed finding recorded privately. The active transaction was resolved with a full simulated refund and an account restriction."
         : "Written dismissed outcome recorded. No Trust Record effect or lasting restriction was created.",
     );
+    const reportedBuyerId = result.state.report?.reportedMemberId;
+    if (
+      result.ok &&
+      outcome === "confirmed" &&
+      reportedBuyerId &&
+      demoBuyers.some((buyer) => buyer.id === reportedBuyerId)
+    ) {
+      updateBuyerTrust(reportedBuyerId, (state) =>
+        permanentlyBlockHigherTiers(state, {
+          kind: "serious-safety-misconduct",
+          reason: "Private confirmed simulated safety finding",
+          appealPath: "Submit a Safety Appeal",
+        }),
+      );
+    }
     if (
       !result.ok ||
       outcome !== "confirmed" ||
@@ -827,20 +1025,25 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function resolveVisibleSafetyAppeal(outcome: "upheld" | "overturned") {
     if (!visibleSafetyState) return;
+    const result = resolveSafetyAppeal(visibleSafetyState, {
+      reviewerId: "simulated-reviewer-2",
+      outcome,
+      writtenOutcome:
+        outcome === "upheld"
+          ? "A different simulated reviewer upheld the written finding."
+          : "A different simulated reviewer overturned the finding and removed its lasting restriction.",
+      resolvedAtMs: currentActionNowMs(),
+    });
     applySafetyResult(
-      resolveSafetyAppeal(visibleSafetyState, {
-        reviewerId: "simulated-reviewer-2",
-        outcome,
-        writtenOutcome:
-          outcome === "upheld"
-            ? "A different simulated reviewer upheld the written finding."
-            : "A different simulated reviewer overturned the finding and removed its lasting restriction.",
-        resolvedAtMs: currentActionNowMs(),
-      }),
+      result,
       outcome === "upheld"
         ? "Final written appeal outcome: finding upheld."
         : "Final written appeal outcome: finding overturned.",
     );
+    const reportedBuyerId = result.state.report?.reportedMemberId;
+    if (result.ok && outcome === "overturned" && reportedBuyerId) {
+      updateBuyerTrust(reportedBuyerId, clearOverturnedPermanentTierBlock);
+    }
   }
 
   function setVisibleAppealTime(timestampMs: number) {
@@ -1143,6 +1346,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setHandoverStates({});
     setHandoverNotices({});
     setSafetyStates({});
+    setTrustStates(createInitialTrustStates());
+    setSelectedQualifyingSellerId(demoSellers[0].id);
     setClockOffsetMs(0);
     setClockNowMs(Date.now());
     setDemoClockPaused(false);
@@ -1238,7 +1443,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <optgroup label="Fictional Demo Buyers (3)">
               {demoBuyers.map((buyer) => (
                 <option key={buyer.id} value={buyer.id}>
-                  {buyer.publicName} - {buyer.tier} - simulated
+                  {buyer.publicName} - {buyerTierLabel(getPublicTrustSummary(trustStates[buyer.id], clockNowMs).tier)} - simulated
                 </option>
               ))}
             </optgroup>
@@ -1258,8 +1463,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               <strong>{selectedBuyer.publicName}</strong>
               <span>Current role: Buyer discovery</span>
               <span>Identity status: {selectedBuyer.identityStatus}</span>
-              <span>Buyer Tier: {selectedBuyer.tier}</span>
-              <span>Active Purchase Commitment limit: {selectedBuyer.activePurchaseLimit}</span>
+              <span>
+                Buyer Tier: {selectedTierProgress
+                  ? buyerTierLabel(selectedTierProgress.tier)
+                  : selectedBuyer.tier}
+              </span>
+              <span>
+                Active Purchase Commitment limit:{" "}
+                {selectedTierProgress?.activePurchaseLimit ?? selectedBuyer.activePurchaseLimit}
+              </span>
               <div>
                 <strong>Fictional history</strong>
                 <p>{selectedBuyer.history}</p>
@@ -1282,6 +1494,101 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           coordinates stay absent.
         </p>
       </section>
+
+      {selectedBuyer && selectedTrustState && selectedTierProgress &&
+      selectedPublicTrustSummary && selectedTradingAvailability ? (
+        <div className="demo-main">
+          <section aria-label="Tier Progress" className="registration-panel">
+            <p className="eyebrow">Private Tier Progress - Simulation</p>
+            <h2>{buyerTierLabel(selectedTierProgress.tier)}</h2>
+            <p>
+              {selectedTierProgress.activePurchaseLimit} active Purchase Commitment
+              {selectedTierProgress.activePurchaseLimit === 1 ? "" : "s"} permitted.
+              Every tier permits one Checkout Hold.
+            </p>
+            <p>{selectedTrustState.successfulHandoverCount} successful handovers</p>
+            <p>
+              {selectedTierProgress.qualifyingProgress.completed} qualifying different Demo{" "}
+              {selectedTierProgress.qualifyingProgress.completed === 1 ? "seller" : "sellers"}{" "}
+              ({selectedTierProgress.qualifyingProgress.completed} of{" "}
+              {selectedTierProgress.qualifyingProgress.required} qualifying target)
+            </p>
+            <p>
+              {selectedActiveStrikes.length
+                ? `${selectedActiveStrikes.length} active Reliability ${selectedActiveStrikes.length === 1 ? "Strike" : "Strikes"}`
+                : "No active Reliability Strikes"}
+            </p>
+            {selectedTradingAvailability.reliabilityWarning ? (
+              <p>Reliability warning active.</p>
+            ) : null}
+            {!selectedTradingAvailability.canBuy || !selectedTradingAvailability.canSell ? (
+              <p>Buying and selling are suspended in this simulated session.</p>
+            ) : null}
+            {selectedTierProgress.strikeExpiresAtMs ? (
+              <p>Strike expiry: {formatWibTime(selectedTierProgress.strikeExpiresAtMs)}</p>
+            ) : null}
+            {selectedTierProgress.blockers.length ? (
+              <ul>
+                {selectedTierProgress.blockers.map((blocker, index) => (
+                  <li key={`${blocker.kind}-${index}`}>Private blocker: {blocker.reason}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No active issues.</p>
+            )}
+            {selectedTierProgress.appealPath ? (
+              <p>Applicable appeal path: {selectedTierProgress.appealPath}</p>
+            ) : null}
+            <div className="listing-actions">
+              <label>
+                Qualifying Demo Seller
+                <select
+                  aria-label="Qualifying Demo Seller"
+                  value={selectedQualifyingSellerId}
+                  onChange={(event) => setSelectedQualifyingSellerId(event.target.value)}
+                >
+                  {demoSellers.map((seller) => (
+                    <option key={seller.id} value={seller.id}>
+                      {seller.publicName} - fictional
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="button button-outline" onClick={recordGuidedSuccessfulHandover}>
+                Record successful handover
+              </button>
+              <button className="button button-outline" onClick={addGuidedReliabilityStrike}>
+                Add Reliability Strike
+              </button>
+              <button className="button button-outline" onClick={clearGuidedOrdinaryIssue}>
+                Clear ordinary issue
+              </button>
+              <button
+                className="button button-outline"
+                disabled={!selectedTierProgress.strikeExpiresAtMs}
+                onClick={() => setGuidedStrikeBoundary(-1)}
+              >
+                Advance to one millisecond before strike expiry
+              </button>
+              <button
+                className="button button-outline"
+                disabled={!selectedTierProgress.strikeExpiresAtMs}
+                onClick={() => setGuidedStrikeBoundary(0)}
+              >
+                Advance to exact strike expiry
+              </button>
+            </div>
+            <p>This guided history and every trust outcome are fictional and simulated.</p>
+          </section>
+          <section aria-label="Trust Summary preview" className="registration-panel">
+            <p className="eyebrow">Member-visible summary</p>
+            <h2>{buyerTierLabel(selectedPublicTrustSummary.tier)}</h2>
+            <p>{selectedPublicTrustSummary.identityVerified ? "Simulated as verified" : "Not verified"}</p>
+            <p>{selectedPublicTrustSummary.successfulHandoverCount} successful handovers</p>
+            <p>{selectedPublicTrustSummary.differentPartnerCount} different partners</p>
+          </section>
+        </div>
+      ) : null}
 
       <nav aria-label="Demo workspaces" className="workspace-tabs">
         <button
@@ -1367,15 +1674,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         />
       ) : null}
 
-      {selectedAccountRestricted && activeWorkspace !== "inventory" ? (
+      {(selectedAccountRestricted || selectedAccountSuspended) && activeWorkspace !== "inventory" ? (
         <main className="demo-main">
           <section aria-label="Restricted simulated account" className="registration-panel">
             <p className="eyebrow">Private account status - Simulation</p>
             <h1>Account unavailable</h1>
             <p>
-              Buying and selling are unavailable while the confirmed simulated safety
+              Buying and selling are unavailable while this private simulated account
               restriction applies. Other members see only that this account is unavailable,
-              never the report, finding, appeal, or restriction reason.
+              never the strike, report, finding, appeal, or restriction reason.
             </p>
           </section>
         </main>
@@ -1417,7 +1724,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         <section aria-label="Purchase Commitments" className="registration-panel">
           <p className="eyebrow">Purchase Commitments - Simulation</p>
           <h2>
-            {selectedBuyerActiveCommitments.length} of {selectedBuyer?.activePurchaseLimit ?? 0} active
+            {selectedBuyerActiveCommitments.length} of {selectedTierProgress?.activePurchaseLimit ?? 0} active
             Purchase Commitments
           </h2>
           {selectedBuyerCommitments.length ? (
@@ -1705,7 +2012,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                             sellerId: selectedSessionListing.sellerId,
                             listingId: selectedBuyerHold.listingId,
                             nowMs: actionNowMs,
-                            activePurchaseLimit: selectedBuyer.activePurchaseLimit,
+                            activePurchaseLimit: selectedTierProgress?.activePurchaseLimit ?? 1,
                           });
                           const createdCommitment = nextState.commitments.find(
                             (commitment) =>
@@ -1724,7 +2031,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                                 sellerId: createdCommitment.sellerId,
                                 listingId: createdCommitment.listingId,
                                 committedAtMs: createdCommitment.createdAtMs,
-                                buyerTier: selectedBuyer.tier,
+                                buyerTier: buyerTierLabel(selectedTierProgress?.tier ?? "Verified"),
                               }),
                             }));
                             setSafetyStates((current) => ({
@@ -1752,12 +2059,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                     <p className="eyebrow">Single-item checkout - Simulation</p>
                     <button
                       className="button button-primary"
-                      disabled={Boolean(
-                        currentBuyerHold ||
-                          selectedListingHold ||
-                          selectedBuyerActiveCommitments.length >=
-                            selectedBuyer.activePurchaseLimit,
-                      )}
+                      disabled={Boolean(selectedListingHold || !selectedCheckoutAllowance?.allowed)}
                       onClick={startSelectedCheckoutHold}
                     >
                       Start 5-minute Checkout Hold
@@ -1771,9 +2073,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                         You already have a Checkout Hold for {currentBuyerHold.listingTitle}.
                         Finish or abandon it before starting another.
                       </p>
-                    ) : selectedBuyerActiveCommitments.length >= selectedBuyer.activePurchaseLimit ? (
+                    ) : selectedCheckoutAllowance?.reason === "account-suspended" ? (
+                      <p>Buying and selling are suspended in this simulated session.</p>
+                    ) : selectedCheckoutAllowance?.reason === "purchase-capacity-reached" ? (
                       <p>
-                        {selectedBuyer.tier} limit of {selectedBuyer.activePurchaseLimit} active {selectedBuyer.activePurchaseLimit === 1
+                        {buyerTierLabel(selectedTierProgress?.tier ?? "Verified")} limit of {selectedTierProgress?.activePurchaseLimit ?? 1} active {(selectedTierProgress?.activePurchaseLimit ?? 1) === 1
                           ? "Purchase Commitment" : "Purchase Commitments"} reached.
                       </p>
                     ) : null}
@@ -1823,7 +2127,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               <div>
                 <span className="fictional-label">Fictional Demo Buyer</span>
                 <h3>{(selectedBuyer ?? demoBuyer).publicName}</h3>
-                <p>{(selectedBuyer ?? demoBuyer).tier}</p>
+                <p>{buyerTierLabel(selectedTierProgress?.tier ?? "Verified")}</p>
                 <small>Identity · {(selectedBuyer ?? demoBuyer).identityStatus}</small>
               </div>
             </section>
