@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { PurchaseCommitment } from "./checkout";
 import {
   HANDOVER_START_DEADLINE_MS,
@@ -116,11 +116,14 @@ function formatWibTime(timestampMs: number) {
 }
 
 type HandoverPanelProps = {
+  actionsBlocked: boolean;
   actorRole: "buyer" | "seller";
   commitment: PurchaseCommitment;
+  contactBlocked: boolean;
   handover: HandoverState;
   nowMs: number;
   notice: string;
+  safetyContent: ReactNode;
   onPropose: (point: HandoverPoint) => void;
   onAccept: (windowId: string) => void;
   onRequestAdjustment: () => void;
@@ -157,11 +160,14 @@ function formatRemaining(deadlineMs: number, nowMs: number) {
 }
 
 export default function HandoverPanel({
+  actionsBlocked,
   actorRole,
   commitment,
+  contactBlocked,
   handover,
   nowMs,
   notice,
+  safetyContent,
   onPropose,
   onAccept,
   onRequestAdjustment,
@@ -244,6 +250,22 @@ export default function HandoverPanel({
         Seller proposes the outdoor point and windows. The buyer may accept or request a
         controlled adjustment; changes take effect only after both parties agree.
       </p>
+
+      {safetyContent}
+      {contactBlocked ? (
+        <p role="status">
+          Contact blocked. Handover coordination and transaction actions are unavailable;
+          either party may leave the unsafe situation without continuing.
+        </p>
+      ) : null}
+      {!contactBlocked && actionsBlocked ? (
+        <p role="status">
+          This transaction was resolved by the guided safety process; handover actions
+          remain unavailable.
+        </p>
+      ) : null}
+
+      <fieldset className="contained-handover-actions" disabled={actionsBlocked}>
 
       {!handover.successRecord && !handover.failureRecord ? (
         <section aria-label="Transaction deadlines" className="checkout-panel">
@@ -829,6 +851,7 @@ export default function HandoverPanel({
           ) : null}
         </>
       )}
+      </fieldset>
 
       {notice ? <p role="status">{notice}</p> : null}
     </section>

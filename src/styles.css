@@ -1180,6 +1180,13 @@ footer p {
   box-shadow: 0 14px 36px rgba(46, 62, 52, 0.08);
 }
 
+.contained-handover-actions {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
 .handover-controls {
   display: grid;
   gap: 12px;
