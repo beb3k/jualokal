@@ -6,4 +6,5 @@ CLAUDE.md
 # Generated dependencies, builds, and test output
 node_modules/
 dist/
+.output/
 test-results/
