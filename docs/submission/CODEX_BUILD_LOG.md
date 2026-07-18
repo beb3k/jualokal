@@ -469,7 +469,7 @@ Issue #12 is implemented, automatically verified, and manually accepted. On 2026
 
 #### Outcome
 
-Issue #17 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner authorized commit, push, merge, and issue closure; stable publication identifiers will be recorded after publication.
+Issue #17 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner authorized publication. Feature commit `1eca8eeb29df9943a3467c51d21d478d5e17147b` was pushed on `codex/issue-17-privacy-safe-list-discovery` and merged as `ff5095d2f37c0ebdf7bde09ea00139589579d16b`; the merge is present on `origin/main`. No pull request was created.
 
 ## Supporting session template
 
