@@ -437,7 +437,7 @@ Issue #11 is implemented, verified, and manually accepted. Publication identifie
 
 #### Outcome
 
-Issue #12 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner completed manual acceptance and authorized commit, push, and merge.
+Issue #12 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner completed manual acceptance and authorized commit, push, and merge. Feature commit `b51b1074302b4d43be332a41f8df214232076a99` was pushed on `codex/issue-12-buyer-tiers` and merged as `a208ada9650ac890e55511a922de607e93e73e5e`; the merge is present on `origin/main`. No pull request was created.
 
 ## Supporting session template
 
