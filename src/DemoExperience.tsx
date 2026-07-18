@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   demoBuyer,
   demoBuyers,
@@ -77,7 +77,10 @@ import {
 } from "./trust";
 import {
   APPROVED_DISCOVERY_CATEGORIES,
+  createSellerDiscoveryMarker,
   discoverListings,
+  getSellerMarkerInitials,
+  projectSellerDiscoveryMarker,
   type ApprovedDiscoveryCategory,
   type DiscoveryCategory,
   type DistanceBand,
@@ -111,7 +114,18 @@ const structuredQuestions = [
 ] as const;
 
 const prototypeDiscoveryRadiusKm = 2;
+const discoveryViewStorageKey = "jualokal.discovery-view";
+const mapHomeAnchorVersion = "fictional-anchor-v1";
 const defaultIncludedParts = "Item and all parts shown in the fictional photos.";
+
+type DiscoveryView = "map" | "list";
+
+function initialDiscoveryView(): DiscoveryView {
+  if (typeof window === "undefined") return "map";
+  return window.localStorage.getItem(discoveryViewStorageKey) === "list"
+    ? "list"
+    : "map";
+}
 
 const browsingLocations = [
   { value: "current", label: "Current simulated location snapshot", available: true },
@@ -304,6 +318,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [questionUpdateNotice, setQuestionUpdateNotice] = useState("");
   const [browsingLocation, setBrowsingLocation] = useState("current");
   const [discoveryCategory, setDiscoveryCategory] = useState<DiscoveryCategory>("All");
+  const [discoveryView, setDiscoveryView] = useState<DiscoveryView>(initialDiscoveryView);
+  const [previewSellerId, setPreviewSellerId] = useState<string | null>(null);
+  const [mapViewport, setMapViewport] = useState({ panX: 0, zoom: 1 });
+  const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
+  const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previewDialogRef = useRef<HTMLElement | null>(null);
+  const previewCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const listingDetailRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (demoClockPaused) return;
@@ -327,6 +349,37 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       setDemoClockPaused(false);
     }
   }, [checkoutState.holds.length, demoClockPaused, handoverStates]);
+
+  useEffect(() => {
+    if (!previewSellerId) return;
+    previewCloseButtonRef.current?.focus();
+    const handlePreviewKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeSellerPreview();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        previewDialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handlePreviewKeyboard);
+    return () => window.removeEventListener("keydown", handlePreviewKeyboard);
+  }, [previewSellerId]);
 
   const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
   const selectedSeller = demoSellers.find(
@@ -496,9 +549,77 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedListingDistanceBand = visibleDemoListings.find(
     ({ listing }) => listing.id === selectedListingId,
   )?.distanceBand;
+  const mapSellerMarkers = demoSellers.flatMap((seller) => {
+    const sellerListings = sessionListings.filter(
+      (listing) => listing.sellerId === seller.id,
+    );
+    const marker = createSellerDiscoveryMarker({
+      sellerId: seller.id,
+      homeAnchorVersion: mapHomeAnchorVersion,
+      sellerListingIds: sellerListings.map((listing) => listing.id),
+      discoveryResults,
+    });
+    if (!marker) return [];
+    const homeDistanceKm =
+      browsingDistanceOverrideKm ?? sellerListings[0]?.distanceKm ?? 0;
+    return [{
+      seller,
+      marker,
+      projection: projectSellerDiscoveryMarker(marker, homeDistanceKm),
+    }];
+  });
+  const mapFrameKm = mapSellerMarkers.some(({ projection }) => projection.frameKm === 3)
+    ? 3
+    : 2;
+  const previewSeller = previewSellerId
+    ? demoSellers.find((seller) => seller.id === previewSellerId)
+    : undefined;
+  const previewListings = previewSeller
+    ? visibleDemoListings.filter(
+        ({ listing }) => listing.sellerId === previewSeller.id,
+      )
+    : [];
+  const previewDistanceBand = previewListings[0]?.distanceBand;
+  const previewTrustSummary = previewSeller
+    ? getPublicTrustSummary(trustStates[previewSeller.id], clockNowMs)
+    : undefined;
   const selectedListingDistanceKm =
     browsingDistanceOverrideKm ?? selectedSessionListing?.distanceKm;
   const listingIsDiscoverable = Boolean(selectedListingDistanceBand);
+
+  function selectDiscoveryView(nextView: DiscoveryView) {
+    setDiscoveryView(nextView);
+    window.localStorage.setItem(discoveryViewStorageKey, nextView);
+  }
+
+  function openSellerPreview(
+    sellerId: string,
+    trigger: HTMLButtonElement,
+  ) {
+    previewTriggerRef.current = trigger;
+    setPreviewSellerId(sellerId);
+  }
+
+  function closeSellerPreview() {
+    setPreviewSellerId(null);
+    window.requestAnimationFrame(() => previewTriggerRef.current?.focus());
+  }
+
+  function openPreviewListing(listing: SessionListing) {
+    loadListingForEditing(listing);
+    setPreviewSellerId(null);
+    window.requestAnimationFrame(() => listingDetailRef.current?.focus());
+  }
+
+  function adjustMapViewport(next: { panX: number; zoom: number }) {
+    setMapViewport(next);
+    setMapStatus("Viewport adjusted; discovery results unchanged");
+  }
+
+  function recenterMap() {
+    setMapViewport({ panX: 0, zoom: 1 });
+    setMapStatus("Buyer-centered view restored");
+  }
 
   function loadListingForEditing(listing: SessionListing) {
     setSelectedListingId(listing.id);
@@ -1804,13 +1925,31 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ) : null}
 
         <section aria-label="Demo marketplace listings" className="discovery-catalog">
-          <div className="inventory-heading">
-            <p className="eyebrow">Nearby Demo Listings - Simulation</p>
-            <h2>{visibleDemoListings.length} nearby simulated listings</h2>
-            <p>
-              Discovery uses the fixed 2 km radius. Out-of-radius inventory remains hidden
-              here and available only in the complete simulated inventory.
-            </p>
+          <div className="inventory-heading discovery-heading">
+            <div>
+              <p className="eyebrow">Nearby Demo Listings - Simulation</p>
+              <h2>{visibleDemoListings.length} nearby simulated listings</h2>
+              <p>
+                Map and List use the same fixed 2 km discovery result. Viewport changes never
+                search a new area or change eligibility.
+              </p>
+            </div>
+            <div aria-label="Discovery View" className="discovery-view-control" role="group">
+              <button
+                aria-pressed={discoveryView === "map"}
+                className="button button-compact button-outline"
+                onClick={() => selectDiscoveryView("map")}
+              >
+                Map
+              </button>
+              <button
+                aria-pressed={discoveryView === "list"}
+                className="button button-compact button-outline"
+                onClick={() => selectDiscoveryView("list")}
+              >
+                List
+              </button>
+            </div>
             <label className="discovery-filter">
               Category Filter
               <select
@@ -1833,34 +1972,178 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </select>
             </label>
           </div>
-          <div className="discovery-grid">
-            {visibleDemoListings.map(({ listing, distanceBand }) => {
-              const seller = demoSellers.find(
-                (candidate) => candidate.id === listing.sellerId,
-              );
-              return (
-                <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
-                  <span className="fictional-label">Simulated Demo Listing</span>
-                  <h3>{listing.title}</h3>
-                  <p>{seller?.publicName} - Fictional Demo Seller</p>
-                  <div className="inventory-facts">
-                    <span>{listing.category}</span>
-                    <span>{listing.condition}</span>
-                    <span>{distanceBand}</span>
-                    <span>{formatRupiah(listing.price)}</span>
-                  </div>
-                  <small>{listing.imageLabel}</small>
+
+          {browsingLocationIsAvailable ? discoveryView === "map" ? (
+            <section aria-label="Seller discovery map" className="discovery-map">
+              <div className="map-context">
+                <strong>Buyer-centered {mapFrameKm} km context</strong>
+                <span>No radius or Seller Convenience Zone is drawn</span>
+              </div>
+              <div
+                aria-label="Your location"
+                className="buyer-location-marker"
+                role="img"
+              >
+                <span aria-hidden="true" />
+              </div>
+              {mapSellerMarkers.map(({ seller, marker, projection }) => (
+                <div
+                  className="seller-marker-position"
+                  key={marker.stableMarkerKey}
+                  style={{
+                    left: `${50 + (projection.offsetXKm / mapFrameKm) * 40 + mapViewport.panX}%`,
+                    top: `${50 - (projection.offsetYKm / mapFrameKm) * 40}%`,
+                    transform: `translate(-50%, -50%) scale(${mapViewport.zoom})`,
+                  }}
+                >
                   <button
-                    className="button button-outline"
-                    onClick={() => loadListingForEditing(listing)}
+                    aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${marker.listingCount} ${marker.listingCount === 1 ? "Listing" : "Listings"}`}
+                    className="seller-discovery-marker"
+                    onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
                   >
-                    View item
+                    <span className="seller-marker-initials" aria-hidden="true">
+                      {getSellerMarkerInitials(seller.publicName)}
+                    </span>
+                    <span className="seller-marker-count" aria-hidden="true">
+                      {marker.listingCount}
+                    </span>
                   </button>
-                </article>
-              );
-            })}
-          </div>
+                </div>
+              ))}
+              <div aria-label="Map viewport controls" className="map-controls" role="group">
+                <button
+                  className="button button-compact button-outline"
+                  onClick={() =>
+                    adjustMapViewport({ ...mapViewport, panX: mapViewport.panX + 4 })
+                  }
+                >
+                  Pan map east
+                </button>
+                <button
+                  className="button button-compact button-outline"
+                  onClick={() =>
+                    adjustMapViewport({
+                      ...mapViewport,
+                      zoom: Math.min(1.5, mapViewport.zoom + 0.25),
+                    })
+                  }
+                >
+                  Zoom in
+                </button>
+                <button
+                  className="button button-compact button-outline"
+                  onClick={() =>
+                    adjustMapViewport({
+                      ...mapViewport,
+                      zoom: Math.max(0.75, mapViewport.zoom - 0.25),
+                    })
+                  }
+                >
+                  Zoom out
+                </button>
+                <button
+                  className="button button-compact button-outline"
+                  onClick={recenterMap}
+                >
+                  Recenter map
+                </button>
+              </div>
+              <p className="map-status" role="status">{mapStatus}</p>
+            </section>
+          ) : (
+            <div className="discovery-grid">
+              {visibleDemoListings.map(({ listing, distanceBand }) => {
+                const seller = demoSellers.find(
+                  (candidate) => candidate.id === listing.sellerId,
+                );
+                return (
+                  <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
+                    <span className="fictional-label">Simulated Demo Listing</span>
+                    <h3>{listing.title}</h3>
+                    {seller ? (
+                      <p>
+                        <button
+                          className="text-button seller-identity-button"
+                          onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
+                        >
+                          {seller.publicName}
+                        </button>{" "}
+                        - Fictional Demo Seller
+                      </p>
+                    ) : null}
+                    <div className="inventory-facts">
+                      <span>{listing.category}</span>
+                      <span>{listing.condition}</span>
+                      <span>{distanceBand}</span>
+                      <span>{formatRupiah(listing.price)}</span>
+                    </div>
+                    <small>{listing.imageLabel}</small>
+                    <button
+                      className="button button-outline"
+                      onClick={() => loadListingForEditing(listing)}
+                    >
+                      View item
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
+
+        {previewSeller && previewDistanceBand && previewTrustSummary ? (
+          <div className="seller-preview-backdrop">
+            <section
+              aria-label={`Seller Preview: ${previewSeller.publicName}`}
+              aria-modal="true"
+              className="seller-preview"
+              ref={previewDialogRef}
+              role="dialog"
+            >
+              <div className="seller-preview-heading">
+                <div>
+                  <p className="eyebrow">Seller Preview · Fictional Demo Seller</p>
+                  <h2>{previewSeller.publicName}</h2>
+                </div>
+                <button
+                  aria-label="Close Seller Preview"
+                  className="button button-compact button-outline"
+                  onClick={closeSellerPreview}
+                  ref={previewCloseButtonRef}
+                >
+                  Close
+                </button>
+              </div>
+              <section aria-label="Trust Summary" className="seller-preview-summary">
+                <strong>Trust Summary</strong>
+                <span>{previewSeller.identityStatus}</span>
+                <span>{previewTrustSummary.successfulHandoverCount} successful handovers</span>
+                <span>{previewTrustSummary.differentPartnerCount} different partners</span>
+                <span>{buyerTierLabel(previewTrustSummary.tier)}</span>
+                <span>{previewDistanceBand}</span>
+              </section>
+              <div className="seller-preview-listings">
+                {previewListings.map(({ listing }) => (
+                  <article
+                    aria-label={`Seller Preview Listing: ${listing.title}`}
+                    key={listing.id}
+                  >
+                    <span className="fictional-label">Simulated Demo Listing</span>
+                    <h3>{listing.title}</h3>
+                    <p>{listing.category} · {listing.condition}</p>
+                    <p>{formatRupiah(listing.price)}</p>
+                    <button
+                      className="button button-outline"
+                      onClick={() => openPreviewListing(listing)}
+                    >
+                      View item
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         <div className="demo-layout">
           {!browsingLocationIsAvailable ? (
@@ -1898,6 +2181,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             aria-label="Demo Listing"
             className="listing-card"
             hidden={!listingIsDiscoverable}
+            ref={listingDetailRef}
+            tabIndex={-1}
           >
             <div
               aria-label="Synthetic fallback illustration, not an item photo"

@@ -195,6 +195,7 @@ test("nearby discovery shows the seeded in-radius listings and excludes out-of-r
   page,
 }) => {
   await openDemo(page);
+  await page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "List" }).click();
 
   const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
   await expect(discovery).toContainText("20 nearby simulated listings");
@@ -348,6 +349,7 @@ test("accounts, listings, histories, locations, and activity stay simulated and 
   await expect(page.locator('input[type="password"], input[type="file"]')).toHaveCount(0);
 
   await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "List" }).click();
   await page
     .getByRole("article", { name: "Nearby simulated listing: Privacy-labelled demo edit" })
     .getByRole("button", { name: "View item" })
@@ -372,6 +374,7 @@ test("List View filters approved categories and uses privacy-safe deterministic 
   page,
 }) => {
   await openDemo(page);
+  await page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "List" }).click();
 
   const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
   const categoryFilter = discovery.getByRole("combobox", { name: "Category Filter" });
@@ -403,6 +406,7 @@ test("listing updates and reactivation preserve the original List View order", a
   page,
 }) => {
   await openDemo(page);
+  await page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "List" }).click();
 
   const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
   const titleHeadings = discovery.locator("article h3");

@@ -40,6 +40,89 @@ export type DiscoveryResult = {
   distanceBand: DistanceBand;
 };
 
+export type SellerDiscoveryMarker = {
+  sellerId: string;
+  listingCount: number;
+  stableMarkerKey: string;
+  offsetXKm: number;
+  offsetYKm: number;
+};
+
+export type SellerMarkerProjection = {
+  stableMarkerKey: string;
+  offsetXKm: number;
+  offsetYKm: number;
+  frameKm: 2 | 3;
+};
+
+type CreateSellerDiscoveryMarkerInput = {
+  sellerId: string;
+  homeAnchorVersion: string;
+  sellerListingIds: readonly string[];
+  discoveryResults: readonly DiscoveryResult[];
+};
+
+function stableFraction(value: string) {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+export function getSellerMarkerInitials(publicName: string) {
+  return publicName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.replace(/[^\p{L}\p{N}]/gu, "").charAt(0))
+    .join("")
+    .toUpperCase();
+}
+
+export function createSellerDiscoveryMarker({
+  sellerId,
+  homeAnchorVersion,
+  sellerListingIds,
+  discoveryResults,
+}: CreateSellerDiscoveryMarkerInput): SellerDiscoveryMarker | null {
+  const sellerListingIdSet = new Set(sellerListingIds);
+  const listingCount = discoveryResults.filter((result) =>
+    sellerListingIdSet.has(result.listingId),
+  ).length;
+  if (listingCount === 0) return null;
+
+  const seed = `${sellerId}:${homeAnchorVersion}`;
+  const angle = stableFraction(`${seed}:angle`) * Math.PI * 2;
+  const radiusKm = 0.35 + stableFraction(`${seed}:radius`) * 0.55;
+
+  return {
+    sellerId,
+    listingCount,
+    stableMarkerKey: seed,
+    offsetXKm: Math.cos(angle) * radiusKm,
+    offsetYKm: Math.sin(angle) * radiusKm,
+  };
+}
+
+export function projectSellerDiscoveryMarker(
+  marker: SellerDiscoveryMarker,
+  homeDistanceKm: number,
+): SellerMarkerProjection {
+  const anchorOffsetKm = Math.hypot(marker.offsetXKm, marker.offsetYKm);
+  const directionX = marker.offsetXKm / anchorOffsetKm;
+  const directionY = marker.offsetYKm / anchorOffsetKm;
+  const markerDistanceKm = Math.max(0, Math.min(2, homeDistanceKm)) + anchorOffsetKm;
+
+  return {
+    stableMarkerKey: marker.stableMarkerKey,
+    offsetXKm: directionX * markerDistanceKm,
+    offsetYKm: directionY * markerDistanceKm,
+    frameKm: markerDistanceKm > 2 ? 3 : 2,
+  };
+}
+
 type DiscoverListingsInput = {
   viewer: DiscoveryViewer;
   listings: readonly DiscoveryListing[];

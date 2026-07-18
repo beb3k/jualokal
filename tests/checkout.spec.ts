@@ -3,6 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
 }
 
 async function purchaseNearbyListing(page: Page, title: string) {
@@ -102,11 +106,13 @@ test("payment clicked after real expiry cannot announce or create success", asyn
   await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
   const timeImmediatelyAfterHoldStarted = await page.evaluate(() => Date.now());
 
-  await page.clock.setSystemTime(timeImmediatelyAfterHoldStarted + 5 * 60 * 1000 + 1);
-  await page
+  const expiredPaymentButton = page
     .getByRole("region", { name: "Checkout Hold" })
-    .getByRole("button", { name: "Simulate successful payment" })
-    .click();
+    .getByRole("button", { name: "Simulate successful payment" });
+  const pauseNowMs = await page.evaluate(() => Date.now());
+  await page.clock.pauseAt(pauseNowMs + 1_000);
+  await page.clock.setSystemTime(timeImmediatelyAfterHoldStarted + 5 * 60 * 1000 + 1);
+  await expiredPaymentButton.click();
 
   await expect(page.getByText("Simulated payment succeeded")).toHaveCount(0);
   await expect(page.getByText("Simulated payment did not complete")).toBeVisible();
