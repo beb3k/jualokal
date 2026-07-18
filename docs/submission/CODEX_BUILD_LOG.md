@@ -375,6 +375,38 @@ Issue #9 is implemented, automatically verified, manually accepted, and committe
 
 Issue #10 is implemented, verified, and manually accepted. Publication details are preserved in the repository and pull request history.
 
+### 2026-07-18 - Safety incident reporting and containment
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Starting commit:** `72fde7d3c9fe67114564cedaae444a06cb229980`
+- **Working branch:** `codex/issue-11-safety-incident`
+- **Related issue:** [#11](https://github.com/beb3k/jualokal/issues/11)
+- **Objective:** Let either transaction participant leave an unsafe situation, file a private structured report, contain immediate danger, and complete a guided simulated review and appeal.
+
+#### Work completed
+
+- Added private structured Safety Reports with a required description, optional simulated evidence label, immediate pair contact blocking, and active-paid-only Safety Holds.
+- Added guided confirmed and dismissed review outcomes, private Trust Record effects, an enforced simulated account restriction, and one appeal through the inclusive seven-day WIB boundary with a different reviewer.
+- Resolved confirmed active Safety Holds with a full simulated refund and paused listing, while dismissed reports resume the handover and post-final reports never reverse released payment.
+- Hid restricted sellers from other buyers, protected reporter identity and unfinished drafts across account switches, and cleared all safety state through Reset Demo.
+- Kept the flow explicitly simulated; no real moderator, money, evidence upload, identity data, contact details, or production moderation operation was introduced.
+
+#### Verification
+
+- Type checking passed.
+- Focused safety state and browser checks passed across phone and desktop profiles.
+- The complete Playwright suite passed: **234/234 checks** across phone and desktop projects.
+- The production build passed.
+- Independent repository-standards and issue-specification reviews passed after draft-privacy, Safety Hold settlement, and account-restriction findings were resolved.
+- GitNexus rated a proposed shared refund-helper change CRITICAL, so that change was not made; the implementation reuses the existing supported refund path without altering its shared behavior.
+- The project owner completed manual acceptance testing and approved commit, push, and merge.
+
+#### Outcome
+
+Issue #11 is implemented, verified, and manually accepted. Publication identifiers are preserved in repository and pull request history.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

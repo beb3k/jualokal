@@ -19,6 +19,7 @@ import {
   type PurchaseCommitment,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
+import SafetyPanel from "./SafetyPanel";
 import {
   buyerAcceptHandover,
   buyerConfirmHandover,
@@ -48,6 +49,17 @@ import {
   type MaterialMismatchReason,
   type HandoverState,
 } from "./handover";
+import {
+  createInitialSafetyState,
+  fileSafetyReport,
+  isPairContactBlocked,
+  resolveSafetyAppeal,
+  reviewSafetyReport,
+  submitSafetyAppeal,
+  type SafetyActionResult,
+  type SafetyCategory,
+  type SafetyState,
+} from "./safety";
 
 const approvedCategories = [
   "Clothing",
@@ -204,6 +216,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [checkoutNotice, setCheckoutNotice] = useState("");
   const [handoverStates, setHandoverStates] = useState<Record<string, HandoverState>>({});
   const [handoverNotices, setHandoverNotices] = useState<Record<string, string>>({});
+  const [safetyStates, setSafetyStates] = useState<Record<string, SafetyState>>({});
   const [clockNowMs, setClockNowMs] = useState(Date.now);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [demoClockPaused, setDemoClockPaused] = useState(false);
@@ -254,10 +267,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }, [clockNowMs]);
 
   useEffect(() => {
-    if (demoClockPaused && checkoutState.holds.length === 0) {
+    if (
+      demoClockPaused &&
+      checkoutState.holds.length === 0 &&
+      Object.keys(handoverStates).length === 0
+    ) {
       setDemoClockPaused(false);
     }
-  }, [checkoutState.holds.length, demoClockPaused]);
+  }, [checkoutState.holds.length, demoClockPaused, handoverStates]);
 
   const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
   const selectedSeller = demoSellers.find(
@@ -306,6 +323,28 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const visibleHandoverState = visibleHandoverCommitment
     ? handoverStates[visibleHandoverCommitment.id]
     : undefined;
+  const visibleSafetyState = visibleHandoverCommitment
+    ? safetyStates[visibleHandoverCommitment.id]
+    : undefined;
+  const visibleContactBlocked = Boolean(
+    visibleSafetyState &&
+      isPairContactBlocked(
+        visibleSafetyState,
+        visibleSafetyState.buyerId,
+        visibleSafetyState.sellerId,
+      ),
+  );
+  const visibleSafetyTransactionResolved = Boolean(
+    visibleHandoverCommitment?.lifecycleStatus === "Completed" &&
+      visibleSafetyState?.report?.review,
+  );
+  const restrictedAccountIds = new Set(
+    Object.values(safetyStates)
+      .filter((state) => state.restriction !== null)
+      .map((state) => state.report?.reportedMemberId)
+      .filter((memberId): memberId is string => Boolean(memberId)),
+  );
+  const selectedAccountRestricted = restrictedAccountIds.has(selectedAccountId);
   const selectedListingCommitment = checkoutState.commitments.find(
     (commitment) =>
       commitment.listingId === selectedListingId && commitmentRemovesListing(commitment),
@@ -338,6 +377,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const listingIsDiscoverable =
     listingStatus === "active" &&
     !selectedListingCommitment &&
+    !restrictedAccountIds.has(selectedListingSeller.id) &&
     browsingLocationIsAvailable &&
     selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
     selectedListingDistanceKm <= permanentDiscoveryMaximumKm;
@@ -350,6 +390,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             (commitment) =>
               commitment.listingId === listing.id && commitmentRemovesListing(commitment),
           ) &&
+          !restrictedAccountIds.has(listing.sellerId) &&
           listing.status === "active" &&
           distanceKm <= prototypeDiscoveryRadiusKm &&
           distanceKm <= permanentDiscoveryMaximumKm
@@ -600,6 +641,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     successNotice: string,
   ) {
     const commitmentId = result.state.commitmentId;
+    if (visibleContactBlocked) {
+      setHandoverNotices((current) => ({
+        ...current,
+        [commitmentId]:
+          "Action blocked: contact is unavailable during the private safety process.",
+      }));
+      return null;
+    }
     if (result.ok) {
       setHandoverStates((current) => ({ ...current, [commitmentId]: result.state }));
       setHandoverNotices((current) => ({ ...current, [commitmentId]: successNotice }));
@@ -655,6 +704,149 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ),
     );
     if (completed.listingId === selectedListingId) setListingStatus(nextListingStatus);
+  }
+
+  function applySafetyResult(
+    result: SafetyActionResult,
+    successNotice: string,
+  ) {
+    const commitmentId = result.state.transactionId;
+    if (result.ok) {
+      setSafetyStates((current) => ({
+        ...current,
+        [commitmentId]: result.state,
+      }));
+      setHandoverNotices((current) => ({
+        ...current,
+        [commitmentId]: successNotice,
+      }));
+      return;
+    }
+    setHandoverNotices((current) => ({
+      ...current,
+      [commitmentId]: "Safety action blocked: " + result.reason.replaceAll("-", " ") + ".",
+    }));
+  }
+
+  function reportVisibleSafety(
+    category: SafetyCategory,
+    description: string,
+    evidenceLabel?: string,
+  ) {
+    if (!visibleSafetyState || !visibleHandoverCommitment) return;
+    const reportedMemberId =
+      selectedAccountId === visibleHandoverCommitment.buyerId
+        ? visibleHandoverCommitment.sellerId
+        : visibleHandoverCommitment.buyerId;
+    const escrowStatus = visibleHandoverCommitment.escrowStatus.startsWith("Held")
+      ? "held"
+      : visibleHandoverCommitment.escrowStatus.startsWith("Released")
+        ? "released"
+        : "refunded";
+    applySafetyResult(
+      fileSafetyReport(visibleSafetyState, {
+        reportId: "safety-" + visibleHandoverCommitment.id,
+        actorId: selectedAccountId,
+        reportedMemberId,
+        category,
+        description,
+        evidenceLabel,
+        credibleImmediateDanger: category === "immediate-physical-danger",
+        reportedAtMs: currentActionNowMs(),
+        transaction: {
+          status:
+            visibleHandoverCommitment.lifecycleStatus === "Active"
+              ? "active"
+              : "final",
+          paid: true,
+          escrowStatus,
+        },
+      }),
+      category === "immediate-physical-danger" &&
+        visibleHandoverCommitment.lifecycleStatus === "Active"
+        ? "Private Safety Report submitted. Contact is blocked and the paid transaction is on Safety Hold."
+        : "Private Safety Report submitted for guided prototype review. Completed settlement is unchanged.",
+    );
+  }
+
+  function reviewVisibleSafety(outcome: "confirmed" | "dismissed") {
+    if (!visibleSafetyState || !visibleHandoverCommitment) return;
+    const result = reviewSafetyReport(visibleSafetyState, {
+      reviewerId: "simulated-reviewer-1",
+      outcome,
+      redactedOutcome:
+        outcome === "confirmed"
+          ? "A simulated reviewer confirmed serious safety misconduct without identifying the reporter."
+          : "The guided prototype review did not confirm the private allegation.",
+      reviewedAtMs: currentActionNowMs(),
+    });
+    applySafetyResult(
+      result,
+      outcome === "confirmed"
+        ? "Written confirmed finding recorded privately. The active transaction was resolved with a full simulated refund and an account restriction."
+        : "Written dismissed outcome recorded. No Trust Record effect or lasting restriction was created.",
+    );
+    if (
+      !result.ok ||
+      outcome !== "confirmed" ||
+      visibleHandoverCommitment.lifecycleStatus !== "Active"
+    ) {
+      return;
+    }
+    setCheckoutState((current) =>
+      refundPurchaseCommitment(
+        current,
+        visibleHandoverCommitment.id,
+        currentActionNowMs(),
+        "No successful handover",
+      ),
+    );
+    setSessionListings((current) =>
+      current.map((listing) =>
+        listing.id === visibleHandoverCommitment.listingId
+          ? { ...listing, status: "paused" }
+          : listing,
+      ),
+    );
+    if (visibleHandoverCommitment.listingId === selectedListingId) {
+      setListingStatus("paused");
+    }
+  }
+
+  function appealVisibleSafety(response: string) {
+    if (!visibleSafetyState) return;
+    applySafetyResult(
+      submitSafetyAppeal(visibleSafetyState, {
+        actorId: selectedAccountId,
+        response,
+        submittedAtMs: currentActionNowMs(),
+      }),
+      "One Safety Appeal submitted to a different simulated reviewer. Applicable restrictions remain.",
+    );
+  }
+
+  function resolveVisibleSafetyAppeal(outcome: "upheld" | "overturned") {
+    if (!visibleSafetyState) return;
+    applySafetyResult(
+      resolveSafetyAppeal(visibleSafetyState, {
+        reviewerId: "simulated-reviewer-2",
+        outcome,
+        writtenOutcome:
+          outcome === "upheld"
+            ? "A different simulated reviewer upheld the written finding."
+            : "A different simulated reviewer overturned the finding and removed its lasting restriction.",
+        resolvedAtMs: currentActionNowMs(),
+      }),
+      outcome === "upheld"
+        ? "Final written appeal outcome: finding upheld."
+        : "Final written appeal outcome: finding overturned.",
+    );
+  }
+
+  function setVisibleAppealTime(timestampMs: number) {
+    setDemoClockPaused(true);
+    setClockOffsetMs(timestampMs - Date.now());
+    setClockNowMs(timestampMs);
   }
 
   function setVisibleBoundaryTime(boundary: string) {
@@ -753,6 +945,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function advanceToHandoverWindow(timestampMs: number) {
+    if (visibleContactBlocked) {
+      if (visibleHandoverCommitment) {
+        setHandoverNotices((current) => ({
+          ...current,
+          [visibleHandoverCommitment.id]:
+            "Action blocked: contact is unavailable during the private safety process.",
+        }));
+      }
+      return;
+    }
     const outsideAcceptedWindow = Boolean(
       visibleHandoverState?.schedule &&
         timestampMs > visibleHandoverState.schedule.window.endsAtMs,
@@ -940,8 +1142,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setCheckoutNotice("");
     setHandoverStates({});
     setHandoverNotices({});
+    setSafetyStates({});
     setClockOffsetMs(0);
     setClockNowMs(Date.now());
+    setDemoClockPaused(false);
     setSessionListings(createInitialSessionListings());
     setSelectedListingId(demoListing.id);
     setTitle(demoListing.title);
@@ -1116,11 +1320,31 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
       {visibleHandoverCommitment && visibleHandoverState ? (
         <HandoverPanel
+          actionsBlocked={
+            visibleContactBlocked || visibleSafetyTransactionResolved
+          }
           actorRole={selectedBuyer ? "buyer" : "seller"}
           commitment={visibleHandoverCommitment}
+          contactBlocked={visibleContactBlocked}
           handover={visibleHandoverState}
           notice={handoverNotices[visibleHandoverCommitment.id] ?? ""}
           nowMs={clockNowMs}
+          safetyContent={
+            visibleSafetyState ? (
+              <SafetyPanel
+                actorId={selectedAccountId}
+                commitment={visibleHandoverCommitment}
+                key={visibleHandoverCommitment.id + ":" + selectedAccountId}
+                nowMs={clockNowMs}
+                safety={visibleSafetyState}
+                onAppeal={appealVisibleSafety}
+                onReport={reportVisibleSafety}
+                onResolveAppeal={resolveVisibleSafetyAppeal}
+                onReview={reviewVisibleSafety}
+                onSetAppealTime={setVisibleAppealTime}
+              />
+            ) : null
+          }
           onAccept={acceptVisibleHandover}
           onAdvance={advanceToHandoverWindow}
           onApproveAdjustment={approveVisibleAdjustment}
@@ -1143,7 +1367,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         />
       ) : null}
 
-      {activeWorkspace === "buyer" ? (
+      {selectedAccountRestricted && activeWorkspace !== "inventory" ? (
+        <main className="demo-main">
+          <section aria-label="Restricted simulated account" className="registration-panel">
+            <p className="eyebrow">Private account status - Simulation</p>
+            <h1>Account unavailable</h1>
+            <p>
+              Buying and selling are unavailable while the confirmed simulated safety
+              restriction applies. Other members see only that this account is unavailable,
+              never the report, finding, appeal, or restriction reason.
+            </p>
+          </section>
+        </main>
+      ) : activeWorkspace === "buyer" ? (
         <main className="demo-main">
         <section className="demo-intro">
           <div>
@@ -1489,6 +1725,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                                 listingId: createdCommitment.listingId,
                                 committedAtMs: createdCommitment.createdAtMs,
                                 buyerTier: selectedBuyer.tier,
+                              }),
+                            }));
+                            setSafetyStates((current) => ({
+                              ...current,
+                              [createdCommitment.id]: createInitialSafetyState({
+                                transactionId: createdCommitment.id,
+                                buyerId: createdCommitment.buyerId,
+                                sellerId: createdCommitment.sellerId,
                               }),
                             }));
                           }
