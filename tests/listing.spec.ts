@@ -198,16 +198,20 @@ test("discovery enforces location availability, privacy, and distance boundaries
   const listing = page.getByRole("region", { name: "Demo Listing" });
   const locationLabels = await location.locator("option").allTextContents();
   expect(locationLabels.join(" ")).not.toMatch(/1\.99|2\.00|2\.01|10\.00|10\.01/);
+  const locationValues = await location.locator("option").evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  );
+  expect(locationValues).not.toContainEqual(expect.stringMatching(/^\d+(?:\.\d+)?$/));
 
-  await location.selectOption("1.99");
+  await location.selectOption("inside-edge");
   await expect(listing).toBeVisible();
-  await expect(listing.getByText("2.0 km away")).toBeVisible();
-  await expect(listing.getByText("1.99 km away")).toHaveCount(0);
+  await expect(listing.getByText("1-2 km", { exact: true })).toBeVisible();
+  await expect(listing).not.toContainText(/\b\d+(?:\.\d+)?\s*(?:m|km) away\b/i);
 
-  await location.selectOption("2.00");
+  await location.selectOption("at-edge");
   await expect(listing).toBeVisible();
 
-  await location.selectOption("2.01");
+  await location.selectOption("outside-edge");
   await expect(listing).toHaveCount(0);
   await expect(page.getByText(/outside the 2 km Discovery Radius/i)).toBeVisible();
 
@@ -219,9 +223,9 @@ test("discovery enforces location availability, privacy, and distance boundaries
   await expect(listing).toHaveCount(0);
   await expect(page.getByText(/Browsing Location is unavailable/i)).toBeVisible();
 
-  await location.selectOption("10.00");
+  await location.selectOption("at-maximum");
   await expect(listing).toHaveCount(0);
-  await location.selectOption("10.01");
+  await location.selectOption("outside-maximum");
   await expect(listing).toHaveCount(0);
   await expect(page.getByText(/permanent maximum is 10 km/i)).toBeVisible();
 

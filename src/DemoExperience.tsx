@@ -75,16 +75,31 @@ import {
   recordSuccessfulHandover,
   type TrustState,
 } from "./trust";
+import {
+  APPROVED_DISCOVERY_CATEGORIES,
+  discoverListings,
+  type ApprovedDiscoveryCategory,
+  type DiscoveryCategory,
+  type DistanceBand,
+} from "./discovery";
 
-const approvedCategories = [
-  "Clothing",
-  "Accessories",
-  "Small electronics",
-  "Books",
-  "Toys",
-  "Hobby equipment",
-  "Portable household goods",
-] as const;
+const discoveryCategoryLabels: Record<ApprovedDiscoveryCategory, string> = {
+  Clothing: "Clothing",
+  Accessories: "Accessories",
+  "Small electronics": "Small Electronics",
+  Books: "Books",
+  Toys: "Toys",
+  "Hobby equipment": "Hobby Equipment",
+  "Portable household goods": "Portable Household Goods",
+};
+
+const discoveryCategoryOptions: ReadonlyArray<{ value: DiscoveryCategory; label: string }> = [
+  { value: "All", label: "All" },
+  ...APPROVED_DISCOVERY_CATEGORIES.map((value) => ({
+    value,
+    label: discoveryCategoryLabels[value],
+  })),
+];
 
 const conditionGrades = ["Like New", "Very Good", "Good", "Fair", "Needs Repair"] as const;
 const structuredQuestions = [
@@ -96,18 +111,17 @@ const structuredQuestions = [
 ] as const;
 
 const prototypeDiscoveryRadiusKm = 2;
-const permanentDiscoveryMaximumKm = 10;
 const defaultIncludedParts = "Item and all parts shown in the fictional photos.";
 
 const browsingLocations = [
-  { value: "0.85", label: "Current simulated location · about 850 m" },
-  { value: "1.99", label: "Nearby boundary check" },
-  { value: "2.00", label: "Discovery-radius edge" },
-  { value: "2.01", label: "Outside discovery-radius check" },
-  { value: "10.00", label: "Permanent-maximum check" },
-  { value: "10.01", label: "Beyond permanent-maximum check" },
-  { value: "denied", label: "Location permission denied" },
-  { value: "unavailable", label: "Location unavailable" },
+  { value: "current", label: "Current simulated location snapshot", available: true },
+  { value: "inside-edge", label: "Nearby boundary check", available: true, distanceKm: 1.99 },
+  { value: "at-edge", label: "Discovery-radius edge", available: true, distanceKm: 2 },
+  { value: "outside-edge", label: "Outside discovery-radius check", available: true, distanceKm: 2.01 },
+  { value: "at-maximum", label: "Permanent-maximum check", available: true, distanceKm: 10 },
+  { value: "outside-maximum", label: "Beyond permanent-maximum check", available: true, distanceKm: 10.01 },
+  { value: "denied", label: "Location permission denied", available: false },
+  { value: "unavailable", label: "Location unavailable", available: false },
 ] as const;
 
 type PublishedListing = {
@@ -138,14 +152,16 @@ function commitmentRemovesListing(commitment: PurchaseCommitment) {
 
 type SessionListing = DemoListingSeed & {
   status: ListingStatus;
+  originalPublicationTimeMs: number;
   photos: string[];
   includedParts: string;
   photoPrivacyConfirmed: boolean;
 };
 
 function createInitialSessionListings(): SessionListing[] {
-  return demoListings.map((listing) => ({
+  return demoListings.map((listing, index) => ({
     ...listing,
+    originalPublicationTimeMs: Date.UTC(2026, 0, 1) + index,
     status: "active",
     photos: ["Complete-item view", "Detail view", "Second detail view"],
     includedParts: defaultIncludedParts,
@@ -190,14 +206,6 @@ const initialPublishedListing: PublishedListing = {
 
 function formatRupiah(price: number) {
   return `Rp ${price.toLocaleString("id-ID")}`;
-}
-
-function formatRoundedDistance(distanceKm: number) {
-  if (distanceKm < 1) {
-    return `${Math.round((distanceKm * 1000) / 50) * 50} m away`;
-  }
-
-  return `${distanceKm.toFixed(1)} km away`;
 }
 
 function formatWibTime(timestampMs: number) {
@@ -294,7 +302,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     question: string;
   } | null>(null);
   const [questionUpdateNotice, setQuestionUpdateNotice] = useState("");
-  const [browsingLocation, setBrowsingLocation] = useState("0.85");
+  const [browsingLocation, setBrowsingLocation] = useState("current");
+  const [discoveryCategory, setDiscoveryCategory] = useState<DiscoveryCategory>("All");
 
   useEffect(() => {
     if (demoClockPaused) return;
@@ -450,36 +459,46 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedPendingQuestion =
     pendingQuestion?.listingId === selectedListingId ? pendingQuestion.question : null;
 
-  const browsingDistanceKm = Number(browsingLocation);
-  const browsingLocationIsAvailable = Number.isFinite(browsingDistanceKm);
+  const browsingLocationScenario = browsingLocations.find(
+    (location) => location.value === browsingLocation,
+  );
+  const browsingLocationIsAvailable = browsingLocationScenario?.available === true;
+  const browsingDistanceOverrideKm =
+    browsingLocationScenario && "distanceKm" in browsingLocationScenario
+      ? browsingLocationScenario.distanceKm
+      : undefined;
+  const discoveryResults = discoverListings({
+    viewer: {
+      id: selectedAccountId,
+      verified: Boolean(selectedAccountTrustState?.identityVerified),
+      locationAvailable: browsingLocationIsAvailable,
+    },
+    category: discoveryCategory,
+    listings: sessionListings.map((listing) => ({
+      id: listing.id,
+      sellerId: listing.sellerId,
+      category: listing.category,
+      distanceKm: browsingDistanceOverrideKm ?? listing.distanceKm,
+      originalPublicationTimeMs: listing.originalPublicationTimeMs,
+      status: listing.status,
+      sellerAvailable:
+        !restrictedAccountIds.has(listing.sellerId) &&
+        !committedListingIds.has(listing.id),
+    })),
+  });
+  const visibleDemoListings: Array<{
+    listing: SessionListing;
+    distanceBand: DistanceBand;
+  }> = discoveryResults.flatMap((result) => {
+    const listing = sessionListings.find((candidate) => candidate.id === result.listingId);
+    return listing ? [{ listing, distanceBand: result.distanceBand }] : [];
+  });
+  const selectedListingDistanceBand = visibleDemoListings.find(
+    ({ listing }) => listing.id === selectedListingId,
+  )?.distanceBand;
   const selectedListingDistanceKm =
-    browsingLocation === "0.85"
-      ? (selectedSessionListing?.distanceKm ?? browsingDistanceKm)
-      : browsingDistanceKm;
-  const listingIsDiscoverable =
-    listingStatus === "active" &&
-    !selectedListingCommitment &&
-    !restrictedAccountIds.has(selectedListingSeller.id) &&
-    browsingLocationIsAvailable &&
-    selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
-    selectedListingDistanceKm <= permanentDiscoveryMaximumKm;
-  const visibleDemoListings = browsingLocationIsAvailable
-    ? sessionListings.filter((listing) => {
-        const distanceKm =
-          browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
-        return (
-          !checkoutState.commitments.some(
-            (commitment) =>
-              commitment.listingId === listing.id && commitmentRemovesListing(commitment),
-          ) &&
-          !restrictedAccountIds.has(listing.sellerId) &&
-          listing.status === "active" &&
-          distanceKm <= prototypeDiscoveryRadiusKm &&
-          distanceKm <= permanentDiscoveryMaximumKm
-        );
-      })
-    : [];
-
+    browsingDistanceOverrideKm ?? selectedSessionListing?.distanceKm;
+  const listingIsDiscoverable = Boolean(selectedListingDistanceBand);
 
   function loadListingForEditing(listing: SessionListing) {
     setSelectedListingId(listing.id);
@@ -582,7 +601,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       errors.push("Describe the included parts");
     }
 
-    if (!approvedCategories.includes(category as (typeof approvedCategories)[number])) {
+    if (!APPROVED_DISCOVERY_CATEGORIES.some((approvedCategory) => approvedCategory === category)) {
       errors.push("Choose an approved category");
     }
 
@@ -1376,7 +1395,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setSelectedQuestion(structuredQuestions[0]);
     setPendingQuestion(null);
     setQuestionUpdateNotice("");
-    setBrowsingLocation("0.85");
+    setBrowsingLocation("current");
+    setDiscoveryCategory("All");
     setResetConfirmationOpen(false);
   }
 
@@ -1791,14 +1811,33 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               Discovery uses the fixed 2 km radius. Out-of-radius inventory remains hidden
               here and available only in the complete simulated inventory.
             </p>
+            <label className="discovery-filter">
+              Category Filter
+              <select
+                aria-label="Category Filter"
+                value={discoveryCategory}
+                onChange={(event) => {
+                  const selectedOption = discoveryCategoryOptions.find(
+                    (option) => option.value === event.target.value,
+                  );
+                  if (selectedOption) {
+                    setDiscoveryCategory(selectedOption.value);
+                  }
+                }}
+              >
+                {discoveryCategoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="discovery-grid">
-            {visibleDemoListings.map((listing) => {
+            {visibleDemoListings.map(({ listing, distanceBand }) => {
               const seller = demoSellers.find(
                 (candidate) => candidate.id === listing.sellerId,
               );
-              const distanceKm =
-                browsingLocation === "0.85" ? listing.distanceKm : browsingDistanceKm;
               return (
                 <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
                   <span className="fictional-label">Simulated Demo Listing</span>
@@ -1807,7 +1846,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                   <div className="inventory-facts">
                     <span>{listing.category}</span>
                     <span>{listing.condition}</span>
-                    <span>{distanceKm < 1 ? "Under 1 km" : "1-2 km"}</span>
+                    <span>{distanceBand}</span>
                     <span>{formatRupiah(listing.price)}</span>
                   </div>
                   <small>{listing.imageLabel}</small>
@@ -1834,14 +1873,17 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </p>
             </section>
           ) : null}
-          {browsingLocationIsAvailable && browsingDistanceKm > prototypeDiscoveryRadiusKm ? (
+          {browsingLocationIsAvailable &&
+          selectedListingDistanceKm !== undefined &&
+          selectedListingDistanceKm > prototypeDiscoveryRadiusKm ? (
             <section className="registration-panel marketplace-empty">
               <h2>No nearby listings</h2>
               <p>This item is outside the 2 km Discovery Radius.</p>
             </section>
           ) : null}
           {browsingLocationIsAvailable &&
-          browsingDistanceKm <= prototypeDiscoveryRadiusKm &&
+          selectedListingDistanceKm !== undefined &&
+          selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
           listingStatus !== "active" ? (
             <section className="registration-panel marketplace-empty">
               <h2>Listing unavailable</h2>
@@ -1891,7 +1933,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               <div className="listing-meta">
                 <span>{publishedListing.category}</span>
                 <span>{selectedListingSeller.publicName} - Fictional Demo Seller</span>
-                <span>{formatRoundedDistance(selectedListingDistanceKm)}</span>
+                <span>{selectedListingDistanceBand}</span>
               </div>
               <h2>{publishedListing.title}</h2>
               <p className="listing-description">{publishedListing.description}</p>
@@ -2277,7 +2319,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <label>
               Category
               <select value={category} onChange={(event) => setCategory(event.target.value)}>
-                {approvedCategories.map((approvedCategory) => (
+                {APPROVED_DISCOVERY_CATEGORIES.map((approvedCategory) => (
                   <option key={approvedCategory}>{approvedCategory}</option>
                 ))}
                 <option>Food</option>

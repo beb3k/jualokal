@@ -91,7 +91,7 @@ test("cancelling Reset Demo preserves the current session changes", async ({ pag
   await page.getByRole("combobox", { name: "Selected fictional account" }).selectOption(
     "buyer-naufal",
   );
-  await page.getByLabel("Simulated Browsing Location").selectOption("2.01");
+  await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
 
   await page.getByRole("button", { name: "Reset Demo" }).click();
   const confirmation = page.getByRole("dialog", { name: "Reset Demo" });
@@ -104,7 +104,7 @@ test("cancelling Reset Demo preserves the current session changes", async ({ pag
   await expect(
     page.getByRole("combobox", { name: "Selected fictional account" }),
   ).toHaveValue("buyer-naufal");
-  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("2.01");
+  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("outside-edge");
 
   await page.getByRole("button", { name: "Seller workspace" }).click();
   await expect(page.getByLabel("Title")).toHaveValue("Session-edited rattan basket");
@@ -121,7 +121,7 @@ test("confirming Reset Demo restores the original fictional session", async ({ p
   await page.getByRole("combobox", { name: "Selected fictional account" }).selectOption(
     "buyer-lestari",
   );
-  await page.getByLabel("Simulated Browsing Location").selectOption("2.01");
+  await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
 
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
@@ -138,7 +138,7 @@ test("confirming Reset Demo restores the original fictional session", async ({ p
   await expect(identity).toContainText(
     "0 successful handovers with 0 different Demo Sellers",
   );
-  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("0.85");
+  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("current");
   await expect(page.getByRole("region", { name: "Demo Listing" })).toBeVisible();
 
   await page.getByRole("button", { name: "Seller workspace" }).click();
@@ -172,14 +172,14 @@ test("independent browser sessions keep changes and resets isolated", async ({
     await sessionBPage.getByRole("button", { name: "Buyer discovery" }).click();
     await sessionBPage
       .getByLabel("Simulated Browsing Location")
-      .selectOption("2.01");
+      .selectOption("outside-edge");
     await sessionBPage.getByRole("button", { name: "Reset Demo" }).click();
     await sessionBPage
       .getByRole("dialog", { name: "Reset Demo" })
       .getByRole("button", { name: "Reset this simulated session" })
       .click();
     await expect(sessionBPage.getByLabel("Simulated Browsing Location")).toHaveValue(
-      "0.85",
+      "current",
     );
 
     await expect(sessionAPage.getByLabel("Title")).toHaveValue(
@@ -205,7 +205,7 @@ test("nearby discovery shows the seeded in-radius listings and excludes out-of-r
   await expect(discovery.getByText("Under 1 km", { exact: true }).first()).toBeVisible();
   await expect(discovery.getByText("1-2 km", { exact: true }).first()).toBeVisible();
 
-  await page.getByLabel("Simulated Browsing Location").selectOption("2.01");
+  await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
   await expect(discovery.getByRole("article")).toHaveCount(0);
   await expect(page.getByText(/outside the 2 km Discovery Radius/i)).toBeVisible();
 
@@ -213,7 +213,7 @@ test("nearby discovery shows the seeded in-radius listings and excludes out-of-r
   await expect(discovery.getByRole("article")).toHaveCount(0);
   await expect(page.getByText(/Browsing Location was denied/i)).toBeVisible();
 
-  await page.getByLabel("Simulated Browsing Location").selectOption("0.85");
+  await page.getByLabel("Simulated Browsing Location").selectOption("current");
   await expect(discovery.getByRole("article")).toHaveCount(20);
 
   await page.getByRole("button", { name: "Demo inventory" }).click();
@@ -366,4 +366,81 @@ test("accounts, listings, histories, locations, and activity stay simulated and 
   await expect(page.locator("body")).toContainText(
     "No real identity, contact, precise location, or payment information",
   );
+});
+
+test("List View filters approved categories and uses privacy-safe deterministic order", async ({
+  page,
+}) => {
+  await openDemo(page);
+
+  const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
+  const categoryFilter = discovery.getByRole("combobox", { name: "Category Filter" });
+
+  await expect(categoryFilter.locator("option")).toHaveText([
+    "All",
+    "Clothing",
+    "Accessories",
+    "Small Electronics",
+    "Books",
+    "Toys",
+    "Hobby Equipment",
+    "Portable Household Goods",
+  ]);
+  await expect(discovery.getByRole("article").first()).toContainText("Denim chore jacket");
+
+  await categoryFilter.selectOption("Books");
+  await expect(discovery.getByRole("article")).toHaveCount(2);
+  await expect(discovery.getByRole("article").nth(0)).toContainText(
+    "Illustrated Indonesian folktales",
+  );
+  await expect(discovery.getByRole("article").nth(1)).toContainText(
+    "Indonesian recipe notebook",
+  );
+  await expect(discovery).not.toContainText(/\b\d+(?:\.\d+)?\s*(?:m|km) away\b/i);
+});
+
+test("listing updates and reactivation preserve the original List View order", async ({
+  page,
+}) => {
+  await openDemo(page);
+
+  const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
+  const titleHeadings = discovery.locator("article h3");
+  const visibleTitles = async () => {
+    await expect(titleHeadings).toHaveCount(20);
+    return titleHeadings.allTextContents();
+  };
+  const originalTitle = "Handwoven rattan market basket";
+  const editedTitle = "Order-stable rattan basket";
+  const initialOrder = await visibleTitles();
+  expect(initialOrder).toContain(originalTitle);
+
+  const expectOriginalOrder = async () => {
+    const currentOrder = await visibleTitles();
+    expect(
+      currentOrder.map((title) => (title === editedTitle ? originalTitle : title)),
+    ).toEqual(initialOrder);
+  };
+
+  await page.getByRole("button", { name: "Seller workspace" }).click();
+  await page.getByLabel("Title").fill(editedTitle);
+  await page.getByRole("button", { name: "Publish listing" }).click();
+  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await expectOriginalOrder();
+
+  await page.getByRole("button", { name: "Seller workspace" }).click();
+  await page.getByRole("button", { name: "Deactivate listing" }).click();
+  await page.getByRole("button", { name: "Publish listing" }).click();
+  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await expectOriginalOrder();
+
+  await page.getByLabel("Structured question").selectOption("Measurements");
+  await page.getByRole("button", { name: "Request listing update" }).click();
+  await page.getByRole("button", { name: "Seller workspace" }).click();
+  await page
+    .getByLabel("Measurements or specifications")
+    .fill("42 cm wide x 31 cm high; approximately 650 g.");
+  await page.getByRole("button", { name: "Update shared listing" }).click();
+  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await expectOriginalOrder();
 });
