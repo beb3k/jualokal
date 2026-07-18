@@ -439,6 +439,38 @@ Issue #11 is implemented, verified, and manually accepted. Publication identifie
 
 Issue #12 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner completed manual acceptance and authorized commit, push, and merge. Feature commit `b51b1074302b4d43be332a41f8df214232076a99` was pushed on `codex/issue-12-buyer-tiers` and merged as `a208ada9650ac890e55511a922de607e93e73e5e`; the merge is present on `origin/main`. No pull request was created.
 
+### 2026-07-18 - Privacy-safe List discovery
+
+- **Session role:** Supporting implementation, testing, and review
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Codex
+- **Starting commit:** `2a9436050023091fb43aeb8342fb3c2d77f06166`
+- **Working branch:** `codex/issue-17-privacy-safe-list-discovery`
+- **Related issue:** [#17](https://github.com/beb3k/jualokal/issues/17)
+- **Objective:** Show each verified member a privacy-safe, viewer-specific nearby inventory in List View with broad distance bands, category filtering, and stable ordering.
+
+#### Work completed
+
+- Added one shared discovery rule that gates inventory on verification and a current location, uses the inclusive 2 km boundary, excludes the viewer's own and unavailable listings, and returns only broad distance bands.
+- Added the agreed single-select category filter and deterministic ordering by distance band and original publication time.
+- Preserved original publication time through listing edits, reactivation, and Structured Question Request responses.
+- Replaced numeric location-control values with opaque simulation scenarios and removed buyer-visible rounded or exact listing distances.
+- Kept existing listing publication, management, cross-listing, checkout, and structured-question behavior intact.
+
+#### Verification
+
+- Type checking and the production build passed.
+- The complete Playwright suite passed: **280/280 checks** across phone and desktop projects.
+- Focused lower checks cover verification and location gates, exact radius and band boundaries, ownership, unavailable inventory, category filtering, and deterministic ordering.
+- Focused browser checks cover the visible category journey, privacy-safe output, stable order after edits/reactivation/question responses, and phone and desktop usability.
+- A live browser pass confirmed the final Books filter shows two correctly ordered results with broad distance bands and no exact distance output.
+- Independent repository-standards and issue-specification reviews passed after all findings were resolved.
+- Pre-edit GitNexus impact analysis rated the discovery seam low architectural risk; broader browser-flow regression risk was covered by the complete suite.
+
+#### Outcome
+
+Issue #17 is implemented, automatically verified, and manually accepted. On 2026-07-18, the project owner authorized commit, push, merge, and issue closure; stable publication identifiers will be recorded after publication.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

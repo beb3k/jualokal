@@ -1455,9 +1455,30 @@ footer p {
   font-size: clamp(2.1rem, 4vw, 3.8rem);
 }
 
-.inventory-heading p:last-child {
+.inventory-heading p {
   color: #65736b;
   line-height: 1.6;
+}
+
+.discovery-filter {
+  display: grid;
+  gap: 7px;
+  width: min(100%, 320px);
+  margin-top: 18px;
+  color: #315846;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.discovery-filter select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(23, 60, 43, 0.2);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: #17251e;
+  background: #fffdf8;
+  font: inherit;
 }
 
 .inventory-grid,
