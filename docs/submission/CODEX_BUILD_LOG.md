@@ -479,6 +479,9 @@ Issue #17 is implemented, automatically verified, and manually accepted. On 2026
 - **Environment:** Kiro IDE using GPT 5.6 Sol; this entry documents project work but does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
 - **Starting commit:** `4b160d260b7f0efc349cd0f51b27cb3d195ed223`
 - **Working branch:** `codex/issue-18-map-seller-discovery`
+- **Feature commit:** `67d4b9a0146a2b1ccfb385bd800a4e4af2456892`
+- **Merge commit:** `3d2d78a5b4de814df8ff335475c8a177d51f2a85`
+- **Publication path:** Feature branch pushed and merged directly into `main`; no pull request was created
 - **Related issue:** [#18](https://github.com/beb3k/jualokal/issues/18)
 - **Objective:** Deliver the first complete privacy-preserving Map View journey using the shared discovery result, stable coarse Seller markers, responsive Seller Preview, and the existing full-listing experience.
 
@@ -502,7 +505,7 @@ Issue #17 is implemented, automatically verified, and manually accepted. On 2026
 
 #### Outcome and follow-up
 
-Issue #18 is implemented, automatically verified, independently reviewed, and manually accepted. Issue #19 remains responsible for location refresh and map-failure recovery; issue #20 remains responsible for overlap grouping, group zoom, and chooser behavior.
+Issue #18 is implemented, automatically verified, independently reviewed, manually accepted, pushed, merged into `main`, and closed. The local and remote issue branches were removed after the merge was verified. Issue #19 remains responsible for location refresh and map-failure recovery; issue #20 remains responsible for overlap grouping, group zoom, and chooser behavior.
 
 ## Supporting session template
 
