@@ -840,13 +840,14 @@ test("incompatible availability ends neutrally with the listing for sale", async
   await expect(outcome).toContainText("Listing status: For Sale");
   await expect(outcome).not.toContainText("Your private Reliability Strike");
 });
-test("seller keeps separate private outcomes for two refunded listings", async ({ page }) => {
+test("seller sees private refund outcomes before a second overlapping strike restricts the account", async ({ page }) => {
   await openDemo(page);
   await purchaseBasket(page);
   await switchAccount(page, "seller-dimas");
   let panel = basketHandover(page);
   await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("damage");
   await panel.getByRole("button", { name: "Report seller unavailability" }).click();
+  await expect(panel).toContainText("Your private seller reason: damage");
 
   await switchAccount(page, "buyer-ayu");
   await purchaseNearbyListing(page, "Batik cotton overshirt");
@@ -857,16 +858,6 @@ test("seller keeps separate private outcomes for two refunded listings", async (
   panel = page.getByRole("region", { name: "Handover for Batik cotton overshirt" });
   await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("loss");
   await panel.getByRole("button", { name: "Report seller unavailability" }).click();
-
-  await page
-    .getByRole("combobox", { name: "Selected seller listing" })
-    .selectOption("listing-01");
-  await expect(basketHandover(page)).toContainText("Your private seller reason: damage");
-
-  await page
-    .getByRole("combobox", { name: "Selected seller listing" })
-    .selectOption("listing-02");
-  await expect(
-    page.getByRole("region", { name: "Handover for Batik cotton overshirt" }),
-  ).toContainText("Your private seller reason: loss");
+  await expect(panel).toContainText("Your private seller reason: loss");
+  await expect(page.getByRole("heading", { name: "Account unavailable" })).toBeVisible();
 });
