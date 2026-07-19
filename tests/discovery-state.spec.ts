@@ -1,9 +1,12 @@
 import { expect, test } from "@playwright/test";
 import {
+  createSellerMapMarkers,
   DISCOVERY_CATEGORIES,
   classifyDiscoveryOutcome,
   discoverListings,
   type DiscoveryListing,
+  type ProjectedSellerMarker,
+  type SellerMarkerGroupDefinition,
 } from "../src/discovery";
 
 const activeListing = (
@@ -269,4 +272,101 @@ test("Seller marker initials support mononymous and verified-last-initial identi
 
   expect(getSellerMarkerInitials("Sukarno")).toBe("S");
   expect(getSellerMarkerInitials("Dimas P.")).toBe("DP");
+});
+
+test("Seller groups preserve coarse positions and separate only eligible groups", () => {
+  const markers: ProjectedSellerMarker[] = [
+    {
+      marker: {
+        sellerId: "seller-a",
+        listingCount: 2,
+        stableMarkerKey: "seller-a:anchor",
+        offsetXKm: 0.2,
+        offsetYKm: 0.3,
+      },
+      projection: {
+        stableMarkerKey: "seller-a:anchor",
+        offsetXKm: 0.6,
+        offsetYKm: 0.7,
+        frameKm: 2,
+      },
+    },
+    {
+      marker: {
+        sellerId: "seller-b",
+        listingCount: 1,
+        stableMarkerKey: "seller-b:anchor",
+        offsetXKm: 0.4,
+        offsetYKm: 0.5,
+      },
+      projection: {
+        stableMarkerKey: "seller-b:anchor",
+        offsetXKm: 0.8,
+        offsetYKm: 0.9,
+        frameKm: 2,
+      },
+    },
+  ];
+  const groups: SellerMarkerGroupDefinition[] = [{
+    id: "shared-coarse-area",
+    separation: "separable",
+    sellerIds: ["seller-a", "seller-b"],
+  }];
+
+  const grouped = createSellerMapMarkers({
+    markers,
+    groups,
+    expandedGroupId: null,
+  });
+  expect(grouped).toEqual([{
+    kind: "group",
+    groupId: "shared-coarse-area",
+    separation: "separable",
+    sellerIds: ["seller-a", "seller-b"],
+    sellerCount: 2,
+    projection: {
+      stableMarkerKey: "shared-coarse-area:seller-a:seller-b",
+      offsetXKm: 0.7,
+      offsetYKm: 0.8,
+      frameKm: 2,
+    },
+  }]);
+
+  const expanded = createSellerMapMarkers({
+    markers,
+    groups,
+    expandedGroupId: "shared-coarse-area",
+  });
+  expect(expanded).toEqual([
+    { kind: "individual", ...markers[0] },
+    { kind: "individual", ...markers[1] },
+  ]);
+});
+
+test("filtering a Seller group to one member returns the original individual marker", () => {
+  const onlyVisibleMarker: ProjectedSellerMarker = {
+    marker: {
+      sellerId: "seller-a",
+      listingCount: 1,
+      stableMarkerKey: "seller-a:anchor",
+      offsetXKm: 0.2,
+      offsetYKm: 0.3,
+    },
+    projection: {
+      stableMarkerKey: "seller-a:anchor",
+      offsetXKm: 0.6,
+      offsetYKm: 0.7,
+      frameKm: 2,
+    },
+  };
+
+  expect(createSellerMapMarkers({
+    markers: [onlyVisibleMarker],
+    groups: [{
+      id: "shared-coarse-area",
+      separation: "inseparable",
+      sellerIds: ["seller-a", "seller-b"],
+    }],
+    expandedGroupId: null,
+  })).toEqual([{ kind: "individual", ...onlyVisibleMarker }]);
 });
