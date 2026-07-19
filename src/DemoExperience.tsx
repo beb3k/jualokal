@@ -77,6 +77,7 @@ import {
 } from "./trust";
 import {
   APPROVED_DISCOVERY_CATEGORIES,
+  classifyDiscoveryOutcome,
   createSellerDiscoveryMarker,
   discoverListings,
   getSellerMarkerInitials,
@@ -122,21 +123,274 @@ type DiscoveryView = "map" | "list";
 
 function initialDiscoveryView(): DiscoveryView {
   if (typeof window === "undefined") return "map";
+  const urlView = new URLSearchParams(window.location.search).get("view");
+  if (urlView === "map" || urlView === "list") return urlView;
   return window.localStorage.getItem(discoveryViewStorageKey) === "list"
     ? "list"
     : "map";
 }
 
+function initialSelectedAccountId() {
+  const accountId = new URLSearchParams(window.location.search).get("account");
+  const accountExists =
+    demoBuyers.some((buyer) => buyer.id === accountId) ||
+    demoSellers.some((seller) => seller.id === accountId);
+  return accountExists && accountId ? accountId : demoBuyer.id;
+}
+
+function initialActiveWorkspace(
+  accountId: string,
+): "buyer" | "seller" | "inventory" {
+  const workspace = new URLSearchParams(window.location.search).get("workspace");
+  if (workspace === "inventory") return "inventory";
+  return accountId.startsWith("seller-") ? "seller" : "buyer";
+}
+
+function initialDiscoveryCategory(): DiscoveryCategory {
+  const category = new URLSearchParams(window.location.search).get("category");
+  return discoveryCategoryOptions.find((option) => option.value === category)?.value ?? "All";
+}
+
+function initialQualifyingSellerId() {
+  const sellerId = new URLSearchParams(window.location.search).get("seller");
+  return demoSellers.find((seller) => seller.id === sellerId)?.id ?? demoSellers[0].id;
+}
+
+function initialSelectedListingId() {
+  const accountId = initialSelectedAccountId();
+  if (!accountId.startsWith("seller-")) return demoListing.id;
+  return demoListings.find((listing) => listing.sellerId === accountId)?.id ?? demoListing.id;
+}
+
 const browsingLocations = [
-  { value: "current", label: "Current simulated location snapshot", available: true },
-  { value: "inside-edge", label: "Nearby boundary check", available: true, distanceKm: 1.99 },
-  { value: "at-edge", label: "Discovery-radius edge", available: true, distanceKm: 2 },
-  { value: "outside-edge", label: "Outside discovery-radius check", available: true, distanceKm: 2.01 },
-  { value: "at-maximum", label: "Permanent-maximum check", available: true, distanceKm: 10 },
-  { value: "outside-maximum", label: "Beyond permanent-maximum check", available: true, distanceKm: 10.01 },
-  { value: "denied", label: "Location permission denied", available: false },
-  { value: "unavailable", label: "Location unavailable", available: false },
+  {
+    value: "current",
+    label: "Current simulated location snapshot",
+    kind: "valid",
+    discovery: "success",
+  },
+  {
+    value: "inside-edge",
+    label: "Nearby boundary check",
+    kind: "valid",
+    discovery: "success",
+    distanceKm: 1.99,
+  },
+  {
+    value: "at-edge",
+    label: "Discovery-radius edge",
+    kind: "valid",
+    discovery: "success",
+    distanceKm: 2,
+  },
+  {
+    value: "outside-edge",
+    label: "Outside discovery-radius check",
+    kind: "valid",
+    discovery: "success",
+    distanceKm: 2.01,
+  },
+  {
+    value: "books-empty",
+    label: "Valid snapshot with no nearby Books",
+    kind: "valid",
+    discovery: "success",
+    emptyCategory: "Books",
+  },
+  {
+    value: "at-maximum",
+    label: "Permanent-maximum check",
+    kind: "valid",
+    discovery: "success",
+    distanceKm: 10,
+  },
+  {
+    value: "outside-maximum",
+    label: "Beyond permanent-maximum check",
+    kind: "valid",
+    discovery: "success",
+    distanceKm: 10.01,
+  },
+  {
+    value: "discovery-failure",
+    label: "Discovery service unavailable",
+    kind: "valid",
+    discovery: "failure",
+  },
+  {
+    value: "map-failure",
+    label: "Map rendering unavailable",
+    kind: "valid",
+    discovery: "success",
+    mapFailure: true,
+  },
+  { value: "denied", label: "Location permission denied", kind: "denied" },
+  { value: "unavailable", label: "Location unavailable", kind: "unavailable" },
 ] as const;
+
+type BrowsingLocationScenario = (typeof browsingLocations)[number];
+type BrowsingLocationValue = BrowsingLocationScenario["value"];
+type BrowsingLocationSnapshot =
+  | {
+      kind: "valid";
+      revision: number;
+      value: BrowsingLocationValue;
+      discovery: "success" | "failure";
+      distanceKm?: number;
+      emptyCategory?: ApprovedDiscoveryCategory;
+    }
+  | { kind: "denied"; revision: number }
+  | { kind: "unavailable"; revision: number }
+  | { kind: "stale"; revision: number };
+
+const initialBrowsingLocationSnapshot: BrowsingLocationSnapshot = {
+  kind: "valid",
+  revision: 1,
+  value: "current",
+  discovery: "success",
+};
+
+function createBrowsingLocationSnapshot(
+  scenario: BrowsingLocationScenario,
+  revision: number,
+): BrowsingLocationSnapshot {
+  if (scenario.kind === "denied") return { kind: "denied", revision };
+  if (scenario.kind === "unavailable") return { kind: "unavailable", revision };
+
+  return {
+    kind: "valid",
+    revision,
+    value: scenario.value,
+    discovery: scenario.discovery,
+    ...("distanceKm" in scenario ? { distanceKm: scenario.distanceKm } : {}),
+    ...("emptyCategory" in scenario ? { emptyCategory: scenario.emptyCategory } : {}),
+  };
+}
+
+function QualifyingSellerSelect({
+  selectedSellerId,
+  onSelect,
+}: {
+  selectedSellerId: string;
+  onSelect: (sellerId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = Math.max(
+    0,
+    demoSellers.findIndex((seller) => seller.id === selectedSellerId),
+  );
+  const [activeIndex, setActiveIndex] = useState(selectedIndex);
+  const selectedSeller = demoSellers[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!wrapperRef.current?.contains(event.target)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [open]);
+
+  function focusOption(index: number) {
+    const wrappedIndex = (index + demoSellers.length) % demoSellers.length;
+    setActiveIndex(wrappedIndex);
+    window.requestAnimationFrame(() => optionRefs.current[wrappedIndex]?.focus());
+  }
+
+  function openOptions() {
+    setOpen(true);
+    focusOption(selectedIndex);
+  }
+
+  function closeOptions() {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function chooseSeller(sellerId: string) {
+    onSelect(sellerId);
+    closeOptions();
+  }
+
+  return (
+    <div className="custom-select" ref={wrapperRef}>
+      <span className="custom-select-label" id="qualifying-seller-label">
+        Qualifying Demo Seller
+      </span>
+      <button
+        aria-controls="qualifying-seller-options"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-labelledby="qualifying-seller-label"
+        className="custom-select-trigger"
+        onClick={() => (open ? closeOptions() : openOptions())}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            openOptions();
+          } else if (event.key === "Escape" && open) {
+            event.preventDefault();
+            closeOptions();
+          }
+        }}
+        ref={triggerRef}
+        role="combobox"
+        type="button"
+      >
+        <span>{selectedSeller.publicName} - fictional</span>
+        <span aria-hidden="true">⌄</span>
+      </button>
+      {open ? (
+        <div
+          aria-labelledby="qualifying-seller-label"
+          className="custom-select-options"
+          id="qualifying-seller-options"
+          role="listbox"
+        >
+          {demoSellers.map((seller, index) => (
+            <button
+              aria-selected={seller.id === selectedSellerId}
+              className="custom-select-option"
+              key={seller.id}
+              onClick={() => chooseSeller(seller.id)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  focusOption(activeIndex + 1);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  focusOption(activeIndex - 1);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  focusOption(0);
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  focusOption(demoSellers.length - 1);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeOptions();
+                }
+              }}
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              role="option"
+              tabIndex={index === activeIndex ? 0 : -1}
+              type="button"
+            >
+              <span>{seller.publicName}</span>
+              <small>Fictional Demo Seller</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type PublishedListing = {
   title: string;
@@ -266,8 +520,10 @@ function createDemoHandoverWindows(committedAtMs: number) {
 }
 
 function DemoExperience({ onExit }: { onExit: () => void }) {
-  const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller" | "inventory">("buyer");
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(demoBuyer.id);
+  const [selectedAccountId, setSelectedAccountId] = useState(initialSelectedAccountId);
+  const [activeWorkspace, setActiveWorkspace] = useState<"buyer" | "seller" | "inventory">(
+    () => initialActiveWorkspace(initialSelectedAccountId()),
+  );
   const [sessionListings, setSessionListings] = useState<SessionListing[]>(
     createInitialSessionListings,
   );
@@ -280,12 +536,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     createInitialTrustStates,
   );
   const [selectedQualifyingSellerId, setSelectedQualifyingSellerId] = useState<string>(
-    demoSellers[0].id,
+    initialQualifyingSellerId,
   );
   const [clockNowMs, setClockNowMs] = useState(Date.now);
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [demoClockPaused, setDemoClockPaused] = useState(false);
-  const [selectedListingId, setSelectedListingId] = useState(demoListing.id);
+  const [selectedListingId, setSelectedListingId] = useState(initialSelectedListingId);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [title, setTitle] = useState<string>(demoListing.title);
   const [category, setCategory] = useState<string>(demoListing.category);
@@ -316,9 +572,17 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     question: string;
   } | null>(null);
   const [questionUpdateNotice, setQuestionUpdateNotice] = useState("");
-  const [browsingLocation, setBrowsingLocation] = useState("current");
-  const [discoveryCategory, setDiscoveryCategory] = useState<DiscoveryCategory>("All");
+  const [browsingLocation, setBrowsingLocation] =
+    useState<BrowsingLocationValue>("current");
+  const [browsingLocationSnapshot, setBrowsingLocationSnapshot] =
+    useState<BrowsingLocationSnapshot>(initialBrowsingLocationSnapshot);
+  const [discoveryCategory, setDiscoveryCategory] =
+    useState<DiscoveryCategory>(initialDiscoveryCategory);
   const [discoveryView, setDiscoveryView] = useState<DiscoveryView>(initialDiscoveryView);
+  const [mapRendering, setMapRendering] = useState<"ready" | "failed">("ready");
+  const [discoveryAnnouncement, setDiscoveryAnnouncement] = useState(
+    "Nearby discovery ready with simulated snapshot 1",
+  );
   const [previewSellerId, setPreviewSellerId] = useState<string | null>(null);
   const [mapViewport, setMapViewport] = useState({ panX: 0, zoom: 1 });
   const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
@@ -381,6 +645,35 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     return () => window.removeEventListener("keydown", handlePreviewKeyboard);
   }, [previewSellerId]);
 
+  useEffect(() => {
+    const markPersistedResumeStale = (event: PageTransitionEvent) => {
+      if (event.persisted) markBrowsingLocationStale();
+    };
+    window.addEventListener("pagehide", markBrowsingLocationStale);
+    window.addEventListener("pageshow", markPersistedResumeStale);
+    return () => {
+      window.removeEventListener("pagehide", markBrowsingLocationStale);
+      window.removeEventListener("pageshow", markPersistedResumeStale);
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("demo", "1");
+    url.searchParams.set("account", selectedAccountId);
+    url.searchParams.set("workspace", activeWorkspace);
+    url.searchParams.set("category", discoveryCategory);
+    url.searchParams.set("view", discoveryView);
+    url.searchParams.set("seller", selectedQualifyingSellerId);
+    window.history.replaceState(null, "", url);
+  }, [
+    activeWorkspace,
+    discoveryCategory,
+    discoveryView,
+    selectedAccountId,
+    selectedQualifyingSellerId,
+  ]);
+
   const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
   const selectedSeller = demoSellers.find(
     (seller) => seller.id === selectedAccountId,
@@ -391,6 +684,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedSessionListing = sessionListings.find(
     (listing) => listing.id === selectedListingId,
   );
+
+  useEffect(() => {
+    if (!selectedAccountId.startsWith("seller-")) return;
+    const firstSellerListing = sessionListings.find(
+      (listing) => listing.sellerId === selectedAccountId,
+    );
+    if (firstSellerListing) loadListingForEditing(firstSellerListing);
+  }, [selectedAccountId]);
   const selectedBuyerHold = selectedBuyer
     ? checkoutState.holds.find(
         (hold) =>
@@ -512,15 +813,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedPendingQuestion =
     pendingQuestion?.listingId === selectedListingId ? pendingQuestion.question : null;
 
-  const browsingLocationScenario = browsingLocations.find(
-    (location) => location.value === browsingLocation,
-  );
-  const browsingLocationIsAvailable = browsingLocationScenario?.available === true;
+  const browsingLocationIsAvailable = browsingLocationSnapshot.kind === "valid";
+  const discoverySucceeded =
+    browsingLocationSnapshot.kind === "valid" &&
+    browsingLocationSnapshot.discovery === "success";
   const browsingDistanceOverrideKm =
-    browsingLocationScenario && "distanceKm" in browsingLocationScenario
-      ? browsingLocationScenario.distanceKm
+    browsingLocationSnapshot.kind === "valid"
+      ? browsingLocationSnapshot.distanceKm
       : undefined;
-  const discoveryResults = discoverListings({
+  const emptyDiscoveryCategory =
+    browsingLocationSnapshot.kind === "valid"
+      ? browsingLocationSnapshot.emptyCategory
+      : undefined;
+  const discoveryResults = discoverySucceeded ? discoverListings({
     viewer: {
       id: selectedAccountId,
       verified: Boolean(selectedAccountTrustState?.identityVerified),
@@ -531,13 +836,25 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       id: listing.id,
       sellerId: listing.sellerId,
       category: listing.category,
-      distanceKm: browsingDistanceOverrideKm ?? listing.distanceKm,
+      distanceKm:
+        emptyDiscoveryCategory === listing.category
+          ? prototypeDiscoveryRadiusKm + 0.01
+          : browsingDistanceOverrideKm ?? listing.distanceKm,
       originalPublicationTimeMs: listing.originalPublicationTimeMs,
       status: listing.status,
       sellerAvailable:
         !restrictedAccountIds.has(listing.sellerId) &&
         !committedListingIds.has(listing.id),
     })),
+  }) : [];
+  const discoveryOutcome = classifyDiscoveryOutcome({
+    location:
+      browsingLocationSnapshot.kind === "valid"
+        ? "valid"
+        : browsingLocationSnapshot.kind,
+    discoverySucceeded,
+    category: discoveryCategory,
+    resultCount: discoveryResults.length,
   });
   const visibleDemoListings: Array<{
     listing: SessionListing;
@@ -571,6 +888,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const mapFrameKm = mapSellerMarkers.some(({ projection }) => projection.frameKm === 3)
     ? 3
     : 2;
+  const mapFallbackActive =
+    browsingLocationIsAvailable &&
+    discoverySucceeded &&
+    discoveryView === "map" &&
+    mapRendering === "failed";
+  const presentedDiscoveryView: DiscoveryView = mapFallbackActive
+    ? "list"
+    : discoveryView;
   const previewSeller = previewSellerId
     ? demoSellers.find((seller) => seller.id === previewSellerId)
     : undefined;
@@ -590,6 +915,61 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   function selectDiscoveryView(nextView: DiscoveryView) {
     setDiscoveryView(nextView);
     window.localStorage.setItem(discoveryViewStorageKey, nextView);
+    setDiscoveryAnnouncement(
+      nextView === "map" && mapRendering === "failed"
+        ? "Map rendering remains unavailable. Showing the same results in List View."
+        : `${nextView === "map" ? "Map" : "List"} View selected; discovery results unchanged.`,
+    );
+  }
+
+  function markBrowsingLocationStale() {
+    setBrowsingLocationSnapshot((currentSnapshot) =>
+      currentSnapshot.kind === "valid"
+        ? { kind: "stale", revision: currentSnapshot.revision }
+        : currentSnapshot,
+    );
+    setDiscoveryAnnouncement(
+      "Browsing Location is stale after resume. Refresh nearby listings to continue.",
+    );
+  }
+
+  function refreshNearbyListings() {
+    const scenario = browsingLocations.find(
+      (candidate) => candidate.value === browsingLocation,
+    );
+    if (!scenario) return;
+
+    const nextRevision = browsingLocationSnapshot.revision + 1;
+    setBrowsingLocationSnapshot(createBrowsingLocationSnapshot(scenario, nextRevision));
+    setMapRendering(
+      scenario.kind === "valid" && "mapFailure" in scenario ? "failed" : "ready",
+    );
+    setMapViewport({ panX: 0, zoom: 1 });
+    setMapStatus("Buyer-centered view restored after refresh");
+    setPreviewSellerId(null);
+
+    if (scenario.kind === "denied") {
+      setDiscoveryAnnouncement("Location permission denied. Nearby discovery not run.");
+    } else if (scenario.kind === "unavailable") {
+      setDiscoveryAnnouncement("Location unavailable. Nearby discovery not run.");
+    } else if (scenario.discovery === "failure") {
+      setDiscoveryAnnouncement("Discovery service failed. Existing emptiness was not inferred.");
+    } else if ("mapFailure" in scenario) {
+      setDiscoveryAnnouncement(
+        "Browsing Location replaced and results recalculated. Map failed, so the same results are shown in List View.",
+      );
+    } else {
+      setDiscoveryAnnouncement(
+        `Browsing Location replaced with simulated snapshot ${nextRevision}; nearby results and Distance Bands recalculated.`,
+      );
+    }
+  }
+
+  function retryMap() {
+    setMapRendering("ready");
+    setMapViewport({ panX: 0, zoom: 1 });
+    setMapStatus("Buyer-centered view restored");
+    setDiscoveryAnnouncement("Map rendering recovered. Map View restored.");
   }
 
   function openSellerPreview(
@@ -1517,7 +1897,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPendingQuestion(null);
     setQuestionUpdateNotice("");
     setBrowsingLocation("current");
+    setBrowsingLocationSnapshot(initialBrowsingLocationSnapshot);
     setDiscoveryCategory("All");
+    setMapRendering("ready");
+    setMapViewport({ panX: 0, zoom: 1 });
+    setMapStatus("Buyer-centered view ready");
+    setDiscoveryAnnouncement("Demo reset with simulated snapshot 1");
     setResetConfirmationOpen(false);
   }
 
@@ -1638,7 +2023,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
       {selectedBuyer && selectedTrustState && selectedTierProgress &&
       selectedPublicTrustSummary && selectedTradingAvailability ? (
-        <div className="demo-main">
+        <div className="demo-main trust-overview">
           <section aria-label="Tier Progress" className="registration-panel">
             <p className="eyebrow">Private Tier Progress - Simulation</p>
             <h2>{buyerTierLabel(selectedTierProgress.tier)}</h2>
@@ -1681,20 +2066,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               <p>Applicable appeal path: {selectedTierProgress.appealPath}</p>
             ) : null}
             <div className="listing-actions">
-              <label>
-                Qualifying Demo Seller
-                <select
-                  aria-label="Qualifying Demo Seller"
-                  value={selectedQualifyingSellerId}
-                  onChange={(event) => setSelectedQualifyingSellerId(event.target.value)}
-                >
-                  {demoSellers.map((seller) => (
-                    <option key={seller.id} value={seller.id}>
-                      {seller.publicName} - fictional
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <QualifyingSellerSelect
+                selectedSellerId={selectedQualifyingSellerId}
+                onSelect={setSelectedQualifyingSellerId}
+              />
               <button className="button button-outline" onClick={recordGuidedSuccessfulHandover}>
                 Record successful handover
               </button>
@@ -1834,14 +2209,20 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <p className="eyebrow">Simulated Browsing Location · Bandung</p>
             <h1>Nearby in Bandung</h1>
             <p>
-              Browse the private marketplace with a current simulated location. No device
-              location or personal details are requested.
+              Choose a fictional replacement snapshot, then refresh explicitly. Demo Mode never
+              requests device location or continuously tracks movement.
             </p>
             <label>
-              Simulated Browsing Location
+              Replacement Simulated Browsing Location
               <select
+                aria-label="Simulated Browsing Location"
                 value={browsingLocation}
-                onChange={(event) => setBrowsingLocation(event.target.value)}
+                onChange={(event) => {
+                  const selectedScenario = browsingLocations.find(
+                    (scenario) => scenario.value === event.target.value,
+                  );
+                  if (selectedScenario) setBrowsingLocation(selectedScenario.value);
+                }}
               >
                 {browsingLocations.map((location) => (
                   <option key={location.value} value={location.value}>
@@ -1850,6 +2231,21 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 ))}
               </select>
             </label>
+            <div className="location-refresh-actions">
+              <button className="button button-primary" onClick={refreshNearbyListings}>
+                Refresh nearby listings
+              </button>
+              <button
+                className="button button-outline"
+                onClick={markBrowsingLocationStale}
+              >
+                Simulate stale resumed session
+              </button>
+              <small>
+                Active simulated snapshot {browsingLocationSnapshot.revision}. Selection alone
+                never changes discovery.
+              </small>
+            </div>
             <p>
               Prototype Discovery Radius: 2 km · The permanent maximum is 10 km and cannot be
               overridden.
@@ -1861,6 +2257,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <small>simulated area</small>
           </div>
         </section>
+
+        <p aria-atomic="true" className="discovery-announcement" role="status">
+          {discoveryAnnouncement}
+        </p>
 
         <section aria-label="Purchase Commitments" className="registration-panel">
           <p className="eyebrow">Purchase Commitments - Simulation</p>
@@ -1961,6 +2361,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                   );
                   if (selectedOption) {
                     setDiscoveryCategory(selectedOption.value);
+                    setDiscoveryAnnouncement(
+                      `${selectedOption.label} Category Filter applied; Map and List updated from the same result.`,
+                    );
                   }
                 }}
               >
@@ -1973,7 +2376,72 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             </label>
           </div>
 
-          {browsingLocationIsAvailable ? discoveryView === "map" ? (
+          {mapFallbackActive ? (
+            <section aria-label="Map Fallback" className="discovery-recovery" role="status">
+              <h3>Map unavailable — showing List View</h3>
+              <p>
+                The same results, Browsing Location, Category Filter, and Distance Bands remain
+                unchanged for this session.
+              </p>
+              <button className="button button-primary" onClick={retryMap}>
+                Retry map
+              </button>
+            </section>
+          ) : null}
+
+          {discoveryOutcome.kind === "location-denied" ? (
+            <section className="discovery-recovery" role="alert">
+              <h3>Location permission denied</h3>
+              <p>Choose a simulated replacement and refresh. No discovery request was run.</p>
+            </section>
+          ) : discoveryOutcome.kind === "location-unavailable" ? (
+            <section className="discovery-recovery" role="alert">
+              <h3>Location unavailable</h3>
+              <p>Try a new simulated snapshot when location is available.</p>
+            </section>
+          ) : discoveryOutcome.kind === "stale-location" ? (
+            <section className="discovery-recovery" role="alert">
+              <h3>Browsing Location needs refresh</h3>
+              <p>The resumed session is stale. Refresh explicitly to continue nearby discovery.</p>
+            </section>
+          ) : discoveryOutcome.kind === "discovery-failure" ? (
+            <section className="discovery-recovery" role="alert">
+              <h3>Nearby discovery unavailable</h3>
+              <p>Your snapshot is valid, but discovery failed. This is not an empty result.</p>
+            </section>
+          ) : discoveryOutcome.kind === "category-empty" ? (
+            <section className="discovery-recovery marketplace-empty" role="status">
+              <h3>No {discoveryCategoryLabels[discoveryOutcome.category]} listings nearby</h3>
+              <p>Other nearby listings may still be available.</p>
+              <button
+                className="button button-primary"
+                onClick={() => {
+                  setDiscoveryCategory("All");
+                  setDiscoveryAnnouncement("All categories restored; nearby results updated.");
+                }}
+              >
+                Show All categories
+              </button>
+            </section>
+          ) : discoveryOutcome.kind === "nearby-empty" ? (
+            <section className="discovery-recovery marketplace-empty" role="status">
+              <h3>No nearby listings yet</h3>
+              <p>The valid 2 km discovery result is empty. The radius was not widened.</p>
+              <div className="empty-state-actions">
+                <button className="button button-primary" onClick={refreshNearbyListings}>
+                  Refresh nearby listings
+                </button>
+                <button
+                  className="button button-outline"
+                  onClick={() => setActiveWorkspace("inventory")}
+                >
+                  Sell an item nearby
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {discoveryOutcome.kind === "results" && presentedDiscoveryView === "map" ? (
             <section aria-label="Seller discovery map" className="discovery-map">
               <div className="map-context">
                 <strong>Buyer-centered {mapFrameKm} km context</strong>
@@ -2050,7 +2518,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </div>
               <p className="map-status" role="status">{mapStatus}</p>
             </section>
-          ) : (
+          ) : discoveryOutcome.kind === "results" && presentedDiscoveryView === "list" ? (
             <div className="discovery-grid">
               {visibleDemoListings.map(({ listing, distanceBand }) => {
                 const seller = demoSellers.find(
@@ -2146,17 +2614,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ) : null}
 
         <div className="demo-layout">
-          {!browsingLocationIsAvailable ? (
-            <section className="registration-panel marketplace-empty">
-              <h2>No listings shown</h2>
-              <p>
-                {browsingLocation === "denied"
-                  ? "Browsing Location was denied. Allow a current location to discover listings."
-                  : "Browsing Location is unavailable. Try again when a current location is available."}
-              </p>
-            </section>
-          ) : null}
-          {browsingLocationIsAvailable &&
+          {discoveryOutcome.kind === "results" &&
           selectedListingDistanceKm !== undefined &&
           selectedListingDistanceKm > prototypeDiscoveryRadiusKm ? (
             <section className="registration-panel marketplace-empty">
@@ -2164,7 +2622,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               <p>This item is outside the 2 km Discovery Radius.</p>
             </section>
           ) : null}
-          {browsingLocationIsAvailable &&
+          {discoveryOutcome.kind === "results" &&
           selectedListingDistanceKm !== undefined &&
           selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
           listingStatus !== "active" ? (

@@ -34,6 +34,60 @@ test("fresh Demo Mode contains the exact representative simulated marketplace", 
   await expect(inventory.getByText(/Synthetic fallback.*simulated item image/i)).toHaveCount(25);
 });
 
+test("safe Demo navigation survives refresh without persisting location state", async ({ page }) => {
+  await page.goto(
+    "/?demo=1&account=buyer-naufal&workspace=buyer&category=Books&view=list&seller=seller-sari",
+  );
+
+  await expect(
+    page.getByRole("combobox", { name: "Selected fictional account" }),
+  ).toHaveValue("buyer-naufal");
+  await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
+  await expect(
+    page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "List" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("combobox", { name: "Qualifying Demo Seller" }),
+  ).toContainText("Sari N.");
+
+  await page.getByLabel("Category Filter").selectOption("Toys");
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "Map" })
+    .click();
+  await page.getByRole("combobox", { name: "Qualifying Demo Seller" }).click();
+  await page
+    .getByRole("listbox")
+    .getByRole("option", { name: /Bima A./ })
+    .click();
+  await page.getByLabel("Simulated Browsing Location").selectOption("at-edge");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+
+  await page.reload();
+
+  await expect(
+    page.getByRole("combobox", { name: "Selected fictional account" }),
+  ).toHaveValue("buyer-naufal");
+  await expect(page.getByLabel("Category Filter")).toHaveValue("Toys");
+  await expect(
+    page.getByRole("group", { name: "Discovery View" }).getByRole("button", { name: "Map" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("combobox", { name: "Qualifying Demo Seller" }),
+  ).toContainText("Bima A.");
+  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("current");
+
+  const params = new URL(page.url()).searchParams;
+  expect([...params.keys()].sort()).toEqual([
+    "account",
+    "category",
+    "demo",
+    "seller",
+    "view",
+    "workspace",
+  ]);
+});
+
 test("judges can switch fictional accounts with identity, role, and tier history always clear", async ({
   page,
 }) => {
@@ -207,14 +261,17 @@ test("nearby discovery shows the seeded in-radius listings and excludes out-of-r
   await expect(discovery.getByText("1-2 km", { exact: true }).first()).toBeVisible();
 
   await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).first().click();
   await expect(discovery.getByRole("article")).toHaveCount(0);
-  await expect(page.getByText(/outside the 2 km Discovery Radius/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
 
   await page.getByLabel("Simulated Browsing Location").selectOption("denied");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).first().click();
   await expect(discovery.getByRole("article")).toHaveCount(0);
-  await expect(page.getByText(/Browsing Location was denied/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
 
   await page.getByLabel("Simulated Browsing Location").selectOption("current");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).first().click();
   await expect(discovery.getByRole("article")).toHaveCount(20);
 
   await page.getByRole("button", { name: "Demo inventory" }).click();
