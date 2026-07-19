@@ -120,6 +120,34 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
           <span className="member-status">Identity · Simulated as verified</span>
         </section>
 
+        <section aria-label="Marketplace next steps" className="member-next-steps">
+          <div className="member-next-steps-heading">
+            <p className="eyebrow">Your marketplace path</p>
+            <h2>Ready for the next local exchange.</h2>
+            <p>
+              Membership unlocks buying now. Seller Activation remains a separate choice when
+              you are ready to list an item.
+            </p>
+          </div>
+          <div className="member-next-steps-grid">
+            <article>
+              <span>01</span>
+              <h3>Discover nearby</h3>
+              <p>Browse private local inventory using a current Browsing Location.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Purchase with confidence</h3>
+              <p>Review the full listing before a protected Checkout Hold and handover.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Sell when ready</h3>
+              <p>Complete Seller Activation separately without publishing a Home Anchor.</p>
+            </article>
+          </div>
+        </section>
+
         <section aria-label="Marketplace access" className="member-card">
           <div className="member-card-heading">
             <div>
