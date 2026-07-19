@@ -15,6 +15,7 @@ export type PurchaseSnapshot = Readonly<{
 
 export type CheckoutHold = Readonly<{
   buyerId: string;
+  sellerId: string;
   listingId: string;
   listingTitle: string;
   transactionPrice: number;
@@ -49,6 +50,46 @@ export type CheckoutState = Readonly<{
   commitments: readonly PurchaseCommitment[];
 }>;
 
+export type ListingClaimability =
+  | Readonly<{ kind: "available" }>
+  | Readonly<{ kind: "held-by-viewer"; expiresAtMs: number }>
+  | Readonly<{ kind: "held-by-other" }>
+  | Readonly<{ kind: "purchased" }>;
+
+export function purchaseCommitmentRemovesListing(
+  commitment: PurchaseCommitment,
+) {
+  return commitment.trustOutcome !== "No successful handover";
+}
+
+export function getListingClaimability(
+  state: CheckoutState,
+  input: Readonly<{
+    listingId: string;
+    viewerId: string;
+    nowMs: number;
+  }>,
+): ListingClaimability {
+  if (
+    state.commitments.some(
+      (commitment) =>
+        commitment.listingId === input.listingId &&
+        purchaseCommitmentRemovesListing(commitment),
+    )
+  ) {
+    return { kind: "purchased" };
+  }
+
+  const hold = state.holds.find(
+    (candidate) =>
+      candidate.listingId === input.listingId && candidate.expiresAtMs > input.nowMs,
+  );
+  if (!hold) return { kind: "available" };
+  return hold.buyerId === input.viewerId
+    ? { kind: "held-by-viewer", expiresAtMs: hold.expiresAtMs }
+    : { kind: "held-by-other" };
+}
+
 export function createInitialCheckoutState(): CheckoutState {
   return { holds: [], commitments: [] };
 }
@@ -58,6 +99,7 @@ export function startCheckoutHold(
   input: Omit<CheckoutHold, "startedAtMs" | "expiresAtMs"> & { nowMs: number },
 ): CheckoutState {
   if (
+    input.buyerId === input.sellerId ||
     state.holds.some(
       (hold) => hold.buyerId === input.buyerId || hold.listingId === input.listingId,
     ) ||
@@ -72,6 +114,7 @@ export function startCheckoutHold(
       ...state.holds,
       {
         buyerId: input.buyerId,
+        sellerId: input.sellerId,
         listingId: input.listingId,
         listingTitle: input.listingTitle,
         transactionPrice: input.transactionPrice,
@@ -140,7 +183,14 @@ export function completeSimulatedPayment(
     };
   }
 
-  if (!hold || activeCommitments >= input.activePurchaseLimit) return activeState;
+  if (
+    !hold ||
+    input.buyerId === input.sellerId ||
+    hold.sellerId !== input.sellerId ||
+    activeCommitments >= input.activePurchaseLimit
+  ) {
+    return activeState;
+  }
 
   return {
     holds: activeState.holds.filter((candidate) => candidate !== hold),

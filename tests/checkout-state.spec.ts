@@ -4,10 +4,18 @@ import {
   completeSimulatedPayment,
   createInitialCheckoutState,
   finalizePurchaseCommitment,
+  getListingClaimability,
   refundPurchaseCommitment,
   startCheckoutHold,
   type CheckoutState,
 } from "../src/checkout";
+import {
+  createSellerDiscoveryMarker,
+  createSellerMapMarkers,
+  discoverListings,
+  projectSellerDiscoveryMarker,
+  type DiscoveryListing,
+} from "../src/discovery";
 
 const snapshot = {
   sellerPublicName: "Demo Seller",
@@ -27,9 +35,11 @@ function startHold(
   buyerId: string,
   nowMs: number,
   listingId = "listing-1",
+  sellerId = "seller-1",
 ) {
   return startCheckoutHold(state, {
     buyerId,
+    sellerId,
     listingId,
     listingTitle: snapshot.title,
     transactionPrice: snapshot.transactionPrice,
@@ -70,6 +80,7 @@ test("a committed listing cannot receive another hold or commitment", () => {
     holds: [
       {
         buyerId: "buyer-2",
+        sellerId: "seller-1",
         listingId: "listing-1",
         listingTitle: snapshot.title,
         transactionPrice: snapshot.transactionPrice,
@@ -160,7 +171,13 @@ test("a completed purchase no longer consumes the buyer's active capacity", () =
   );
   expect(soldListingHoldAttempt).toBe(completedPurchase);
 
-  const secondHold = startHold(completedPurchase, "buyer-1", 4_000, "listing-2");
+  const secondHold = startHold(
+    completedPurchase,
+    "buyer-1",
+    4_000,
+    "listing-2",
+    "seller-2",
+  );
 
   const secondPurchase = completeSimulatedPayment(secondHold, {
     buyerId: "buyer-1",
@@ -257,4 +274,147 @@ test("a failed handover refund completes the commitment once without a payout", 
   );
   expect(repeatedRefund).toBe(refundedState);
   expect(repeatedRefund.commitments[0].completedAtMs).toBe(3_000);
+});
+
+test("ownership authorization rejects self-holds and forged self-payment", () => {
+  const initialState = createInitialCheckoutState();
+  const selfHoldAttempt = startHold(
+    initialState,
+    "seller-1",
+    1_000,
+    "listing-1",
+    "seller-1",
+  );
+  expect(selfHoldAttempt).toBe(initialState);
+
+  const forgedSelfHold: CheckoutState = {
+    holds: [{
+      buyerId: "seller-1",
+      sellerId: "seller-1",
+      listingId: "listing-1",
+      listingTitle: snapshot.title,
+      transactionPrice: snapshot.transactionPrice,
+      startedAtMs: 1_000,
+      expiresAtMs: 1_000 + CHECKOUT_HOLD_MS,
+      snapshot,
+    }],
+    commitments: [],
+  };
+  const selfPaymentAttempt = completeSimulatedPayment(forgedSelfHold, {
+    buyerId: "seller-1",
+    sellerId: "seller-1",
+    listingId: "listing-1",
+    nowMs: 2_000,
+    activePurchaseLimit: 1,
+  });
+
+  expect(selfPaymentAttempt).toBe(forgedSelfHold);
+  expect(selfPaymentAttempt.commitments).toHaveLength(0);
+});
+
+test("claimability is viewer-specific while hold and purchase update discovery atomically", () => {
+  const listings: DiscoveryListing[] = [
+    {
+      id: "listing-1",
+      sellerId: "seller-1",
+      category: "Books",
+      distanceKm: 0.5,
+      originalPublicationTimeMs: 2_000,
+      status: "active",
+      sellerAvailable: true,
+    },
+    {
+      id: "listing-2",
+      sellerId: "seller-2",
+      category: "Books",
+      distanceKm: 0.6,
+      originalPublicationTimeMs: 1_000,
+      status: "active",
+      sellerAvailable: true,
+    },
+  ];
+  const heldState = startHold(createInitialCheckoutState(), "buyer-1", 3_000);
+
+  expect(getListingClaimability(heldState, {
+    listingId: "listing-1",
+    viewerId: "buyer-1",
+    nowMs: 4_000,
+  })).toEqual({ kind: "held-by-viewer", expiresAtMs: 3_000 + CHECKOUT_HOLD_MS });
+  expect(getListingClaimability(heldState, {
+    listingId: "listing-1",
+    viewerId: "buyer-2",
+    nowMs: 4_000,
+  })).toEqual({ kind: "held-by-other" });
+
+  const projectDiscovery = (state: CheckoutState) => {
+    const results = discoverListings({
+      viewer: { id: "buyer-2", verified: true, locationAvailable: true },
+      listings: listings.map((listing) => ({
+        ...listing,
+        sellerAvailable: getListingClaimability(state, {
+          listingId: listing.id,
+          viewerId: "buyer-2",
+          nowMs: 4_000,
+        }).kind !== "purchased",
+      })),
+    });
+    const projectedMarkers = ["seller-1", "seller-2"].flatMap((sellerId) => {
+      const marker = createSellerDiscoveryMarker({
+        sellerId,
+        homeAnchorVersion: "fictional-anchor-v1",
+        sellerListingIds: listings
+          .filter((listing) => listing.sellerId === sellerId)
+          .map((listing) => listing.id),
+        discoveryResults: results,
+      });
+      if (!marker) return [];
+      return [{ marker, projection: projectSellerDiscoveryMarker(marker, 0.5) }];
+    });
+    return {
+      results,
+      markers: createSellerMapMarkers({
+        markers: projectedMarkers,
+        groups: [{
+          id: "group-1",
+          separation: "separable",
+          sellerIds: ["seller-1", "seller-2"],
+        }],
+        expandedGroupId: null,
+      }),
+    };
+  };
+
+  const heldDiscovery = projectDiscovery(heldState);
+  expect(heldDiscovery.results.map((result) => result.listingId)).toEqual([
+    "listing-1",
+    "listing-2",
+  ]);
+  expect(heldDiscovery.markers).toMatchObject([{
+    kind: "group",
+    sellerCount: 2,
+  }]);
+  expect(listings[0].originalPublicationTimeMs).toBe(2_000);
+
+  const purchasedState = completeSimulatedPayment(heldState, {
+    buyerId: "buyer-1",
+    sellerId: "seller-1",
+    listingId: "listing-1",
+    nowMs: 4_000,
+    activePurchaseLimit: 1,
+  });
+  const purchasedDiscovery = projectDiscovery(purchasedState);
+
+  expect(getListingClaimability(purchasedState, {
+    listingId: "listing-1",
+    viewerId: "buyer-2",
+    nowMs: 4_000,
+  })).toEqual({ kind: "purchased" });
+  expect(purchasedDiscovery.results.map((result) => result.listingId)).toEqual([
+    "listing-2",
+  ]);
+  expect(purchasedDiscovery.markers).toMatchObject([{
+    kind: "individual",
+    marker: { sellerId: "seller-2", listingCount: 1 },
+  }]);
+  expect(listings[0].originalPublicationTimeMs).toBe(2_000);
 });
