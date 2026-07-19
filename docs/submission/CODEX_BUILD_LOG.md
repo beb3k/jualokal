@@ -507,6 +507,42 @@ Issue #17 is implemented, automatically verified, and manually accepted. On 2026
 
 Issue #18 is implemented, automatically verified, independently reviewed, manually accepted, pushed, merged into `main`, and closed. The local and remote issue branches were removed after the merge was verified. Issue #19 remains responsible for location refresh and map-failure recovery; issue #20 remains responsible for overlap grouping, group zoom, and chooser behavior.
 
+### 2026-07-19 - Browsing Location refresh and recovery
+
+- **Session role:** External contribution integration, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer, contributor Zul Faza Makarima, and Kiro
+- **Environment:** Kiro IDE using GPT 5.6 Sol; this supporting entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `1fe97c9db2096fbb9ab55c40cbc7191592f2e66a`
+- **Working branch:** `codex/issue-19-refresh-recovery` with maintainer integration on `codex/issue-19-pr32-integration`
+- **Contributor feature commit:** `8326e14e730176abdd1bd597560a4ea41d3ca7a2`
+- **Maintainer review-fix commit:** `901bf14`
+- **Pull request:** [#32](https://github.com/beb3k/jualokal/pull/32)
+- **Related issue:** [#19](https://github.com/beb3k/jualokal/issues/19)
+- **Objective:** Give buyers explicit control over replacing Browsing Location, distinguish recovery and empty states, and preserve valid discovery results when map rendering fails without introducing continuous tracking.
+
+#### Work completed
+
+- Added explicit snapshot replacement that recalculates nearby results and Distance Bands while preserving the selected Discovery View and Category Filter.
+- Added distinct stale, denied, unavailable, discovery-failure, category-empty, genuine nearby-empty, and map-rendering-fallback states with accessible announcements.
+- Preserved valid results and the saved Map preference during session-only fallback, with explicit map retry and recovery.
+- Added real hidden-to-visible browser resume handling that marks a valid snapshot stale without requesting device location.
+- Routed the genuine-empty **Sell an item nearby** action to editable Demo Seller listing management rather than read-only inventory.
+- Preserved privacy-safe distance bands and session-only Browsing Location behavior.
+
+#### Verification
+
+- The project owner manually tested PR #32 before final integration fixes.
+- Focused red-green coverage reproduced both review blockers, then passed **4/4** checks across phone and desktop.
+- The complete Playwright suite passed: **308/308** checks across phone and desktop projects.
+- Type checking, `git diff --check`, and the production build passed.
+- Independent standards review passed. Targeted specification re-review confirmed both P1 findings resolved with no fix-induced regression.
+- GitNexus staged-scope analysis found the two expected files, six mapped symbols, no affected execution flows, and LOW risk for the maintainer fix.
+
+#### Outcome
+
+Issue #19 behavior is implemented and verified in PR #32. Contributor authorship remains on the original feature commit, with the focused maintainer correction recorded separately.
+
 ## Supporting session template
 
 Copy this section for every meaningful supporting Codex task.

@@ -55,6 +55,14 @@ function App() {
                 See listing
                 <span aria-hidden="true">→</span>
               </a>
+              <button
+                className="button button-outline"
+                onClick={() => setDemoOpen(true)}
+                type="button"
+              >
+                Explore Demo Mode
+                <span aria-hidden="true">↗</span>
+              </button>
               <a className="button button-quiet" href="/login">
                 Log in
                 <span aria-hidden="true">→</span>

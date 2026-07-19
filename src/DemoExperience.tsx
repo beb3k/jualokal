@@ -80,8 +80,8 @@ import {
 } from "./trust";
 import {
   APPROVED_DISCOVERY_CATEGORIES,
-  classifyDiscoveryOutcome,
   createSellerMapMarkers,
+  classifyDiscoveryOutcome,
   createSellerDiscoveryMarker,
   discoverListings,
   getSellerMarkerInitials,
@@ -661,35 +661,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }, [previewSellerId]);
 
   useEffect(() => {
-    const markPersistedResumeStale = (event: PageTransitionEvent) => {
-      if (event.persisted) markBrowsingLocationStale();
-    };
-    window.addEventListener("pagehide", markBrowsingLocationStale);
-    window.addEventListener("pageshow", markPersistedResumeStale);
-    return () => {
-      window.removeEventListener("pagehide", markBrowsingLocationStale);
-      window.removeEventListener("pageshow", markPersistedResumeStale);
-    };
-  }, []);
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("demo", "1");
-    url.searchParams.set("account", selectedAccountId);
-    url.searchParams.set("workspace", activeWorkspace);
-    url.searchParams.set("category", discoveryCategory);
-    url.searchParams.set("view", discoveryView);
-    url.searchParams.set("seller", selectedQualifyingSellerId);
-    window.history.replaceState(null, "", url);
-  }, [
-    activeWorkspace,
-    discoveryCategory,
-    discoveryView,
-    selectedAccountId,
-    selectedQualifyingSellerId,
-  ]);
-
-  useEffect(() => {
     if (!chooserGroupId) return;
     chooserCloseButtonRef.current?.focus();
     const handleChooserKeyboard = (event: KeyboardEvent) => {
@@ -731,6 +702,45 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPreviewSellerId(null);
     setMapViewport({ panX: 0, zoom: 1 });
   }, [discoveryCategory, selectedAccountId]);
+  useEffect(() => {
+    let pageWasHidden = document.visibilityState === "hidden";
+    const markPersistedResumeStale = (event: PageTransitionEvent) => {
+      if (event.persisted) markBrowsingLocationStale();
+    };
+    const markBackgroundResumeStale = () => {
+      if (document.visibilityState === "hidden") {
+        pageWasHidden = true;
+      } else if (pageWasHidden) {
+        pageWasHidden = false;
+        markBrowsingLocationStale();
+      }
+    };
+    window.addEventListener("pagehide", markBrowsingLocationStale);
+    window.addEventListener("pageshow", markPersistedResumeStale);
+    document.addEventListener("visibilitychange", markBackgroundResumeStale);
+    return () => {
+      window.removeEventListener("pagehide", markBrowsingLocationStale);
+      window.removeEventListener("pageshow", markPersistedResumeStale);
+      document.removeEventListener("visibilitychange", markBackgroundResumeStale);
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("demo", "1");
+    url.searchParams.set("account", selectedAccountId);
+    url.searchParams.set("workspace", activeWorkspace);
+    url.searchParams.set("category", discoveryCategory);
+    url.searchParams.set("view", discoveryView);
+    url.searchParams.set("seller", selectedQualifyingSellerId);
+    window.history.replaceState(null, "", url);
+  }, [
+    activeWorkspace,
+    discoveryCategory,
+    discoveryView,
+    selectedAccountId,
+    selectedQualifyingSellerId,
+  ]);
 
   const selectedBuyer = demoBuyers.find((buyer) => buyer.id === selectedAccountId);
   const selectedSeller = demoSellers.find(
@@ -2571,7 +2581,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 </button>
                 <button
                   className="button button-outline"
-                  onClick={() => setActiveWorkspace("inventory")}
+                  onClick={() => {
+                    setSelectedAccountId(demoSeller.id);
+                    const nextListing = sessionListings.find(
+                      (listing) => listing.sellerId === demoSeller.id,
+                    );
+                    if (nextListing) loadListingForEditing(nextListing);
+                    setActiveWorkspace("seller");
+                  }}
                 >
                   Sell an item nearby
                 </button>
