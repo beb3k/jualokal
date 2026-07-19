@@ -1,4 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function expectHorizontallyContained(page: Page, locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(-1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width + 1);
+}
 
 async function openDemo(page: Page) {
   await page.goto("/");
@@ -15,6 +24,39 @@ test("fresh Demo Mode contains the exact representative simulated marketplace", 
   await expect(summary).toContainText("5 Demo Sellers");
   await expect(summary).toContainText("25 active Demo Listings");
 
+  const currentTask = page.getByRole("region", { name: "Current demo task" });
+  const workspaces = currentTask.getByRole("navigation", { name: "Demo workspaces" });
+  await expect(currentTask).toContainText("Buyer discovery");
+  await expect(
+    workspaces.getByRole("button", { name: "Buyer discovery", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+
+  const trustContext = page.getByRole("region", {
+    name: "Buyer trust and reviewer context",
+  });
+  const reviewerControls = page.getByRole("region", { name: "Reviewer controls" });
+  await expect(trustContext).toBeVisible();
+  await expect(reviewerControls).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Tier Progress" })
+      .getByRole("button", { name: "Record successful handover" }),
+  ).toHaveCount(0);
+  await expect(
+    reviewerControls.getByRole("button", { name: "Record successful handover" }),
+  ).toBeVisible();
+  const taskBox = await currentTask.boundingBox();
+  const summaryBox = await summary.boundingBox();
+  const trustBox = await trustContext.boundingBox();
+  expect(taskBox).not.toBeNull();
+  expect(summaryBox).not.toBeNull();
+  expect(trustBox).not.toBeNull();
+  expect(taskBox!.y).toBeLessThan(summaryBox!.y);
+  expect(summaryBox!.y).toBeLessThan(trustBox!.y);
+  await expectHorizontallyContained(page, summary);
+  await expectHorizontallyContained(page, currentTask);
+  await expectHorizontallyContained(page, trustContext);
+  await expectHorizontallyContained(page, reviewerControls);
+
   const accountSwitcher = page.getByRole("combobox", { name: "Selected fictional account" });
   await expect(
     accountSwitcher.locator('optgroup[label="Fictional Demo Buyers (3)"] option'),
@@ -24,6 +66,9 @@ test("fresh Demo Mode contains the exact representative simulated marketplace", 
   ).toHaveCount(5);
 
   await page.getByRole("button", { name: "Demo inventory" }).click();
+  await expect(
+    workspaces.getByRole("button", { name: "Demo inventory", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   const inventory = page.getByRole("region", { name: "Complete simulated inventory" });
   await expect(inventory.getByRole("article")).toHaveCount(25);
   await expect(inventory.getByText("Like New", { exact: true }).first()).toBeVisible();
@@ -127,11 +172,23 @@ test("judges can switch fictional accounts with identity, role, and tier history
   }
 
   await switcher.selectOption("seller-sari");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Demo workspaces" })
+      .getByRole("button", { name: "Seller workspace", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(identity).toContainText("Sari N.");
   await expect(identity).toContainText("Fictional Demo Seller");
   await expect(identity).toContainText("Seller workspace");
   await expect(identity).toContainText("Seller Activation complete");
   await expect(identity).toContainText("Simulated as verified");
+
+  const selectedSellerDiscovery = page
+    .getByRole("navigation", { name: "Demo workspaces" })
+    .getByRole("button", { name: "View discovery as selected Seller", exact: true });
+  await selectedSellerDiscovery.click();
+  await expect(selectedSellerDiscovery).toHaveAccessibleName("View discovery as selected Seller");
+  await expect(selectedSellerDiscovery).toHaveAttribute("aria-current", "page");
 });
 
 test("cancelling Reset Demo preserves the current session changes", async ({ page }) => {

@@ -2053,6 +2053,82 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         </button>
       </header>
 
+      <section aria-label="Current demo task" className="demo-task-shell">
+        <div className="demo-task-heading">
+          <span className="shell-region-label">Current task</span>
+          <strong>
+            {activeWorkspace === "inventory"
+              ? "Demo inventory"
+              : activeWorkspace === "seller"
+                ? "Seller workspace"
+                : selectedSeller
+                  ? "View discovery as selected Seller"
+                  : "Buyer discovery"}
+          </strong>
+          <small>
+            {(selectedBuyer ?? selectedSeller)?.publicName} · fictional account
+          </small>
+        </div>
+        <nav aria-label="Demo workspaces" className="workspace-tabs">
+          <button
+            aria-current={activeWorkspace === "buyer" && selectedBuyer ? "page" : undefined}
+            className="button button-compact button-outline"
+            onClick={() => {
+              setSelectedAccountId(demoBuyer.id);
+              setActiveWorkspace("buyer");
+            }}
+          >
+            Buyer discovery
+            {activeWorkspace === "buyer" && selectedBuyer ? (
+              <span aria-hidden="true" className="workspace-active-label">Active</span>
+            ) : null}
+          </button>
+          {selectedSeller ? (
+            <button
+              aria-current={activeWorkspace === "buyer" ? "page" : undefined}
+              className="button button-compact button-outline"
+              onClick={() => setActiveWorkspace("buyer")}
+            >
+              View discovery as selected Seller
+              {activeWorkspace === "buyer" ? (
+                <span aria-hidden="true" className="workspace-active-label">Active</span>
+              ) : null}
+            </button>
+          ) : null}
+          <button
+            aria-current={activeWorkspace === "seller" ? "page" : undefined}
+            className="button button-compact button-outline"
+            onClick={() => {
+              const nextSeller = selectedSeller ?? demoSeller;
+              setSelectedAccountId(nextSeller.id);
+              const nextListing =
+                sessionListings.find(
+                  (listing) =>
+                    listing.id === selectedListingId && listing.sellerId === nextSeller.id,
+                ) ??
+                sessionListings.find((listing) => listing.sellerId === nextSeller.id);
+              if (nextListing) loadListingForEditing(nextListing);
+              setActiveWorkspace("seller");
+            }}
+          >
+            Seller workspace
+            {activeWorkspace === "seller" ? (
+              <span aria-hidden="true" className="workspace-active-label">Active</span>
+            ) : null}
+          </button>
+          <button
+            aria-current={activeWorkspace === "inventory" ? "page" : undefined}
+            className="button button-compact button-outline"
+            onClick={() => setActiveWorkspace("inventory")}
+          >
+            Demo inventory
+            {activeWorkspace === "inventory" ? (
+              <span aria-hidden="true" className="workspace-active-label">Active</span>
+            ) : null}
+          </button>
+        </nav>
+      </section>
+
       <section aria-label="Demo marketplace summary" className="demo-summary">
         <div>
           <span className="fictional-label">Session-only simulated marketplace</span>
@@ -2135,134 +2211,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           coordinates stay absent.
         </p>
       </section>
-
-      {selectedBuyer && selectedTrustState && selectedTierProgress &&
-      selectedPublicTrustSummary && selectedTradingAvailability ? (
-        <div className="demo-main trust-overview">
-          <section aria-label="Tier Progress" className="registration-panel">
-            <p className="eyebrow">Private Tier Progress - Simulation</p>
-            <h2>{buyerTierLabel(selectedTierProgress.tier)}</h2>
-            <p>
-              {selectedTierProgress.activePurchaseLimit} active Purchase Commitment
-              {selectedTierProgress.activePurchaseLimit === 1 ? "" : "s"} permitted.
-              Every tier permits one Checkout Hold.
-            </p>
-            <p>{selectedTrustState.successfulHandoverCount} successful handovers</p>
-            <p>
-              {selectedTierProgress.qualifyingProgress.completed} qualifying different Demo{" "}
-              {selectedTierProgress.qualifyingProgress.completed === 1 ? "seller" : "sellers"}{" "}
-              ({selectedTierProgress.qualifyingProgress.completed} of{" "}
-              {selectedTierProgress.qualifyingProgress.required} qualifying target)
-            </p>
-            <p>
-              {selectedActiveStrikes.length
-                ? `${selectedActiveStrikes.length} active Reliability ${selectedActiveStrikes.length === 1 ? "Strike" : "Strikes"}`
-                : "No active Reliability Strikes"}
-            </p>
-            {selectedTradingAvailability.reliabilityWarning ? (
-              <p>Reliability warning active.</p>
-            ) : null}
-            {!selectedTradingAvailability.canBuy || !selectedTradingAvailability.canSell ? (
-              <p>Buying and selling are suspended in this simulated session.</p>
-            ) : null}
-            {selectedTierProgress.strikeExpiresAtMs ? (
-              <p>Strike expiry: {formatWibTime(selectedTierProgress.strikeExpiresAtMs)}</p>
-            ) : null}
-            {selectedTierProgress.blockers.length ? (
-              <ul>
-                {selectedTierProgress.blockers.map((blocker, index) => (
-                  <li key={`${blocker.kind}-${index}`}>Private blocker: {blocker.reason}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>No active issues.</p>
-            )}
-            {selectedTierProgress.appealPath ? (
-              <p>Applicable appeal path: {selectedTierProgress.appealPath}</p>
-            ) : null}
-            <div className="listing-actions">
-              <QualifyingSellerSelect
-                selectedSellerId={selectedQualifyingSellerId}
-                onSelect={setSelectedQualifyingSellerId}
-              />
-              <button className="button button-outline" onClick={recordGuidedSuccessfulHandover}>
-                Record successful handover
-              </button>
-              <button className="button button-outline" onClick={addGuidedReliabilityStrike}>
-                Add Reliability Strike
-              </button>
-              <button className="button button-outline" onClick={clearGuidedOrdinaryIssue}>
-                Clear ordinary issue
-              </button>
-              <button
-                className="button button-outline"
-                disabled={!selectedTierProgress.strikeExpiresAtMs}
-                onClick={() => setGuidedStrikeBoundary(-1)}
-              >
-                Advance to one millisecond before strike expiry
-              </button>
-              <button
-                className="button button-outline"
-                disabled={!selectedTierProgress.strikeExpiresAtMs}
-                onClick={() => setGuidedStrikeBoundary(0)}
-              >
-                Advance to exact strike expiry
-              </button>
-            </div>
-            <p>This guided history and every trust outcome are fictional and simulated.</p>
-          </section>
-          <section aria-label="Trust Summary preview" className="registration-panel">
-            <p className="eyebrow">Member-visible summary</p>
-            <h2>{buyerTierLabel(selectedPublicTrustSummary.tier)}</h2>
-            <p>{selectedPublicTrustSummary.identityVerified ? "Simulated as verified" : "Not verified"}</p>
-            <p>{selectedPublicTrustSummary.successfulHandoverCount} successful handovers</p>
-            <p>{selectedPublicTrustSummary.differentPartnerCount} different partners</p>
-          </section>
-        </div>
-      ) : null}
-
-      <nav aria-label="Demo workspaces" className="workspace-tabs">
-        <button
-          className="button button-compact button-outline"
-          onClick={() => {
-            setSelectedAccountId(demoBuyer.id);
-            setActiveWorkspace("buyer");
-          }}
-        >
-          Buyer discovery
-        </button>
-        {selectedSeller ? (
-          <button
-            className="button button-compact button-outline"
-            onClick={() => setActiveWorkspace("buyer")}
-          >
-            View discovery as selected Seller
-          </button>
-        ) : null}
-        <button
-          className="button button-compact button-outline"
-          onClick={() => {
-            const nextSeller = selectedSeller ?? demoSeller;
-            setSelectedAccountId(nextSeller.id);
-            const nextListing =
-              sessionListings.find(
-                (listing) =>
-                  listing.id === selectedListingId && listing.sellerId === nextSeller.id,
-              ) ??
-              sessionListings.find((listing) => listing.sellerId === nextSeller.id);
-            if (nextListing) loadListingForEditing(nextListing);
-            setActiveWorkspace("seller");
-          }}
-        >
-          Seller workspace
-        </button>
-        <button
-          className="button button-compact button-outline"
-          onClick={() => setActiveWorkspace("inventory")}
-        >
-          Demo inventory
-        </button>
-      </nav>
 
       {visibleHandoverCommitment && visibleHandoverState ? (
         <HandoverPanel
@@ -3410,6 +3358,111 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </section>
         </main>
       )}
+
+      {selectedBuyer && selectedTrustState && selectedTierProgress &&
+      selectedPublicTrustSummary && selectedTradingAvailability ? (
+        <div
+          aria-label="Buyer trust and reviewer context"
+          className="demo-main trust-overview demo-support-region"
+          role="region"
+        >
+          <div className="demo-support-heading">
+            <span className="shell-region-label">Supporting context</span>
+            <strong>Buyer trust and reviewer controls</strong>
+            <small>Private progress stays separate from the active marketplace task.</small>
+          </div>
+          <section aria-label="Tier Progress" className="registration-panel">
+            <p className="eyebrow">Private Tier Progress - Simulation</p>
+            <h2>{buyerTierLabel(selectedTierProgress.tier)}</h2>
+            <p>
+              {selectedTierProgress.activePurchaseLimit} active Purchase Commitment
+              {selectedTierProgress.activePurchaseLimit === 1 ? "" : "s"} permitted.
+              Every tier permits one Checkout Hold.
+            </p>
+            <p>{selectedTrustState.successfulHandoverCount} successful handovers</p>
+            <p>
+              {selectedTierProgress.qualifyingProgress.completed} qualifying different Demo{" "}
+              {selectedTierProgress.qualifyingProgress.completed === 1 ? "seller" : "sellers"}{" "}
+              ({selectedTierProgress.qualifyingProgress.completed} of{" "}
+              {selectedTierProgress.qualifyingProgress.required} qualifying target)
+            </p>
+            <p>
+              {selectedActiveStrikes.length
+                ? `${selectedActiveStrikes.length} active Reliability ${selectedActiveStrikes.length === 1 ? "Strike" : "Strikes"}`
+                : "No active Reliability Strikes"}
+            </p>
+            {selectedTradingAvailability.reliabilityWarning ? (
+              <p>Reliability warning active.</p>
+            ) : null}
+            {!selectedTradingAvailability.canBuy || !selectedTradingAvailability.canSell ? (
+              <p>Buying and selling are suspended in this simulated session.</p>
+            ) : null}
+            {selectedTierProgress.strikeExpiresAtMs ? (
+              <p>Strike expiry: {formatWibTime(selectedTierProgress.strikeExpiresAtMs)}</p>
+            ) : null}
+            {selectedTierProgress.blockers.length ? (
+              <ul>
+                {selectedTierProgress.blockers.map((blocker, index) => (
+                  <li key={`${blocker.kind}-${index}`}>Private blocker: {blocker.reason}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No active issues.</p>
+            )}
+            {selectedTierProgress.appealPath ? (
+              <p>Applicable appeal path: {selectedTierProgress.appealPath}</p>
+            ) : null}
+          </section>
+          <section aria-label="Trust Summary preview" className="registration-panel">
+            <p className="eyebrow">Member-visible summary</p>
+            <h2>{buyerTierLabel(selectedPublicTrustSummary.tier)}</h2>
+            <p>{selectedPublicTrustSummary.identityVerified ? "Simulated as verified" : "Not verified"}</p>
+            <p>{selectedPublicTrustSummary.successfulHandoverCount} successful handovers</p>
+            <p>{selectedPublicTrustSummary.differentPartnerCount} different partners</p>
+          </section>
+          <section
+            aria-label="Reviewer controls"
+            className="registration-panel demo-reviewer-panel"
+          >
+            <p className="eyebrow">Guided prototype tools · Simulation</p>
+            <h2>Reviewer controls</h2>
+            <p>
+              Change only this fictional buyer's trust history to inspect private account
+              outcomes. These controls are not member marketplace actions.
+            </p>
+            <div className="listing-actions">
+              <QualifyingSellerSelect
+                selectedSellerId={selectedQualifyingSellerId}
+                onSelect={setSelectedQualifyingSellerId}
+              />
+              <button className="button button-outline" onClick={recordGuidedSuccessfulHandover}>
+                Record successful handover
+              </button>
+              <button className="button button-outline" onClick={addGuidedReliabilityStrike}>
+                Add Reliability Strike
+              </button>
+              <button className="button button-outline" onClick={clearGuidedOrdinaryIssue}>
+                Clear ordinary issue
+              </button>
+              <button
+                className="button button-outline"
+                disabled={!selectedTierProgress.strikeExpiresAtMs}
+                onClick={() => setGuidedStrikeBoundary(-1)}
+              >
+                Advance to one millisecond before strike expiry
+              </button>
+              <button
+                className="button button-outline"
+                disabled={!selectedTierProgress.strikeExpiresAtMs}
+                onClick={() => setGuidedStrikeBoundary(0)}
+              >
+                Advance to exact strike expiry
+              </button>
+            </div>
+            <p>This guided history and every trust outcome are fictional and simulated.</p>
+          </section>
+        </div>
+      ) : null}
 
       {resetConfirmationOpen ? (
         <div className="dialog-backdrop">
