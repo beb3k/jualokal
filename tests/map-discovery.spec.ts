@@ -97,11 +97,13 @@ test("Map and List use one filtered result while only explicit view preference p
   ).toHaveCount(0);
   await expect(filteredMap.locator(".seller-discovery-marker")).toHaveCount(2);
   await page.getByLabel("Simulated Browsing Location").selectOption("at-edge");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("region", { name: "Seller discovery map" })).toContainText(
     "Buyer-centered 3 km context",
   );
   await viewControl.getByRole("button", { name: "List" }).click();
   await page.getByLabel("Simulated Browsing Location").selectOption("inside-edge");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
 
   const stored = await page.evaluate(() => ({
     view: localStorage.getItem("jualokal.discovery-view"),
@@ -124,6 +126,7 @@ test("Map and List hide location-dependent content without a valid snapshot", as
   const location = page.getByLabel("Simulated Browsing Location");
 
   await location.selectOption("denied");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
   await expect(page.getByRole("img", { name: "Your location" })).toHaveCount(0);
 
@@ -136,5 +139,101 @@ test("Map and List hide location-dependent content without a valid snapshot", as
   ).toHaveCount(0);
 
   await location.selectOption("unavailable");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("img", { name: "Your location" })).toHaveCount(0);
+});
+
+test("refresh replaces only the snapshot while preserving view and category", async ({ page }) => {
+  await openDemo(page);
+
+  const location = page.getByLabel("Simulated Browsing Location");
+  const viewControl = page.getByRole("group", { name: "Discovery View" });
+  await viewControl.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Category Filter").selectOption("Books");
+  const listings = page.getByRole("region", { name: "Demo marketplace listings" });
+  await expect(listings.getByRole("article")).toHaveCount(2);
+
+  await location.selectOption("at-edge");
+  await expect(listings.getByRole("article")).toHaveCount(2);
+  await expect(page.getByText(/Active simulated snapshot 1/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+  await expect(listings.getByRole("article")).toHaveCount(3);
+  await expect(listings.getByText("1-2 km", { exact: true }).first()).toBeVisible();
+  await expect(viewControl.getByRole("button", { name: "List" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
+  await expect(page.getByText(/Active simulated snapshot 2/)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /recalculated/ })).toBeVisible();
+});
+
+test("stale resume, location errors, service failure, and empty states stay distinct", async ({
+  page,
+}) => {
+  await openDemo(page);
+  const location = page.getByLabel("Simulated Browsing Location");
+  const refresh = page.getByRole("button", { name: "Refresh nearby listings" }).first();
+
+  await page.getByRole("button", { name: "Simulate stale resumed session" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Browsing Location needs refresh" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
+
+  await refresh.click();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+
+  await location.selectOption("denied");
+  await refresh.click();
+  await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
+
+  await location.selectOption("unavailable");
+  await refresh.click();
+  await expect(page.getByRole("heading", { name: "Location unavailable" })).toBeVisible();
+
+  await location.selectOption("discovery-failure");
+  await refresh.click();
+  await expect(page.getByRole("heading", { name: "Nearby discovery unavailable" })).toBeVisible();
+  await expect(page.getByText("This is not an empty result.")).toBeVisible();
+
+  await location.selectOption("books-empty");
+  await refresh.click();
+  await page.getByLabel("Category Filter").selectOption("Books");
+  await expect(page.getByRole("heading", { name: "No Books listings nearby" })).toBeVisible();
+  await page.getByRole("button", { name: "Show All categories" }).click();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+
+  await location.selectOption("outside-edge");
+  await refresh.click();
+  const nearbyEmpty = page.getByRole("heading", { name: "No nearby listings yet" }).locator("..");
+  await expect(nearbyEmpty).toContainText("radius was not widened");
+  await expect(nearbyEmpty.getByRole("button", { name: "Refresh nearby listings" })).toBeVisible();
+  await expect(nearbyEmpty.getByRole("button", { name: "Sell an item nearby" })).toBeVisible();
+});
+
+test("Map Fallback preserves results and saved preference until retry recovers", async ({ page }) => {
+  await openDemo(page);
+  const viewControl = page.getByRole("group", { name: "Discovery View" });
+  await viewControl.getByRole("button", { name: "List" }).click();
+  await viewControl.getByRole("button", { name: "Map" }).click();
+  await page.getByLabel("Category Filter").selectOption("Books");
+  await page.getByLabel("Simulated Browsing Location").selectOption("map-failure");
+  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+
+  const fallback = page.getByRole("status", { name: "Map Fallback" });
+  await expect(fallback).toBeVisible();
+  await expect(fallback).toContainText("same results");
+  await expect(
+    page.getByRole("region", { name: "Demo marketplace listings" }).getByRole("article"),
+  ).toHaveCount(2);
+  await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("jualokal.discovery-view")))
+    .toBe("map");
+
+  await fallback.getByRole("button", { name: "Retry map" }).click();
+  await expect(fallback).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Map rendering recovered" })).toBeVisible();
 });

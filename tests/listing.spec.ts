@@ -195,6 +195,7 @@ test("discovery enforces location availability, privacy, and distance boundaries
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
 
   const location = page.getByLabel("Simulated Browsing Location");
+  const refresh = page.getByRole("button", { name: "Refresh nearby listings" }).first();
   const listing = page.getByRole("region", { name: "Demo Listing" });
   const locationLabels = await location.locator("option").allTextContents();
   expect(locationLabels.join(" ")).not.toMatch(/1\.99|2\.00|2\.01|10\.00|10\.01/);
@@ -204,28 +205,35 @@ test("discovery enforces location availability, privacy, and distance boundaries
   expect(locationValues).not.toContainEqual(expect.stringMatching(/^\d+(?:\.\d+)?$/));
 
   await location.selectOption("inside-edge");
+  await refresh.click();
   await expect(listing).toBeVisible();
   await expect(listing.getByText("1-2 km", { exact: true })).toBeVisible();
   await expect(listing).not.toContainText(/\b\d+(?:\.\d+)?\s*(?:m|km) away\b/i);
 
   await location.selectOption("at-edge");
+  await refresh.click();
   await expect(listing).toBeVisible();
 
   await location.selectOption("outside-edge");
+  await refresh.click();
   await expect(listing).toHaveCount(0);
-  await expect(page.getByText(/outside the 2 km Discovery Radius/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
 
   await location.selectOption("denied");
+  await refresh.click();
   await expect(listing).toHaveCount(0);
-  await expect(page.getByText(/Browsing Location was denied/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
 
   await location.selectOption("unavailable");
+  await refresh.click();
   await expect(listing).toHaveCount(0);
-  await expect(page.getByText(/Browsing Location is unavailable/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Location unavailable" })).toBeVisible();
 
   await location.selectOption("at-maximum");
+  await refresh.click();
   await expect(listing).toHaveCount(0);
   await location.selectOption("outside-maximum");
+  await refresh.click();
   await expect(listing).toHaveCount(0);
   await expect(page.getByText(/permanent maximum is 10 km/i)).toBeVisible();
 
