@@ -6,6 +6,9 @@ import { nitro } from "nitro/vite";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  server: {
+    port: 5173,
+  },
   plugins: [tanstackStart(), react(), tailwindcss(), nitro()],
   resolve: {
     alias: {

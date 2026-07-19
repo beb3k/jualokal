@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function enterVerifiedMember(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Register" }).click();
   await page.getByRole("button", { name: "Continue to simulated verification" }).click();
 
   const verification = page.getByRole("dialog", {
@@ -26,7 +26,7 @@ test("public visitors can understand Jualokal and begin registration without see
   await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
   await expect(page.getByText(/Rp\s?\d/)).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Register" }).click();
 
   const registration = page.getByRole("dialog", { name: "Begin registration" });
   await expect(registration).toBeVisible();
@@ -41,7 +41,7 @@ test("public access stays blocked during the simulated Identity Verification wal
   await page.goto("/");
 
   await expect(page.getByRole("main", { name: "Verified Member marketplace" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Register" }).click();
   await page.getByRole("button", { name: "Continue to simulated verification" }).click();
 
   const verification = page.getByRole("dialog", {
@@ -63,13 +63,13 @@ test("public access stays blocked during the simulated Identity Verification wal
   await expect(page.getByRole("main", { name: "Verified Member marketplace" })).toHaveCount(0);
 
   await verification.getByRole("button", { name: "Close verification" }).click();
-  await expect(page.getByRole("button", { name: "Begin registration" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Register" })).toBeVisible();
   await expect(page.getByRole("main", { name: "Verified Member marketplace" })).toHaveCount(0);
 });
 
 test("completed verification creates a buyer-only Verified Member", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Register" }).click();
   await page.getByRole("button", { name: "Continue to simulated verification" }).click();
 
   const verification = page.getByRole("dialog", {
@@ -200,7 +200,7 @@ test("the public and demo layouts remain usable without horizontal clipping", as
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Begin registration" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Register" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Explore Demo Mode" })).toBeVisible();
 
   const publicOverflow = await page.evaluate(
@@ -221,7 +221,7 @@ test("verification, member access, and Seller Activation stay usable in the view
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Begin registration" }).click();
+  await page.getByRole("button", { name: "Register" }).click();
   await page.getByRole("button", { name: "Continue to simulated verification" }).click();
 
   const verification = page.getByRole("dialog", {

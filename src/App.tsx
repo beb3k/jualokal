@@ -1,17 +1,105 @@
 import { lazy, Suspense, useState } from "react";
-import VerifiedMemberExperience from "./VerifiedMemberExperience";
+import type { FormEvent } from "react";
+import { completeSimulatedIdentityVerification, registerAccount } from "./utils/auth";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
 function RegistrationPanel({
+  initialStep,
   onClose,
   onVerified,
 }: {
+  initialStep: "registration" | "verification";
   onClose: () => void;
   onVerified: () => void;
 }) {
-  const [step, setStep] = useState<"registration" | "verification">("registration");
+  const [step, setStep] = useState<"registration" | "confirmation" | "verification">(
+    initialStep,
+  );
   const [simulationAcknowledged, setSimulationAcknowledged] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submitRegistration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+
+    const form = new FormData(event.currentTarget);
+    const email = form.get("email");
+    const password = form.get("password");
+    if (typeof email !== "string" || typeof password !== "string") {
+      setError("Email and password are required.");
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const result = await registerAccount({ data: { email, password } });
+      if (result.status === "error") {
+        setError(result.message);
+      } else if (result.status === "confirmation-required") {
+        setStep("confirmation");
+      } else {
+        setStep("verification");
+      }
+    } catch {
+      setError("Registration is temporarily unavailable. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function finishVerification() {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const result = await completeSimulatedIdentityVerification();
+      if (result.status === "verified") {
+        onVerified();
+      } else if (result.status === "authentication-required") {
+        setError("Confirm your email or sign in before completing this walkthrough.");
+      } else {
+        setError("Verification simulation could not be saved. Try again.");
+      }
+    } catch {
+      setError("Verification simulation is temporarily unavailable. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (step === "confirmation") {
+    return (
+      <div className="dialog-backdrop">
+        <section
+          aria-labelledby="confirmation-title"
+          aria-modal="true"
+          className="registration-panel"
+          role="dialog"
+        >
+          <button aria-label="Close registration" className="icon-button" onClick={onClose}>
+            ×
+          </button>
+          <p className="eyebrow">Registration · Email confirmation</p>
+          <h2 id="confirmation-title">Check your email</h2>
+          <p className="panel-lead">
+            Open the confirmation link from Supabase, then return here for the simulated
+            Identity Verification walkthrough.
+          </p>
+          <div className="registration-note">
+            <span aria-hidden="true">!</span>
+            <p>
+              Do not send identity documents, selfies, biometrics, or payment information.
+            </p>
+          </div>
+          <a className="button button-primary" href="/login">
+            Already confirmed? Sign in
+          </a>
+        </section>
+      </div>
+    );
+  }
 
   if (step === "verification") {
     return (
@@ -50,11 +138,16 @@ function RegistrationPanel({
           </label>
           <button
             className="button button-primary"
-            disabled={!simulationAcknowledged}
-            onClick={onVerified}
+            disabled={!simulationAcknowledged || submitting}
+            onClick={finishVerification}
           >
-            Complete simulated verification
+            {submitting ? "Saving simulation…" : "Complete simulated verification"}
           </button>
+          {error === null ? null : (
+            <p aria-live="polite" className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
           <button className="text-button" onClick={() => setStep("registration")}>
             Back to registration
           </button>
@@ -80,16 +173,40 @@ function RegistrationPanel({
           Create your accountable membership before entering the private marketplace.
           Identity Verification comes next as a clearly simulated walkthrough.
         </p>
-        <div className="registration-note">
-          <span aria-hidden="true">✓</span>
-          <p>
-            This prototype does not ask for a name, password, identity document, payment
-            method, or physical location here.
+        <form className="registration-fields" onSubmit={submitRegistration}>
+          <label htmlFor="registration-email">Email</label>
+          <input
+            autoComplete="email"
+            id="registration-email"
+            name="email"
+            placeholder="you@example.com"
+            required
+            type="email"
+          />
+          <label htmlFor="registration-password">Password</label>
+          <input
+            autoComplete="new-password"
+            id="registration-password"
+            minLength={8}
+            name="password"
+            required
+            type="password"
+          />
+          <p className="form-hint">
+            Used only for real account access. Identity verification remains simulated.
           </p>
-        </div>
-        <button className="button button-primary" onClick={() => setStep("verification")}>
-          Continue to simulated verification
-        </button>
+          {error === null ? null : (
+            <p aria-live="polite" className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="button button-primary" disabled={submitting} type="submit">
+            {submitting ? "Creating account…" : "Create account"}
+          </button>
+        </form>
+        <a className="text-button" href="/login">
+          Already have an account? Sign in
+        </a>
         <button className="text-button" onClick={onClose}>
           Back to the public explanation
         </button>
@@ -99,11 +216,11 @@ function RegistrationPanel({
 }
 
 function App() {
-  const [registrationOpen, setRegistrationOpen] = useState(false);
+  const onboardingStep = new URLSearchParams(window.location.search).get("onboarding");
+  const [registrationOpen, setRegistrationOpen] = useState(onboardingStep === "verify");
   const [demoOpen, setDemoOpen] = useState(
     () => new URLSearchParams(window.location.search).get("demo") === "1",
   );
-  const [memberVerified, setMemberVerified] = useState(false);
 
   function openDemo() {
     const url = new URL(window.location.href);
@@ -119,10 +236,6 @@ function App() {
     }
     window.history.replaceState(null, "", url);
     setDemoOpen(false);
-  }
-
-  if (memberVerified) {
-    return <VerifiedMemberExperience onExit={() => setMemberVerified(false)} />;
   }
 
   if (demoOpen) {
@@ -160,13 +273,13 @@ function App() {
             </p>
             <div className="hero-actions">
               <button className="button button-primary" onClick={() => setRegistrationOpen(true)}>
-                Begin registration
+                Register
                 <span aria-hidden="true">→</span>
               </button>
-              <button className="button button-quiet" onClick={openDemo}>
-                Explore Demo Mode
-                <span aria-hidden="true">↗</span>
-              </button>
+              <a className="button button-quiet" href="/login">
+                Log in
+                <span aria-hidden="true">→</span>
+              </a>
             </div>
             <p className="access-note">
               <span aria-hidden="true">●</span>
@@ -253,11 +366,9 @@ function App() {
 
       {registrationOpen ? (
         <RegistrationPanel
+          initialStep={onboardingStep === "verify" ? "verification" : "registration"}
           onClose={() => setRegistrationOpen(false)}
-          onVerified={() => {
-            setRegistrationOpen(false);
-            setMemberVerified(true);
-          }}
+          onVerified={() => window.location.assign("/dashboard")}
         />
       ) : null}
     </div>

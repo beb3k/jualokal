@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/utils/auth";
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard, active: true },
@@ -20,6 +21,11 @@ const navigation = [
 ];
 
 export function AppSidebar({ className }: { className?: string }) {
+  async function endSession() {
+    await signOut();
+    window.location.assign("/login");
+  }
+
   return (
     <aside className={cn("flex h-svh w-64 shrink-0 flex-col border-r bg-card", className)}>
       <div className="flex h-16 items-center border-b px-5">
@@ -56,11 +62,13 @@ export function AppSidebar({ className }: { className?: string }) {
           <Settings />
           Settings
         </Button>
-        <Button asChild className="w-full justify-start text-muted-foreground" variant="ghost">
-          <Link to="/login">
-            <LogOut />
-            Sign out
-          </Link>
+        <Button
+          className="w-full justify-start text-muted-foreground"
+          onClick={endSession}
+          variant="ghost"
+        >
+          <LogOut />
+          Sign out
         </Button>
       </div>
     </aside>

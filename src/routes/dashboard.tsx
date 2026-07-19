@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Bell, Handshake, Menu, Package, Plus, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -6,8 +6,15 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentMember } from "@/utils/auth";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: async () => {
+    const member = await getCurrentMember();
+    if (member === null) throw redirect({ to: "/login" });
+    if (!member.identityVerified) throw redirect({ href: "/?onboarding=verify" });
+    return { member };
+  },
   component: DashboardPage,
 });
 

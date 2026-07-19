@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,69 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signIn, startGoogleSignIn } from "@/utils/auth";
 
 export function LoginForm() {
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  function openDashboardPreview(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => setHydrated(true), []);
+
+  async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void navigate({ to: "/dashboard" });
+    setError(null);
+    setSubmitting(true);
+
+    const form = new FormData(event.currentTarget);
+    const email = form.get("email");
+    const password = form.get("password");
+
+    if (typeof email !== "string" || typeof password !== "string") {
+      setError("Email and password are required.");
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const result = await signIn({ data: { email, password } });
+      if (result.status === "error") {
+        setError(result.message);
+        return;
+      }
+
+      if (!result.identityVerified) {
+        window.location.assign("/?onboarding=verify");
+        return;
+      }
+
+      await navigate({ to: "/dashboard" });
+    } catch {
+      setError("Sign in is temporarily unavailable. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitGoogleLogin() {
+    setError(null);
+    setGoogleSubmitting(true);
+
+    try {
+      const result = await startGoogleSignIn();
+      if (result.status === "error") {
+        setError(result.message);
+        return;
+      }
+
+      window.location.assign(result.url);
+    } catch {
+      setError("Google sign-in is temporarily unavailable. Try again.");
+    } finally {
+      setGoogleSubmitting(false);
+    }
   }
 
   return (
@@ -29,38 +86,58 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action="/dashboard" className="grid gap-5" method="get" onSubmit={openDashboardPreview}>
+        <Button
+          className="w-full"
+          disabled={!hydrated || googleSubmitting || submitting}
+          onClick={submitGoogleLogin}
+          type="button"
+          variant="outline"
+        >
+          <span aria-hidden="true" className="font-bold text-[#4285f4]">
+            G
+          </span>
+          {googleSubmitting ? "Opening Google…" : "Continue with Google"}
+        </Button>
+        <div className="my-5 flex items-center gap-3" role="separator">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or use email</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <form className="grid gap-5" onSubmit={submitLogin}>
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
             <Input
               autoComplete="email"
               id="email"
+              name="email"
               placeholder="you@example.com"
               required
               type="email"
             />
           </div>
           <div className="grid gap-2">
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="password">Password</Label>
-              <a className="text-xs font-medium text-primary hover:underline" href="#forgot-password">
-                Forgot password?
-              </a>
-            </div>
+            <Label htmlFor="password">Password</Label>
             <Input
               autoComplete="current-password"
               id="password"
               minLength={8}
+              name="password"
               required
               type="password"
             />
           </div>
-          <Button className="w-full" type="submit">
-            Sign in
+          {error === null ? null : (
+            <p aria-live="polite" className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <Button
+            className="w-full"
+            disabled={!hydrated || googleSubmitting || submitting}
+            type="submit"
+          >
+            {submitting ? "Signing in…" : "Sign in"}
           </Button>
-          <p className="text-center text-xs leading-relaxed text-muted-foreground">
-            UI preview only. Authentication is not connected yet.
-          </p>
         </form>
         <p className="mt-6 text-center text-sm text-muted-foreground">
           New to Jualokal?{" "}

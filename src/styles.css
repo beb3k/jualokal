@@ -599,6 +599,46 @@ footer p {
   margin: 8px auto 0;
 }
 
+.registration-fields {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0 8px;
+}
+
+.registration-fields label {
+  font-size: 0.88rem;
+  font-weight: 750;
+}
+
+.registration-fields input {
+  width: 100%;
+  border: 1px solid rgba(23, 60, 43, 0.2);
+  border-radius: 14px;
+  padding: 13px 14px;
+  color: #17251e;
+  background: rgba(255, 255, 255, 0.72);
+  font: inherit;
+}
+
+.registration-fields .button-primary {
+  width: 100%;
+}
+
+.form-hint,
+.auth-error {
+  margin: 2px 0 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.form-hint {
+  color: #586960;
+}
+
+.auth-error {
+  color: #9a2f2f;
+}
+
 .verification-confirmation {
   display: flex;
   align-items: flex-start;
