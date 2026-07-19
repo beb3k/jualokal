@@ -646,14 +646,25 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }, [previewSellerId]);
 
   useEffect(() => {
+    let pageWasHidden = document.visibilityState === "hidden";
     const markPersistedResumeStale = (event: PageTransitionEvent) => {
       if (event.persisted) markBrowsingLocationStale();
     };
+    const markBackgroundResumeStale = () => {
+      if (document.visibilityState === "hidden") {
+        pageWasHidden = true;
+      } else if (pageWasHidden) {
+        pageWasHidden = false;
+        markBrowsingLocationStale();
+      }
+    };
     window.addEventListener("pagehide", markBrowsingLocationStale);
     window.addEventListener("pageshow", markPersistedResumeStale);
+    document.addEventListener("visibilitychange", markBackgroundResumeStale);
     return () => {
       window.removeEventListener("pagehide", markBrowsingLocationStale);
       window.removeEventListener("pageshow", markPersistedResumeStale);
+      document.removeEventListener("visibilitychange", markBackgroundResumeStale);
     };
   }, []);
 
@@ -2433,7 +2444,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 </button>
                 <button
                   className="button button-outline"
-                  onClick={() => setActiveWorkspace("inventory")}
+                  onClick={() => {
+                    setSelectedAccountId(demoSeller.id);
+                    const nextListing = sessionListings.find(
+                      (listing) => listing.sellerId === demoSeller.id,
+                    );
+                    if (nextListing) loadListingForEditing(nextListing);
+                    setActiveWorkspace("seller");
+                  }}
                 >
                   Sell an item nearby
                 </button>

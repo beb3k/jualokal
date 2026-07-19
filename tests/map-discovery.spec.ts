@@ -169,6 +169,48 @@ test("refresh replaces only the snapshot while preserving view and category", as
   await expect(page.getByRole("status").filter({ hasText: /recalculated/ })).toBeVisible();
 });
 
+test("returning from the background marks the Browsing Location stale without requesting location", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    let requests = 0;
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: () => { requests += 1; },
+        watchPosition: () => { requests += 1; return 1; },
+        clearWatch: () => undefined,
+      },
+    });
+    Object.defineProperty(window, "__locationRequests", {
+      get: () => requests,
+    });
+  });
+  await openDemo(page);
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+
+  await page.evaluate(() => {
+    let simulatedVisibility: DocumentVisibilityState = "hidden";
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => simulatedVisibility,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    simulatedVisibility = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+  await expect(
+    page.getByRole("heading", { name: "Browsing Location needs refresh" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
+  await expect(
+    page.evaluate(
+      () => (window as typeof window & { __locationRequests: number }).__locationRequests,
+    ),
+  ).resolves.toBe(0);
+});
+
 test("stale resume, location errors, service failure, and empty states stay distinct", async ({
   page,
 }) => {
@@ -209,8 +251,15 @@ test("stale resume, location errors, service failure, and empty states stay dist
   await refresh.click();
   const nearbyEmpty = page.getByRole("heading", { name: "No nearby listings yet" }).locator("..");
   await expect(nearbyEmpty).toContainText("radius was not widened");
+  const sellNearby = nearbyEmpty.getByRole("button", { name: "Sell an item nearby" });
   await expect(nearbyEmpty.getByRole("button", { name: "Refresh nearby listings" })).toBeVisible();
-  await expect(nearbyEmpty.getByRole("button", { name: "Sell an item nearby" })).toBeVisible();
+  await expect(sellNearby).toBeVisible();
+
+  await sellNearby.click();
+  await expect(page.getByRole("heading", { name: "Manage demo listing" })).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Selected fictional account" }),
+  ).toHaveValue("seller-dimas");
 });
 
 test("Map Fallback preserves results and saved preference until retry recovers", async ({ page }) => {
