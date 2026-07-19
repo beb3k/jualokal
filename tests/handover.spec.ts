@@ -243,6 +243,10 @@ test("Reset Demo removes the completed transaction and permits a fresh journey",
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
   await expect(
     page.getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" }),
   ).toBeVisible();
@@ -515,6 +519,10 @@ test("Reset Demo clears an incomplete handover and its preserved evidence", asyn
   await expect(page.getByRole("region", { name: "Preserved confirmation evidence" })).toHaveCount(
     0,
   );
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
   await expect(
     page.getByRole("article", {
       name: "Nearby simulated listing: Handwoven rattan market basket",
@@ -683,6 +691,10 @@ test("Reset Demo clears a mismatch and permits a fresh successful handover", asy
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
   await purchaseBasket(page);
   await arrangeHandover(page);
   await recordBothPartiesPresent(page);

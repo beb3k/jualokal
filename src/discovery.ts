@@ -55,6 +55,32 @@ export type SellerMarkerProjection = {
   frameKm: 2 | 3;
 };
 
+export type SellerMarkerGroupDefinition = Readonly<{
+  id: string;
+  separation: "separable" | "inseparable";
+  sellerIds: readonly string[];
+}>;
+
+export type ProjectedSellerMarker = Readonly<{
+  marker: SellerDiscoveryMarker;
+  projection: SellerMarkerProjection;
+}>;
+
+export type SellerMapMarker =
+  | Readonly<{
+      kind: "individual";
+      marker: SellerDiscoveryMarker;
+      projection: SellerMarkerProjection;
+    }>
+  | Readonly<{
+      kind: "group";
+      groupId: string;
+      separation: "separable" | "inseparable";
+      sellerIds: readonly string[];
+      sellerCount: number;
+      projection: SellerMarkerProjection;
+    }>;
+
 type CreateSellerDiscoveryMarkerInput = {
   sellerId: string;
   homeAnchorVersion: string;
@@ -121,6 +147,66 @@ export function projectSellerDiscoveryMarker(
     offsetYKm: directionY * markerDistanceKm,
     frameKm: markerDistanceKm > 2 ? 3 : 2,
   };
+}
+
+type CreateSellerMapMarkersInput = Readonly<{
+  markers: readonly ProjectedSellerMarker[];
+  groups: readonly SellerMarkerGroupDefinition[];
+  expandedGroupId: string | null;
+}>;
+
+export function createSellerMapMarkers({
+  markers,
+  groups,
+  expandedGroupId,
+}: CreateSellerMapMarkersInput): SellerMapMarker[] {
+  const groupedSellerIds = new Set(groups.flatMap((group) => group.sellerIds));
+  const ungroupedMarkers: SellerMapMarker[] = markers
+    .filter(({ marker }) => !groupedSellerIds.has(marker.sellerId))
+    .map(({ marker, projection }) => ({ kind: "individual", marker, projection }));
+
+  const groupedMarkers = groups.flatMap((group): SellerMapMarker[] => {
+    const members = markers.filter(({ marker }) =>
+      group.sellerIds.includes(marker.sellerId),
+    );
+    if (members.length === 0) return [];
+    if (
+      members.length === 1 ||
+      (group.separation === "separable" && group.id === expandedGroupId)
+    ) {
+      return members.map(({ marker, projection }) => ({
+        kind: "individual",
+        marker,
+        projection,
+      }));
+    }
+
+    const sellerIds = members.map(({ marker }) => marker.sellerId);
+    const offsetXKm = members.reduce(
+      (total, { projection }) => total + projection.offsetXKm,
+      0,
+    ) / members.length;
+    const offsetYKm = members.reduce(
+      (total, { projection }) => total + projection.offsetYKm,
+      0,
+    ) / members.length;
+
+    return [{
+      kind: "group",
+      groupId: group.id,
+      separation: group.separation,
+      sellerIds,
+      sellerCount: sellerIds.length,
+      projection: {
+        stableMarkerKey: `${group.id}:${sellerIds.join(":")}`,
+        offsetXKm,
+        offsetYKm,
+        frameKm: members.some(({ projection }) => projection.frameKm === 3) ? 3 : 2,
+      },
+    }];
+  });
+
+  return [...ungroupedMarkers, ...groupedMarkers];
 }
 
 type DiscoverListingsInput = {

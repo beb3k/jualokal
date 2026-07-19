@@ -138,3 +138,117 @@ test("Map and List hide location-dependent content without a valid snapshot", as
   await location.selectOption("unavailable");
   await expect(page.getByRole("img", { name: "Your location" })).toHaveCount(0);
 });
+
+test("grouped Sellers zoom only when separable and otherwise use one chooser", async ({
+  page,
+}) => {
+  await openDemo(page);
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+
+  await expect(
+    map.getByRole("button", { name: "Seller marker, DP, 4 Listings" }),
+  ).toBeVisible();
+  const separableGroup = map.getByRole("button", {
+    name: "Seller marker group, 2 Sellers, zoom to separate",
+  });
+  const sharedAreaGroup = map.getByRole("button", {
+    name: "Seller marker group, 2 Sellers, choose Seller",
+  });
+  await expect(separableGroup).toBeVisible();
+  await expect(sharedAreaGroup).toBeVisible();
+
+  await separableGroup.click();
+  await expect(
+    map.getByRole("button", { name: "Seller marker, SN, 4 Listings" }),
+  ).toBeFocused();
+  await expect(
+    map.getByRole("button", { name: "Seller marker, BA, 4 Listings" }),
+  ).toBeVisible();
+  await expect(map.getByRole("status")).toContainText(
+    "2 Sellers separated at the same coarse positions",
+  );
+  await expect(separableGroup).toHaveCount(0);
+
+  await map.getByRole("button", { name: "Recenter map" }).click();
+  await expect(separableGroup).toBeVisible();
+  await sharedAreaGroup.focus();
+  await page.keyboard.press("Enter");
+
+  const chooser = page.getByRole("dialog", { name: "Seller chooser" });
+  await expect(chooser.getByRole("button", { name: "Close Seller chooser" })).toBeFocused();
+  await expect(chooser).toContainText("cannot be separated without inventing locations");
+  await chooser
+    .getByRole("button", { name: "Rani K. · Fictional Demo Seller" })
+    .click();
+
+  const preview = page.getByRole("dialog", { name: "Seller Preview: Rani K." });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("article")).toHaveCount(4);
+  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+  await expect(sharedAreaGroup).toBeFocused();
+});
+
+test("filters and account switching update groups, Preview, and List from one result", async ({
+  page,
+}) => {
+  await openDemo(page);
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  const viewControl = page.getByRole("group", { name: "Discovery View" });
+
+  await page.getByLabel("Category Filter").selectOption("Books");
+  await expect(map.getByRole("button", { name: /Seller marker group/ })).toHaveCount(0);
+  await expect(
+    map.getByRole("button", { name: "Seller marker, SN, 1 Listing" }),
+  ).toBeVisible();
+  await expect(
+    map.getByRole("button", { name: "Seller marker, RK, 1 Listing" }),
+  ).toBeVisible();
+
+  await map.getByRole("button", { name: "Seller marker, SN, 1 Listing" }).click();
+  const preview = page.getByRole("dialog", { name: "Seller Preview: Sari N." });
+  await expect(preview.getByRole("article")).toHaveCount(1);
+  await expect(preview).toContainText("Indonesian recipe notebook");
+  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+
+  await viewControl.getByRole("button", { name: "List" }).click();
+  const list = page.getByRole("region", { name: "Demo marketplace listings" });
+  await expect(list.getByRole("article")).toHaveCount(2);
+
+  const account = page.getByRole("combobox", { name: "Selected fictional account" });
+  await account.selectOption("seller-sari");
+  await page.getByRole("button", { name: "View discovery as selected Seller" }).click();
+  await expect(account).toHaveValue("seller-sari");
+  await expect(list.getByText("Indonesian recipe notebook")).toHaveCount(0);
+  await expect(list.getByRole("article")).toHaveCount(1);
+
+  await account.selectOption("buyer-naufal");
+  await expect(list.getByText("Indonesian recipe notebook")).toBeVisible();
+  await expect(list.getByRole("article")).toHaveCount(2);
+});
+
+test("Reset Demo restores Map, location, inventory, and grouped marker state", async ({ page }) => {
+  await openDemo(page);
+  const viewControl = page.getByRole("group", { name: "Discovery View" });
+  await viewControl.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Category Filter").selectOption("Books");
+  await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
+
+  await page.getByRole("button", { name: "Reset Demo" }).click();
+  await page
+    .getByRole("dialog", { name: "Reset Demo" })
+    .getByRole("button", { name: "Reset this simulated session" })
+    .click();
+
+  await expect(viewControl.getByRole("button", { name: "Map" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByLabel("Category Filter")).toHaveValue("All");
+  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("current");
+  await expect(page.getByRole("region", { name: "Demo marketplace summary" })).toContainText(
+    "25 active Demo Listings",
+  );
+  await expect(
+    page.getByRole("button", { name: "Seller marker group, 2 Sellers, choose Seller" }),
+  ).toBeVisible();
+});

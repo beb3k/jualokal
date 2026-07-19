@@ -260,6 +260,10 @@ test("Reset Demo clears private safety state before a fresh transaction", async 
     .click();
   await expect(basketHandover(page)).toHaveCount(0);
 
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
   await purchaseBasket(page);
   const safety = basketHandover(page).getByRole("region", {
     name: "Safety incident help",

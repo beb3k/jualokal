@@ -1951,6 +1951,25 @@ footer p {
   transform: rotate(45deg);
 }
 
+.seller-marker-group {
+  width: 72px;
+  height: 54px;
+  border-radius: 16px;
+  background: #315846;
+  transform: none;
+}
+
+.seller-marker-group-label {
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.seller-marker-group .seller-marker-count {
+  transform: none;
+}
+
 .seller-marker-count {
   position: absolute;
   top: -9px;
@@ -2059,6 +2078,17 @@ footer p {
 .seller-preview-listings p {
   margin: 5px 0;
   color: #65736b;
+}
+
+.seller-chooser-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.seller-chooser-options .button {
+  justify-content: flex-start;
+  text-align: left;
 }
 
 @media (max-width: 680px) {
