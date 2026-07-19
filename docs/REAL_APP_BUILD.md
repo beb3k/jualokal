@@ -30,7 +30,7 @@ contract changes.
 | Phase | State | Evidence |
 |---|---|---|
 | Authentication foundation | Complete | Commit `78ba652`; typecheck, 18 focused phone/desktop checks, production build passed |
-| Member profile persistence | Complete | Hosted migration, remote lint and anonymous boundary; local RLS, typecheck, 18 focused checks, build passed |
+| Member profile persistence | Complete | Commit `3834b31`; hosted migration, remote lint and anonymous boundary; local RLS, typecheck, 18 focused checks, build passed |
 | Seller Activation and encrypted Home Anchor | Active next task | Unblocked by member profile persistence |
 | Listing publication and private photos | Pending | Blocked by Seller Activation |
 | Privacy-safe discovery | Pending | Blocked by listings and protected location service |
@@ -46,8 +46,8 @@ contract changes.
 Objective: persist one authenticated member profile and enforce the admission boundary for
 the real marketplace.
 
-Implementation status: complete and verified locally and against hosted Supabase. Project-owner
-phone and desktop acceptance remains pending.
+Implementation status: complete, verified locally and against hosted Supabase, and accepted by
+the project owner on phone and desktop.
 
 ### Deliverables
 
@@ -70,7 +70,7 @@ phone and desktop acceptance remains pending.
 - Cross-member private reads and writes fail under Row Level Security.
 - No identity document, biometric, payment, Home Anchor, or private coordinate is collected.
 - Migration verification, typecheck, focused tests, and production build pass.
-- Project-owner phone and desktop acceptance remains pending until explicitly confirmed.
+- Project-owner phone and desktop acceptance confirmed on 2026-07-19.
 
 ## Planned data order
 
@@ -91,11 +91,12 @@ phone and desktop acceptance remains pending.
 - Focused browser tests: 18/18 across phone and desktop
 - Production build: passed
 - GitNexus: 11 files, 20 symbols, two expected flows, MEDIUM risk
-- Live phone and desktop acceptance: pending project owner
+- Live phone and desktop acceptance: passed on 2026-07-19
 
 ### 2026-07-19 — persisted member foundation
 
 - Branch: `codex/issue-1-real-auth`
+- Commit: `3834b31`
 - Migration: `202607190001_member_profiles.sql`
 - Isolated PostgreSQL 17 migration and RLS checks: passed
 - Typecheck: passed
@@ -104,7 +105,32 @@ phone and desktop acceptance remains pending.
 - Hosted migration history: local and remote version `202607190001` match
 - Hosted database lint: passed, no public-schema errors
 - Hosted anonymous boundary: table and all member RPCs deny access
-- Live phone and desktop acceptance: pending project owner
+- Live phone and desktop acceptance: passed on 2026-07-19
+
+### 2026-07-19 — real-auth integration stabilization
+
+- Branch: `codex/issue-1-real-auth`
+- Pull request: [#34](https://github.com/beb3k/jualokal/pull/34)
+- Integration commit: `1a46daf`
+- Restored the visible judge-facing Demo Mode entry while preserving `/register`, `/login`,
+  the authentication callback, protected `/dashboard`, and persisted member profiles.
+- Reconciled the current auth journeys with merged discovery and Checkout Hold behavior.
+- Playwright: 342/342 checks passed across phone and desktop projects.
+- Typecheck and production build: passed.
+- GitNexus staged impact: LOW, with no affected execution flows.
+- Desktop and iPhone checks: passed with no horizontal overflow.
+- Project-owner acceptance, commit authorization, and push: complete.
+- GitHub state: draft, mergeable, and awaiting final review/merge.
+
+## Active coordination
+
+- Presentation-overhaul PRD [#36](https://github.com/beb3k/jualokal/issues/36) and ticket
+  [#37](https://github.com/beb3k/jualokal/issues/37) currently assume the earlier simulated
+  admission UI. If PR #34 merges first, its real auth routes and admission flow become the
+  protected baseline for that presentation-only work.
+- No #36 implementation PR exists. Current risk is specification drift and likely future overlap
+  in `App.tsx`, `DemoExperience.tsx`, `styles.css`, and public/auth browser tests, not an existing
+  code conflict.
 
 ## Open inputs
 

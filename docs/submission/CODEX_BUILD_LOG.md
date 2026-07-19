@@ -541,7 +541,93 @@ Issue #18 is implemented, automatically verified, independently reviewed, manual
 
 #### Outcome
 
-Issue #19 behavior is implemented and verified in PR #32. Contributor authorship remains on the original feature commit, with the focused maintainer correction recorded separately.
+Issue #19 was merged through [PR #32](https://github.com/beb3k/jualokal/pull/32) as
+`bab977c4f0f1ef0bca6a94746abfab5987647a7f` and closed on 2026-07-19. Contributor authorship
+remains on the original feature commit, with the focused maintainer correction recorded
+separately.
+
+### 2026-07-19 - Grouped Seller discovery
+
+- **Session role:** Implementation, integration, testing, and review
+- **Primary Core Build Session:** No
+- **Working branch:** `codex/issue-20-grouped-seller-discovery`
+- **Feature commit:** `bc83a465ec5b10cbcbbf7671ff288bea81e30d48`
+- **Pull request:** [#33](https://github.com/beb3k/jualokal/pull/33)
+- **Related issue:** [#20](https://github.com/beb3k/jualokal/issues/20)
+- **Objective:** Demonstrate separable and inseparable coarse Seller-marker groups without
+  revealing precise Seller locations.
+
+#### Work completed
+
+- Added individual, separable-group, and inseparable shared-area Demo markers.
+- Added group zoom and a keyboard-accessible Seller chooser while preserving coarse positions.
+- Kept filters, account switching, Seller Preview, List View, ownership exclusion, and Reset Demo
+  synchronized.
+
+#### Verification and outcome
+
+- Typecheck and production build passed.
+- The complete Playwright suite passed: **304/304 checks**.
+- GitNexus change detection found nine expected files, 13 symbols, and MEDIUM expected UI-flow
+  risk covered by the complete suite.
+- PR #33 merged as `21e3f64336143a205c7f975d6c7cad0f1d4a47ec`; issue #20 closed.
+
+### 2026-07-19 - Checkout Hold discovery consistency
+
+- **Session role:** Implementation, integration, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Working branch:** `codex/issue-21-checkout-discovery`
+- **Feature commit:** `9b12d353c3137e68e7b328589dfe4be3a1427fa7`
+- **Pull request:** [#35](https://github.com/beb3k/jualokal/pull/35)
+- **Related issues:** [#21](https://github.com/beb3k/jualokal/issues/21) and parent
+  [#16](https://github.com/beb3k/jualokal/issues/16)
+- **Objective:** Keep held and purchased inventory consistent across Map, List, Seller Preview,
+  listing detail, and grouped markers.
+
+#### Work completed
+
+- Kept held listings visible but unclaimable to competing buyers without revealing the holder.
+- Restored claimability at exact expiry without reordering discovery.
+- Removed purchased inventory atomically from all discovery surfaces and counts.
+- Rejected Seller self-checkout at hold and payment boundaries.
+
+#### Verification and outcome
+
+- Typecheck, production build, and **314/314 Playwright checks** passed.
+- Desktop and iPhone 12 Pro acceptance covered hold privacy, expiry, purchase removal, marker
+  collapse, Seller ownership, and horizontal overflow.
+- Project-owner acceptance completed before merge.
+- PR #35 merged as `372bb0b75e628285017ef4d99de53b1c79bf0159`; issue #21 closed.
+- With issues #17-#21 complete, parent issue #16 closed on 2026-07-19.
+
+### 2026-07-19 - Real-auth integration stabilization
+
+- **Session role:** Integration, regression repair, testing, and coordination
+- **Primary Core Build Session:** No
+- **Working branch:** `codex/issue-1-real-auth`
+- **Pull request:** [#34](https://github.com/beb3k/jualokal/pull/34)
+- **Integration commit:** `1a46dafbd3182b1a06665837590987be0e7d4769`
+- **Objective:** Reconcile real authentication and persisted member profiles with the completed
+  Demo discovery and Checkout Hold work.
+
+#### Work completed
+
+- Resolved integration conflicts while preserving discovery recovery, grouped markers, and
+  Checkout Hold consistency.
+- Restored the visible judge-facing Demo Mode entry.
+- Updated obsolete registration tests for `/register`, `/login`, and protected `/dashboard`.
+- Enabled reduced motion during browser automation to prevent smooth-scroll instability without
+  changing product behavior.
+
+#### Verification and outcome
+
+- Focused integration checks passed 38/38; the final complete suite passed **342/342**.
+- Typecheck, production build, desktop preview, and iPhone preview passed.
+- GitNexus staged impact was LOW with no affected execution flows.
+- Project-owner acceptance and commit authorization completed; commit pushed.
+- PR #34 is draft, mergeable, and awaiting final review/merge.
+- Issue #36/#37 coordination risk was recorded on GitHub: their old admission assumptions must be
+  reconciled with PR #34 before presentation-overhaul implementation begins.
 
 ## Supporting session template
 
