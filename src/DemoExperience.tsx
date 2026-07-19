@@ -5,6 +5,7 @@ import {
   demoListing,
   demoListings,
   demoSeller,
+  demoSellerMarkerGroups,
   demoSellers,
   type DemoListingSeed,
 } from "./demo-data";
@@ -77,6 +78,7 @@ import {
 } from "./trust";
 import {
   APPROVED_DISCOVERY_CATEGORIES,
+  createSellerMapMarkers,
   classifyDiscoveryOutcome,
   createSellerDiscoveryMarker,
   discoverListings,
@@ -85,6 +87,7 @@ import {
   type ApprovedDiscoveryCategory,
   type DiscoveryCategory,
   type DistanceBand,
+  type SellerMapMarker,
 } from "./discovery";
 
 const discoveryCategoryLabels: Record<ApprovedDiscoveryCategory, string> = {
@@ -584,11 +587,17 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     "Nearby discovery ready with simulated snapshot 1",
   );
   const [previewSellerId, setPreviewSellerId] = useState<string | null>(null);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [chooserGroupId, setChooserGroupId] = useState<string | null>(null);
   const [mapViewport, setMapViewport] = useState({ panX: 0, zoom: 1 });
   const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewDialogRef = useRef<HTMLElement | null>(null);
   const previewCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const chooserTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const chooserDialogRef = useRef<HTMLElement | null>(null);
+  const chooserCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const expandedSellerMarkerRef = useRef<HTMLButtonElement | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -644,6 +653,49 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     window.addEventListener("keydown", handlePreviewKeyboard);
     return () => window.removeEventListener("keydown", handlePreviewKeyboard);
   }, [previewSellerId]);
+
+  useEffect(() => {
+    if (!chooserGroupId) return;
+    chooserCloseButtonRef.current?.focus();
+    const handleChooserKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeSellerChooser();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        chooserDialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleChooserKeyboard);
+    return () => window.removeEventListener("keydown", handleChooserKeyboard);
+  }, [chooserGroupId]);
+
+  useEffect(() => {
+    if (!expandedGroupId) return;
+    window.requestAnimationFrame(() => expandedSellerMarkerRef.current?.focus());
+  }, [expandedGroupId]);
+
+  useEffect(() => {
+    setExpandedGroupId(null);
+    setChooserGroupId(null);
+    setPreviewSellerId(null);
+    setMapViewport({ panX: 0, zoom: 1 });
+  }, [discoveryCategory, selectedAccountId]);
 
   useEffect(() => {
     let pageWasHidden = document.visibilityState === "hidden";
@@ -896,9 +948,28 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       projection: projectSellerDiscoveryMarker(marker, homeDistanceKm),
     }];
   });
-  const mapFrameKm = mapSellerMarkers.some(({ projection }) => projection.frameKm === 3)
+  const sellerMapMarkers = createSellerMapMarkers({
+    markers: mapSellerMarkers.map(({ marker, projection }) => ({ marker, projection })),
+    groups: demoSellerMarkerGroups,
+    expandedGroupId,
+  });
+  const mapFrameKm = sellerMapMarkers.some(({ projection }) => projection.frameKm === 3)
     ? 3
     : 2;
+  const expandedSellerId = expandedGroupId
+    ? demoSellerMarkerGroups.find((group) => group.id === expandedGroupId)?.sellerIds[0]
+    : undefined;
+  const chooserGroup = chooserGroupId
+    ? sellerMapMarkers.find(
+        (marker) => marker.kind === "group" && marker.groupId === chooserGroupId,
+      )
+    : undefined;
+  const chooserSellers = chooserGroup?.kind === "group"
+    ? chooserGroup.sellerIds.flatMap((sellerId) => {
+        const seller = demoSellers.find((candidate) => candidate.id === sellerId);
+        return seller ? [seller] : [];
+      })
+    : [];
   const mapFallbackActive =
     browsingLocationIsAvailable &&
     discoverySucceeded &&
@@ -991,6 +1062,31 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPreviewSellerId(sellerId);
   }
 
+  function selectSellerMarkerGroup(
+    group: Extract<SellerMapMarker, { kind: "group" }>,
+    trigger: HTMLButtonElement,
+  ) {
+    chooserTriggerRef.current = trigger;
+    if (group.separation === "separable") {
+      setExpandedGroupId(group.groupId);
+      setMapViewport({ ...mapViewport, zoom: 1.5 });
+      setMapStatus(`${group.sellerCount} Sellers separated at the same coarse positions`);
+      return;
+    }
+    setChooserGroupId(group.groupId);
+  }
+
+  function closeSellerChooser() {
+    setChooserGroupId(null);
+    window.requestAnimationFrame(() => chooserTriggerRef.current?.focus());
+  }
+
+  function openSellerFromChooser(sellerId: string) {
+    previewTriggerRef.current = chooserTriggerRef.current;
+    setChooserGroupId(null);
+    setPreviewSellerId(sellerId);
+  }
+
   function closeSellerPreview() {
     setPreviewSellerId(null);
     window.requestAnimationFrame(() => previewTriggerRef.current?.focus());
@@ -1008,6 +1104,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function recenterMap() {
+    setExpandedGroupId(null);
     setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view restored");
   }
@@ -1910,6 +2007,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setBrowsingLocation("current");
     setBrowsingLocationSnapshot(initialBrowsingLocationSnapshot);
     setDiscoveryCategory("All");
+    setDiscoveryView("map");
+    window.localStorage.setItem(discoveryViewStorageKey, "map");
+    setPreviewSellerId(null);
+    setExpandedGroupId(null);
+    setChooserGroupId(null);
+    setMapViewport({ panX: 0, zoom: 1 });
+    setMapStatus("Buyer-centered view ready");
     setMapRendering("ready");
     setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view ready");
@@ -2127,6 +2231,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         >
           Buyer discovery
         </button>
+        {selectedSeller ? (
+          <button
+            className="button button-compact button-outline"
+            onClick={() => setActiveWorkspace("buyer")}
+          >
+            View discovery as selected Seller
+          </button>
+        ) : null}
         <button
           className="button button-compact button-outline"
           onClick={() => {
@@ -2472,30 +2584,67 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               >
                 <span aria-hidden="true" />
               </div>
-              {mapSellerMarkers.map(({ seller, marker, projection }) => (
-                <div
-                  className="seller-marker-position"
-                  key={marker.stableMarkerKey}
-                  style={{
-                    left: `${50 + (projection.offsetXKm / mapFrameKm) * 40 + mapViewport.panX}%`,
-                    top: `${50 - (projection.offsetYKm / mapFrameKm) * 40}%`,
-                    transform: `translate(-50%, -50%) scale(${mapViewport.zoom})`,
-                  }}
-                >
-                  <button
-                    aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${marker.listingCount} ${marker.listingCount === 1 ? "Listing" : "Listings"}`}
-                    className="seller-discovery-marker"
-                    onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
+              {sellerMapMarkers.flatMap((mapMarker) => {
+                const projection = mapMarker.projection;
+                const markerPosition = {
+                  left: `${50 + (projection.offsetXKm / mapFrameKm) * 40 * mapViewport.zoom + mapViewport.panX}%`,
+                  top: `${50 - (projection.offsetYKm / mapFrameKm) * 40 * mapViewport.zoom}%`,
+                  transform: "translate(-50%, -50%)",
+                };
+                if (mapMarker.kind === "group") {
+                  return [
+                    <div
+                      className="seller-marker-position"
+                      key={projection.stableMarkerKey}
+                      style={markerPosition}
+                    >
+                      <button
+                        aria-label={`Seller marker group, ${mapMarker.sellerCount} Sellers, ${mapMarker.separation === "separable" ? "zoom to separate" : "choose Seller"}`}
+                        className="seller-discovery-marker seller-marker-group"
+                        onClick={(event) =>
+                          selectSellerMarkerGroup(mapMarker, event.currentTarget)
+                        }
+                      >
+                        <span className="seller-marker-group-label" aria-hidden="true">
+                          Sellers
+                        </span>
+                        <span className="seller-marker-count" aria-hidden="true">
+                          {mapMarker.sellerCount}
+                        </span>
+                      </button>
+                    </div>,
+                  ];
+                }
+
+                const seller = demoSellers.find(
+                  (candidate) => candidate.id === mapMarker.marker.sellerId,
+                );
+                if (!seller) return [];
+                const listingLabel = mapMarker.marker.listingCount === 1
+                  ? "Listing"
+                  : "Listings";
+                return [
+                  <div
+                    className="seller-marker-position"
+                    key={mapMarker.marker.stableMarkerKey}
+                    style={markerPosition}
                   >
-                    <span className="seller-marker-initials" aria-hidden="true">
-                      {getSellerMarkerInitials(seller.publicName)}
-                    </span>
-                    <span className="seller-marker-count" aria-hidden="true">
-                      {marker.listingCount}
-                    </span>
-                  </button>
-                </div>
-              ))}
+                    <button
+                      aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${mapMarker.marker.listingCount} ${listingLabel}`}
+                      className="seller-discovery-marker"
+                      onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
+                      ref={seller.id === expandedSellerId ? expandedSellerMarkerRef : undefined}
+                    >
+                      <span className="seller-marker-initials" aria-hidden="true">
+                        {getSellerMarkerInitials(seller.publicName)}
+                      </span>
+                      <span className="seller-marker-count" aria-hidden="true">
+                        {mapMarker.marker.listingCount}
+                      </span>
+                    </button>
+                  </div>,
+                ];
+              })}
               <div aria-label="Map viewport controls" className="map-controls" role="group">
                 <button
                   className="button button-compact button-outline"
@@ -2576,6 +2725,48 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             </div>
           ) : null}
         </section>
+
+        {chooserGroup?.kind === "group" ? (
+          <div className="seller-preview-backdrop">
+            <section
+              aria-label="Seller chooser"
+              aria-modal="true"
+              className="seller-preview seller-chooser"
+              ref={chooserDialogRef}
+              role="dialog"
+            >
+              <div className="seller-preview-heading">
+                <div>
+                  <p className="eyebrow">Shared fictional area</p>
+                  <h2>Choose a Demo Seller</h2>
+                </div>
+                <button
+                  aria-label="Close Seller chooser"
+                  className="button button-compact button-outline"
+                  onClick={closeSellerChooser}
+                  ref={chooserCloseButtonRef}
+                >
+                  Close
+                </button>
+              </div>
+              <p>
+                These Sellers share one coarse marker and cannot be separated without inventing
+                locations. Choose a fictional Seller to open the same Seller Preview.
+              </p>
+              <div className="seller-chooser-options">
+                {chooserSellers.map((seller) => (
+                  <button
+                    className="button button-outline"
+                    key={seller.id}
+                    onClick={() => openSellerFromChooser(seller.id)}
+                  >
+                    {seller.publicName} · Fictional Demo Seller
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {previewSeller && previewDistanceBand && previewTrustSummary ? (
           <div className="seller-preview-backdrop">

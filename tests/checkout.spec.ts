@@ -339,6 +339,10 @@ test("Reset Demo clears checkout state and restores purchased items", async ({ p
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
   await expect(
     page.getByRole("article", {
       name: "Nearby simulated listing: Handwoven rattan market basket",

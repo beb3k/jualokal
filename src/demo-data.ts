@@ -80,6 +80,19 @@ export const demoSellers = [
   },
 ] as const;
 
+export const demoSellerMarkerGroups = [
+  {
+    id: "fictional-separable-area",
+    separation: "separable",
+    sellerIds: ["seller-sari", "seller-bima"],
+  },
+  {
+    id: "fictional-shared-area",
+    separation: "inseparable",
+    sellerIds: ["seller-rani", "seller-wawan"],
+  },
+] as const;
+
 export type DemoListingSeed = {
   id: string;
   sellerId: (typeof demoSellers)[number]["id"];
