@@ -185,9 +185,15 @@ function App() {
               <strong>Close to home.</strong>
               <span>Private from the start.</span>
             </div>
-            <span className="promise-label label-top">Portable goods</span>
-            <span className="promise-label label-right">Nearby handover</span>
-            <span className="promise-label label-bottom">Protected location</span>
+            <span className="promise-label-orbit orbit-top">
+              <span className="promise-label label-top">Portable goods</span>
+            </span>
+            <span className="promise-label-orbit orbit-right">
+              <span className="promise-label label-right">Nearby handover</span>
+            </span>
+            <span className="promise-label-orbit orbit-bottom">
+              <span className="promise-label label-bottom">Protected location</span>
+            </span>
           </div>
         </section>
 

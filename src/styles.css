@@ -283,6 +283,7 @@ h2 {
   border-radius: 48% 48% 46% 54%;
   background: #e1e6d9;
   box-shadow: inset 0 0 80px rgba(255, 255, 255, 0.52);
+  animation: promise-float 8s ease-in-out infinite;
 }
 
 .promise-orbit {
@@ -290,10 +291,13 @@ h2 {
   inset: 14%;
   border: 1px dashed rgba(23, 60, 43, 0.22);
   border-radius: 50%;
+  animation: promise-orbit 36s linear infinite;
 }
 
 .promise-orbit-two {
   inset: 27%;
+  animation-direction: reverse;
+  animation-duration: 24s;
 }
 
 .promise-centre {
@@ -303,6 +307,8 @@ h2 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 5px;
+  padding: 14px;
   border-radius: 50%;
   color: #f6f0e3;
   background: #173c2b;
@@ -311,20 +317,48 @@ h2 {
 }
 
 .promise-centre strong {
-  margin-top: 6px;
   font-family: Georgia, serif;
   font-size: clamp(1rem, 2vw, 1.45rem);
   font-weight: 500;
+  line-height: 1.1;
 }
 
 .promise-centre span:last-child {
-  margin-top: 5px;
+  max-width: 12ch;
   color: #b9c8bd;
   font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .promise-lock {
   font-size: 1.7rem;
+  line-height: 1;
+}
+
+@keyframes promise-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(0.6deg);
+  }
+}
+
+@keyframes promise-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promise-card,
+  .promise-orbit,
+  .promise-label-orbit,
+  .promise-label-orbit .promise-label {
+    animation: none;
+  }
 }
 
 .promise-label {
@@ -339,19 +373,58 @@ h2 {
   font-weight: 750;
 }
 
-.label-top {
+.promise-label-orbit {
+  --orbit-start: -45deg;
+  --orbit-end: 315deg;
+  --label-start: 45deg;
+  --label-end: -315deg;
+
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--orbit-start));
+  animation: promise-label-lap 18s linear infinite;
+  pointer-events: none;
+}
+
+.promise-label-orbit .promise-label {
   top: 12%;
-  left: 4%;
+  left: 50%;
+  transform: translateX(-50%) rotate(var(--label-start));
+  animation: promise-label-upright 18s linear infinite;
 }
 
-.label-right {
-  top: 34%;
-  right: -4%;
+.orbit-right {
+  --orbit-start: 75deg;
+  --orbit-end: 435deg;
+  --label-start: -75deg;
+  --label-end: -435deg;
 }
 
-.label-bottom {
-  right: 13%;
-  bottom: 9%;
+.orbit-bottom {
+  --orbit-start: 195deg;
+  --orbit-end: 555deg;
+  --label-start: -195deg;
+  --label-end: -555deg;
+}
+
+@keyframes promise-label-lap {
+  from {
+    transform: rotate(var(--orbit-start));
+  }
+
+  to {
+    transform: rotate(var(--orbit-end));
+  }
+}
+
+@keyframes promise-label-upright {
+  from {
+    transform: translateX(-50%) rotate(var(--label-start));
+  }
+
+  to {
+    transform: translateX(-50%) rotate(var(--label-end));
+  }
 }
 
 .principles {
