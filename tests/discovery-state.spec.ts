@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   DISCOVERY_CATEGORIES,
+  classifyDiscoveryOutcome,
   discoverListings,
   type DiscoveryListing,
 } from "../src/discovery";
@@ -52,6 +53,65 @@ test("discovery requires both verified membership and an available browsing loca
       listings,
     }),
   ).toEqual([]);
+});
+
+test("discovery outcomes keep failures and empty results semantically distinct", () => {
+  expect(
+    classifyDiscoveryOutcome({
+      location: "denied",
+      discoverySucceeded: false,
+      category: "All",
+      resultCount: 0,
+    }),
+  ).toEqual({ kind: "location-denied" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "unavailable",
+      discoverySucceeded: false,
+      category: "All",
+      resultCount: 0,
+    }),
+  ).toEqual({ kind: "location-unavailable" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "stale",
+      discoverySucceeded: true,
+      category: "All",
+      resultCount: 4,
+    }),
+  ).toEqual({ kind: "stale-location" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "valid",
+      discoverySucceeded: false,
+      category: "All",
+      resultCount: 0,
+    }),
+  ).toEqual({ kind: "discovery-failure" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "valid",
+      discoverySucceeded: true,
+      category: "Books",
+      resultCount: 0,
+    }),
+  ).toEqual({ kind: "category-empty", category: "Books" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "valid",
+      discoverySucceeded: true,
+      category: "All",
+      resultCount: 0,
+    }),
+  ).toEqual({ kind: "nearby-empty" });
+  expect(
+    classifyDiscoveryOutcome({
+      location: "valid",
+      discoverySucceeded: true,
+      category: "All",
+      resultCount: 3,
+    }),
+  ).toEqual({ kind: "results", resultCount: 3 });
 });
 
 test("discovery includes the 2 km boundary and exposes only privacy-safe distance bands", () => {
