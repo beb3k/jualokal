@@ -191,6 +191,114 @@ test("competing buyers cannot both hold the same item and the holder stays priva
   );
 });
 
+test("a competing buyer sees one held Listing as unclaimable across Map, Preview, List, and detail", async ({
+  page,
+}) => {
+  await openDemo(page);
+  const list = page.getByRole("region", { name: "Demo marketplace listings" });
+  const titlesBeforeHold = await list.locator("article h3").allTextContents();
+  const basket = list.getByRole("article", {
+    name: "Nearby simulated listing: Handwoven rattan market basket",
+  });
+  await basket.getByRole("button", { name: "View item" }).click();
+  await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
+
+  const account = page.getByRole("combobox", { name: "Selected fictional account" });
+  await account.selectOption("buyer-naufal");
+  await expect(basket).toContainText("Checkout Hold · unavailable to claim");
+  await expect(await list.locator("article h3").allTextContents()).toEqual(titlesBeforeHold);
+
+  const detail = page.getByRole("region", { name: "Demo Listing" });
+  await expect(detail).toContainText("Checkout Hold · unavailable to claim");
+  const checkout = detail.getByRole("region", { name: "Checkout" });
+  await expect(checkout).toContainText("Checkout is already in progress for another buyer");
+  await expect(checkout).not.toContainText("Ayu R.");
+
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "Map" })
+    .click();
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  const marker = map.getByRole("button", {
+    name: "Seller marker, DP, 4 Listings, 1 held Listing unavailable to claim",
+  });
+  await expect(marker).toBeVisible();
+  await expect(map).not.toContainText("Ayu R.");
+  await marker.click();
+
+  const preview = page.getByRole("dialog", { name: "Seller Preview: Dimas P." });
+  const previewBasket = preview.getByRole("article", {
+    name: "Seller Preview Listing: Handwoven rattan market basket",
+  });
+  await expect(preview).toContainText("Under 1 km");
+  await expect(previewBasket).toContainText("Checkout Hold · unavailable to claim");
+  await expect(preview).not.toContainText("Ayu R.");
+  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+
+  await account.selectOption("buyer-ayu");
+  await detail
+    .getByRole("region", { name: "Checkout Hold" })
+    .getByRole("button", { name: "Advance to exact hold expiry" })
+    .click();
+  await account.selectOption("buyer-naufal");
+  await expect(map.getByRole("button", {
+    name: "Seller marker, DP, 4 Listings",
+    exact: true,
+  })).toBeVisible();
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "List" })
+    .click();
+  await expect(basket.getByText("Checkout Hold · unavailable to claim")).toHaveCount(0);
+  await expect(await list.locator("article h3").allTextContents()).toEqual(titlesBeforeHold);
+});
+
+test("successful purchase updates List, marker counts, and group membership together", async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.getByLabel("Category Filter").selectOption("Accessories");
+  const list = page.getByRole("region", { name: "Demo marketplace listings" });
+  await expect(list.getByRole("article")).toHaveCount(4);
+
+  await purchaseNearbyListing(page, "Woven pandan tote");
+  await expect(list.getByText("Woven pandan tote")).toHaveCount(0);
+  await expect(list.getByRole("article")).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "3 nearby simulated listings" })).toBeVisible();
+
+  await page
+    .getByRole("group", { name: "Discovery View" })
+    .getByRole("button", { name: "Map" })
+    .click();
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  await expect(
+    map.getByRole("button", { name: "Seller marker group, 2 Sellers, zoom to separate" }),
+  ).toHaveCount(0);
+  await expect(map.getByRole("button", { name: "Seller marker, SN, 1 Listing" })).toHaveCount(0);
+  const bimaMarker = map.getByRole("button", { name: "Seller marker, BA, 1 Listing" });
+  await expect(bimaMarker).toBeVisible();
+  await expect(
+    map.getByRole("button", { name: "Seller marker group, 2 Sellers, choose Seller" }),
+  ).toBeVisible();
+
+  await bimaMarker.click();
+  const preview = page.getByRole("dialog", { name: "Seller Preview: Bima A." });
+  await expect(preview.getByRole("article")).toHaveCount(1);
+  await expect(preview).toContainText("Canvas futsal shoe bag");
+});
+
+test("a Seller cannot reach checkout for an owned Listing through discovery", async ({ page }) => {
+  await openDemo(page);
+  const account = page.getByRole("combobox", { name: "Selected fictional account" });
+  await account.selectOption("seller-dimas");
+  await page.getByRole("button", { name: "View discovery as selected Seller" }).click();
+
+  const list = page.getByRole("region", { name: "Demo marketplace listings" });
+  await expect(list.getByText("Handwoven rattan market basket")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toHaveCount(0);
+});
+
 test("a Checkout Hold locks the seller's listing details and sale actions", async ({ page }) => {
   await openDemo(page);
 

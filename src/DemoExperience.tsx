@@ -15,9 +15,11 @@ import {
   endCheckoutHold,
   expireCheckoutHolds,
   finalizePurchaseCommitment,
+  getListingClaimability,
+  purchaseCommitmentRemovesListing,
   refundPurchaseCommitment,
   startCheckoutHold,
-  type PurchaseCommitment,
+  type ListingClaimability,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
 import SafetyPanel from "./SafetyPanel";
@@ -163,8 +165,12 @@ type ListingStatus =
   | "paused"
   | "removed";
 
-function commitmentRemovesListing(commitment: PurchaseCommitment) {
-  return commitment.trustOutcome !== "No successful handover";
+function checkoutAvailabilityLabel(claimability: ListingClaimability) {
+  if (claimability.kind === "held-by-viewer") return "Your Checkout Hold";
+  if (claimability.kind === "held-by-other") {
+    return "Checkout Hold · unavailable to claim";
+  }
+  return null;
 }
 
 type SessionListing = DemoListingSeed & {
@@ -543,14 +549,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   );
   const selectedListingCommitment = checkoutState.commitments.find(
     (commitment) =>
-      commitment.listingId === selectedListingId && commitmentRemovesListing(commitment),
+      commitment.listingId === selectedListingId &&
+      purchaseCommitmentRemovesListing(commitment),
   );
   const selectedListingIsLocked = Boolean(
     selectedListingHold || selectedListingCommitment,
   );
   const committedListingIds = new Set(
     checkoutState.commitments
-      .filter(commitmentRemovesListing)
+      .filter(purchaseCommitmentRemovesListing)
       .map((commitment) => commitment.listingId),
   );
   const selectedHoldRemainingSeconds = selectedBuyerHold
@@ -597,6 +604,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }> = discoveryResults.flatMap((result) => {
     const listing = sessionListings.find((candidate) => candidate.id === result.listingId);
     return listing ? [{ listing, distanceBand: result.distanceBand }] : [];
+  });
+  const visibleHeldListings = visibleDemoListings.flatMap(({ listing }) => {
+    const claimability = getListingClaimability(checkoutState, {
+      listingId: listing.id,
+      viewerId: selectedAccountId,
+      nowMs: clockNowMs,
+    });
+    return claimability.kind === "held-by-viewer" || claimability.kind === "held-by-other"
+      ? [{ listing, claimability }]
+      : [];
   });
   const selectedListingDistanceBand = visibleDemoListings.find(
     ({ listing }) => listing.id === selectedListingId,
@@ -657,6 +674,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedListingDistanceKm =
     browsingDistanceOverrideKm ?? selectedSessionListing?.distanceKm;
   const listingIsDiscoverable = Boolean(selectedListingDistanceBand);
+  const selectedListingClaimability: ListingClaimability = selectedSessionListing
+    ? getListingClaimability(checkoutState, {
+        listingId: selectedSessionListing.id,
+        viewerId: selectedAccountId,
+        nowMs: clockNowMs,
+      })
+    : { kind: "available" };
+  const selectedListingAvailabilityLabel = checkoutAvailabilityLabel(
+    selectedListingClaimability,
+  );
 
   function selectDiscoveryView(nextView: DiscoveryView) {
     setDiscoveryView(nextView);
@@ -765,6 +792,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setCheckoutState((currentState) =>
       startCheckoutHold(currentState, {
         buyerId: selectedBuyer.id,
+        sellerId: selectedSessionListing.sellerId,
         listingId: selectedSessionListing.id,
         listingTitle: selectedSessionListing.title,
         transactionPrice: selectedSessionListing.price,
@@ -2100,6 +2128,23 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               </div>
               {sellerMapMarkers.flatMap((mapMarker) => {
                 const projection = mapMarker.projection;
+                const representedSellerIds = mapMarker.kind === "group"
+                  ? mapMarker.sellerIds
+                  : [mapMarker.marker.sellerId];
+                const representedHeldListings = visibleHeldListings.filter(({ listing }) =>
+                  representedSellerIds.includes(listing.sellerId),
+                );
+                const competingHoldCount = representedHeldListings.filter(
+                  ({ claimability }) => claimability.kind === "held-by-other",
+                ).length;
+                const ownHoldCount = representedHeldListings.filter(
+                  ({ claimability }) => claimability.kind === "held-by-viewer",
+                ).length;
+                const holdSummary = competingHoldCount > 0
+                  ? `${competingHoldCount} held ${competingHoldCount === 1 ? "Listing" : "Listings"} unavailable to claim`
+                  : ownHoldCount > 0
+                    ? `${ownHoldCount} ${ownHoldCount === 1 ? "Listing" : "Listings"} in your Checkout Hold`
+                    : null;
                 const markerPosition = {
                   left: `${50 + (projection.offsetXKm / mapFrameKm) * 40 * mapViewport.zoom + mapViewport.panX}%`,
                   top: `${50 - (projection.offsetYKm / mapFrameKm) * 40 * mapViewport.zoom}%`,
@@ -2113,7 +2158,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                       style={markerPosition}
                     >
                       <button
-                        aria-label={`Seller marker group, ${mapMarker.sellerCount} Sellers, ${mapMarker.separation === "separable" ? "zoom to separate" : "choose Seller"}`}
+                        aria-label={`Seller marker group, ${mapMarker.sellerCount} Sellers, ${mapMarker.separation === "separable" ? "zoom to separate" : "choose Seller"}${holdSummary ? `, ${holdSummary}` : ""}`}
                         className="seller-discovery-marker seller-marker-group"
                         onClick={(event) =>
                           selectSellerMarkerGroup(mapMarker, event.currentTarget)
@@ -2125,6 +2170,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                         <span className="seller-marker-count" aria-hidden="true">
                           {mapMarker.sellerCount}
                         </span>
+                        {holdSummary ? (
+                          <span className="marker-checkout-status" aria-hidden="true">
+                            {holdSummary}
+                          </span>
+                        ) : null}
                       </button>
                     </div>,
                   ];
@@ -2144,7 +2194,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                     style={markerPosition}
                   >
                     <button
-                      aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${mapMarker.marker.listingCount} ${listingLabel}`}
+                      aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${mapMarker.marker.listingCount} ${listingLabel}${holdSummary ? `, ${holdSummary}` : ""}`}
                       className="seller-discovery-marker"
                       onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
                       ref={seller.id === expandedSellerId ? expandedSellerMarkerRef : undefined}
@@ -2155,6 +2205,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                       <span className="seller-marker-count" aria-hidden="true">
                         {mapMarker.marker.listingCount}
                       </span>
+                      {holdSummary ? (
+                        <span className="marker-checkout-status" aria-hidden="true">
+                          {holdSummary}
+                        </span>
+                      ) : null}
                     </button>
                   </div>,
                 ];
@@ -2205,10 +2260,20 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 const seller = demoSellers.find(
                   (candidate) => candidate.id === listing.sellerId,
                 );
+                const availabilityLabel = checkoutAvailabilityLabel(
+                  getListingClaimability(checkoutState, {
+                    listingId: listing.id,
+                    viewerId: selectedAccountId,
+                    nowMs: clockNowMs,
+                  }),
+                );
                 return (
                   <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
                     <span className="fictional-label">Simulated Demo Listing</span>
                     <h3>{listing.title}</h3>
+                    {availabilityLabel ? (
+                      <p className="checkout-availability-badge">{availabilityLabel}</p>
+                    ) : null}
                     {seller ? (
                       <p>
                         <button
@@ -2275,6 +2340,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                     onClick={() => openSellerFromChooser(seller.id)}
                   >
                     {seller.publicName} · Fictional Demo Seller
+                    {visibleHeldListings.some(
+                      ({ listing }) => listing.sellerId === seller.id,
+                    )
+                      ? " · Checkout Hold on a Listing"
+                      : ""}
                   </button>
                 ))}
               </div>
@@ -2314,23 +2384,35 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 <span>{previewDistanceBand}</span>
               </section>
               <div className="seller-preview-listings">
-                {previewListings.map(({ listing }) => (
-                  <article
-                    aria-label={`Seller Preview Listing: ${listing.title}`}
-                    key={listing.id}
-                  >
-                    <span className="fictional-label">Simulated Demo Listing</span>
-                    <h3>{listing.title}</h3>
-                    <p>{listing.category} · {listing.condition}</p>
-                    <p>{formatRupiah(listing.price)}</p>
-                    <button
-                      className="button button-outline"
-                      onClick={() => openPreviewListing(listing)}
+                {previewListings.map(({ listing }) => {
+                  const availabilityLabel = checkoutAvailabilityLabel(
+                    getListingClaimability(checkoutState, {
+                      listingId: listing.id,
+                      viewerId: selectedAccountId,
+                      nowMs: clockNowMs,
+                    }),
+                  );
+                  return (
+                    <article
+                      aria-label={`Seller Preview Listing: ${listing.title}`}
+                      key={listing.id}
                     >
-                      View item
-                    </button>
-                  </article>
-                ))}
+                      <span className="fictional-label">Simulated Demo Listing</span>
+                      <h3>{listing.title}</h3>
+                      {availabilityLabel ? (
+                        <p className="checkout-availability-badge">{availabilityLabel}</p>
+                      ) : null}
+                      <p>{listing.category} · {listing.condition}</p>
+                      <p>{formatRupiah(listing.price)}</p>
+                      <button
+                        className="button button-outline"
+                        onClick={() => openPreviewListing(listing)}
+                      >
+                        View item
+                      </button>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </div>
@@ -2447,6 +2529,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 </div>
                 <span className="read-only-badge">Shared listing</span>
               </div>
+              {selectedListingAvailabilityLabel ? (
+                <p className="checkout-availability-badge">
+                  {selectedListingAvailabilityLabel}
+                </p>
+              ) : null}
               {selectedBuyer && selectedSessionListing ? (
                 selectedBuyerHold ? (
                   <section aria-label="Checkout Hold" className="checkout-panel">
