@@ -18,9 +18,7 @@ export const Route = createFileRoute("/auth/callback")({
       throw redirect({ href: "/login?confirmation=invalid" });
     }
 
-    throw redirect({
-      href: result.identityVerified ? "/dashboard" : "/?onboarding=verify",
-    });
+    throw redirect({ to: "/dashboard" });
   },
   component: AuthCallbackPage,
 });

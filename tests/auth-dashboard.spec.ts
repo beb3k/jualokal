@@ -44,21 +44,53 @@ test("Google login starts the Supabase OAuth flow with the app callback", async 
 });
 
 test("registration collects account credentials but no identity evidence", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Register" }).click();
+  await page.goto("/register");
 
-  const registration = page.getByRole("dialog", { name: "Begin registration" });
+  const registration = page.getByRole("main");
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
   await expect(registration.getByLabel("Email")).toBeVisible();
-  await expect(registration.getByLabel("Password")).toBeVisible();
+  await expect(registration.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(registration.getByLabel("Confirm password")).toBeVisible();
   await expect(
     registration.locator('input[type="file"], input[type="tel"]'),
   ).toHaveCount(0);
   await expect(registration).toContainText("Identity verification remains simulated");
 });
 
+test("registration rejects mismatched passwords without sending credentials", async ({ page }) => {
+  await page.goto("/register");
+
+  await page.getByLabel("Email").fill("new-member@example.com");
+  await page.getByLabel("Password", { exact: true }).fill("correct-password");
+  await page.getByLabel("Confirm password").fill("different-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByRole("alert")).toHaveText("Passwords do not match.");
+  await expect(page).toHaveURL(/\/register$/);
+  expect(page.url()).not.toContain("new-member@example.com");
+  expect(page.url()).not.toContain("correct-password");
+});
+
+test("landing See listing CTA opens the registration page", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "See listing" }).click();
+
+  await expect(page).toHaveURL(/\/register$/);
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+});
+
+test("landing does not host authenticated onboarding", async ({ page }) => {
+  await page.goto("/?onboarding=verify");
+
+  await expect(
+    page.getByRole("heading", { name: "Identity Verification walkthrough" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Secondhand goods, handed over nearby." })).toBeVisible();
+});
+
 test("landing login CTA opens the real login page", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Log in" }).click();
+  await page.getByRole("main").getByRole("link", { name: "Log in", exact: true }).click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();

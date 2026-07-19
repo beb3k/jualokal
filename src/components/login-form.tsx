@@ -45,11 +45,6 @@ export function LoginForm() {
         return;
       }
 
-      if (!result.identityVerified) {
-        window.location.assign("/?onboarding=verify");
-        return;
-      }
-
       await navigate({ to: "/dashboard" });
     } catch {
       setError("Sign in is temporarily unavailable. Try again.");
@@ -141,7 +136,7 @@ export function LoginForm() {
         </form>
         <p className="mt-6 text-center text-sm text-muted-foreground">
           New to Jualokal?{" "}
-          <Link className="font-medium text-primary hover:underline" to="/">
+          <Link className="font-medium text-primary hover:underline" to="/register">
             Begin registration
           </Link>
         </p>

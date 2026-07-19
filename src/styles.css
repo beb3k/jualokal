@@ -454,7 +454,8 @@ h2 {
 }
 
 .principle-grid article {
-  min-height: 245px;
+  position: relative;
+  min-height: 330px;
   border-top: 2px solid #173c2b;
   padding: 25px 5px 0;
 }
@@ -465,8 +466,113 @@ h2 {
   font-weight: 800;
 }
 
+.principle-art {
+  position: relative;
+  height: 112px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.principle-art span,
+.principle-art svg {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.art-access-person {
+  top: 31px;
+  left: 19%;
+  width: 48px;
+  height: 48px;
+  color: #b36b30;
+  stroke-width: 1.7;
+  animation: art-access-enter 4.5s ease-in-out infinite;
+}
+
+.art-access-gate {
+  top: 20px;
+  right: 20%;
+  width: 54px;
+  height: 74px;
+  border: 3px solid #173c2b;
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  transform-origin: right center;
+  animation: art-gate-open 4.5s ease-in-out infinite;
+}
+
+.art-nearby-home {
+  bottom: 29px;
+  width: 42px;
+  height: 42px;
+  color: #173c2b;
+  stroke-width: 1.7;
+}
+
+.art-nearby-home-start {
+  left: 10%;
+}
+
+.art-nearby-home-end {
+  right: 10%;
+}
+
+.art-nearby-path {
+  right: 24%;
+  bottom: 49px;
+  left: 24%;
+  border-top: 2px dashed rgba(23, 60, 43, 0.35);
+}
+
+.art-nearby-package {
+  bottom: 38px;
+  left: calc(20% + 6px);
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 6px;
+  color: #f6f0e4;
+  background: #b36b30;
+  stroke-width: 1.8;
+  animation: art-package-handover 4.5s ease-in-out infinite;
+}
+
+.art-private-radius {
+  top: 19px;
+  left: 20%;
+  width: 74px;
+  height: 74px;
+  border: 2px dashed rgba(179, 107, 48, 0.5);
+  border-radius: 50%;
+  animation: art-radius-protect 4.5s ease-in-out infinite;
+}
+
+.art-private-pin {
+  top: 36px;
+  left: calc(20% + 20px);
+  width: 34px;
+  height: 34px;
+  color: #b36b30;
+  stroke-width: 1.8;
+  animation: art-pin-hide 4.5s ease-in-out infinite;
+}
+
+.art-private-shield {
+  top: 25px;
+  right: 22%;
+  width: 62px;
+  height: 62px;
+  color: #173c2b;
+  fill: #e1e6d9;
+  stroke-width: 1.6;
+  animation: art-shield-cover 4.5s ease-in-out infinite;
+}
+
 .principle-grid h3 {
-  margin: 65px 0 12px;
+  margin: 28px 0 12px;
   font-family: Georgia, serif;
   font-size: 1.55rem;
   font-weight: 500;
@@ -521,6 +627,63 @@ footer {
 
 footer p {
   margin: 0;
+}
+
+footer nav {
+  display: flex;
+  gap: 18px;
+}
+
+footer nav a {
+  color: inherit;
+  text-underline-offset: 4px;
+}
+
+footer nav a:hover {
+  color: #173c2b;
+}
+
+@keyframes art-access-enter {
+  0%, 12% { transform: translateX(-18px); opacity: 0; }
+  30%, 62% { transform: translateX(0); opacity: 1; }
+  82%, 100% { transform: translateX(130px); opacity: 0; }
+}
+
+@keyframes art-gate-open {
+  0%, 35%, 100% { transform: perspective(80px) rotateY(0); }
+  52%, 82% { transform: perspective(80px) rotateY(62deg); }
+}
+
+@keyframes art-package-handover {
+  0%, 15% { transform: translateX(0) translateY(0); opacity: 0; }
+  25% { opacity: 1; }
+  50% { transform: translateX(90px) translateY(-10px); opacity: 1; }
+  78% { transform: translateX(180px) translateY(0); opacity: 1; }
+  90%, 100% { transform: translateX(180px) translateY(0); opacity: 0; }
+}
+
+@keyframes art-radius-protect {
+  0%, 24% { transform: scale(0.72); opacity: 0; }
+  42%, 68% { transform: scale(1); opacity: 1; }
+  84%, 100% { transform: scale(0.82); opacity: 0; }
+}
+
+@keyframes art-pin-hide {
+  0%, 52% { transform: translateX(0); opacity: 1; }
+  72%, 100% { transform: translateX(105px) scale(0.7); opacity: 0; }
+}
+
+@keyframes art-shield-cover {
+  0%, 35% { transform: translateX(30px) scale(0.82); opacity: 0; }
+  58%, 88% { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(0) scale(0.9); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .principle-art span,
+  .principle-art svg {
+    animation: none;
+  }
 }
 
 .dialog-backdrop {
@@ -1854,6 +2017,7 @@ footer p {
   }
 
   .promise-card {
+    order: -1;
     width: 96%;
   }
 
@@ -1877,11 +2041,11 @@ footer p {
   }
 
   .principle-grid article {
-    min-height: 200px;
+    min-height: 310px;
   }
 
   .principle-grid h3 {
-    margin-top: 45px;
+    margin-top: 25px;
   }
 
   .demo-invitation {
@@ -1893,6 +2057,10 @@ footer p {
   footer {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  footer nav {
+    flex-wrap: wrap;
   }
 
   .registration-panel {

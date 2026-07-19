@@ -1,18 +1,18 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Bell, Handshake, Menu, Package, Plus, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentMember } from "@/utils/auth";
+import { completeSimulatedIdentityVerification, getCurrentMember } from "@/utils/auth";
 
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: async () => {
     const member = await getCurrentMember();
     if (member === null) throw redirect({ to: "/login" });
-    if (!member.identityVerified) throw redirect({ href: "/?onboarding=verify" });
     return { member };
   },
   component: DashboardPage,
@@ -25,6 +25,10 @@ const activity = [
 ];
 
 function DashboardPage() {
+  const { member } = Route.useRouteContext();
+
+  if (!member.identityVerified) return <OnboardingStage />;
+
   return (
     <div className="flex min-h-svh bg-background text-foreground">
       <AppSidebar className="sticky top-0 hidden md:flex" />
@@ -113,6 +117,84 @@ function DashboardPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+function OnboardingStage() {
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function finishVerification() {
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const result = await completeSimulatedIdentityVerification();
+      if (result.status === "verified") {
+        window.location.assign("/dashboard");
+        return;
+      }
+
+      setError(
+        result.status === "authentication-required"
+          ? "Sign in again before completing this walkthrough."
+          : "Verification simulation could not be saved. Try again.",
+      );
+    } catch {
+      setError("Verification simulation is temporarily unavailable. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="grid min-h-svh place-items-center bg-muted/40 p-4 sm:p-6">
+      <Card className="w-full max-w-2xl border-primary/10 shadow-xl shadow-primary/5">
+        <CardHeader className="gap-4">
+          <Badge className="w-fit">Onboarding · Simulation</Badge>
+          <div className="grid size-12 place-items-center rounded-xl bg-secondary text-primary">
+            <ShieldCheck className="size-6" />
+          </div>
+          <div>
+            <CardTitle className="font-serif text-3xl tracking-tight">
+              Identity Verification walkthrough
+            </CardTitle>
+            <CardDescription className="mt-3 text-sm leading-6">
+              This simulated admission check shows how Jualokal establishes accountable
+              membership before marketplace access.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          <div className="rounded-lg border border-amber-600/20 bg-amber-500/10 p-4 text-sm leading-6">
+            This is not a real identity check. Do not enter or upload real ID, selfies,
+            biometrics, passwords, payment methods, or other sensitive evidence.
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 text-sm leading-6">
+            <input
+              checked={acknowledged}
+              className="mt-1 size-4 accent-primary"
+              onChange={(event) => setAcknowledged(event.target.checked)}
+              type="checkbox"
+            />
+            <span>I understand this is a simulation and will not provide real personal data.</span>
+          </label>
+          {error === null ? null : (
+            <p aria-live="polite" className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <Button
+            disabled={!acknowledged || submitting}
+            onClick={finishVerification}
+            size="lg"
+          >
+            {submitting ? "Saving simulation…" : "Complete simulated verification"}
+          </Button>
+        </CardContent>
+      </Card>
+    </main>
   );
 }
 
