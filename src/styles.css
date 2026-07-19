@@ -762,6 +762,24 @@ footer p {
   padding-bottom: 75px;
 }
 
+.trust-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  align-items: start;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.trust-overview .registration-panel {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+}
+
+.trust-overview .button {
+  scroll-margin-top: 72px;
+}
+
 .workspace-tabs {
   display: flex;
   width: min(1180px, calc(100% - 32px));
@@ -1137,6 +1155,75 @@ footer p {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 18px;
+}
+
+.custom-select {
+  position: relative;
+  flex: 1 1 250px;
+  min-width: min(250px, 100%);
+}
+
+.custom-select-label {
+  display: block;
+  margin-bottom: 7px;
+  color: #315846;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.custom-select-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(23, 60, 43, 0.2);
+  border-radius: 13px;
+  padding: 11px 13px;
+  color: #173c2b;
+  background: #fffdf8;
+  font: inherit;
+  font-weight: 750;
+  text-align: left;
+}
+
+.custom-select-options {
+  position: absolute;
+  z-index: 15;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(23, 60, 43, 0.16);
+  border-radius: 16px;
+  padding: 6px;
+  background: #fffdf8;
+  box-shadow: 0 18px 45px rgba(23, 37, 30, 0.16);
+}
+
+.custom-select-option {
+  display: grid;
+  gap: 2px;
+  border: 0;
+  border-radius: 11px;
+  padding: 10px 11px;
+  color: #173c2b;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.custom-select-option:hover,
+.custom-select-option:focus-visible,
+.custom-select-option[aria-selected="true"] {
+  background: #e8ebdf;
+}
+
+.custom-select-option small {
+  color: #65736b;
+  font-size: 0.7rem;
 }
 
 .checkout-panel {
@@ -1547,6 +1634,7 @@ footer p {
   }
 
   .demo-layout,
+  .trust-overview,
   .listing-card {
     grid-template-columns: 1fr;
   }
@@ -1849,6 +1937,45 @@ footer p {
   color: #fffdf8;
   border-color: #173c2b;
   background: #173c2b;
+}
+
+.location-refresh-actions,
+.empty-state-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.location-refresh-actions small {
+  max-width: 420px;
+  color: #65736b;
+}
+
+.discovery-announcement {
+  width: min(100% - 32px, 1180px);
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: #315846;
+  background: #e8ebdf;
+}
+
+.discovery-recovery {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(23, 60, 43, 0.16);
+  border-radius: 20px;
+  padding: 20px;
+  background: #fffdf8;
+}
+
+.discovery-recovery h3,
+.discovery-recovery p {
+  margin: 0;
 }
 
 .discovery-map {

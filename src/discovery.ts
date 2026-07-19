@@ -18,6 +18,37 @@ export type ApprovedDiscoveryCategory =
 export type DiscoveryCategory = (typeof DISCOVERY_CATEGORIES)[number];
 export type DistanceBand = "Under 1 km" | "1-2 km";
 
+export type DiscoveryOutcome =
+  | { kind: "location-denied" }
+  | { kind: "location-unavailable" }
+  | { kind: "stale-location" }
+  | { kind: "discovery-failure" }
+  | { kind: "category-empty"; category: ApprovedDiscoveryCategory }
+  | { kind: "nearby-empty" }
+  | { kind: "results"; resultCount: number };
+
+type ClassifyDiscoveryOutcomeInput = {
+  location: "valid" | "denied" | "unavailable" | "stale";
+  discoverySucceeded: boolean;
+  category: DiscoveryCategory;
+  resultCount: number;
+};
+
+export function classifyDiscoveryOutcome({
+  location,
+  discoverySucceeded,
+  category,
+  resultCount,
+}: ClassifyDiscoveryOutcomeInput): DiscoveryOutcome {
+  if (location === "denied") return { kind: "location-denied" };
+  if (location === "unavailable") return { kind: "location-unavailable" };
+  if (location === "stale") return { kind: "stale-location" };
+  if (!discoverySucceeded) return { kind: "discovery-failure" };
+  if (resultCount > 0) return { kind: "results", resultCount };
+  if (category !== "All") return { kind: "category-empty", category };
+  return { kind: "nearby-empty" };
+}
+
 export type DiscoveryViewer = {
   id: string;
   verified: boolean;

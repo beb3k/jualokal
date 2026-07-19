@@ -8,9 +8,8 @@ async function openTrustDemo(page: Page) {
 }
 
 async function recordSuccess(page: Page, sellerIndex: number) {
-  await page
-    .getByRole("combobox", { name: "Qualifying Demo Seller" })
-    .selectOption({ index: sellerIndex });
+  await page.getByRole("combobox", { name: "Qualifying Demo Seller" }).click();
+  await page.getByRole("listbox").getByRole("option").nth(sellerIndex).click();
   await page.getByRole("button", { name: "Record successful handover" }).click();
 }
 
@@ -48,6 +47,46 @@ test("different sellers earn Reliable and Trusted capacity while a repeat seller
 
   await expect(progress).toContainText(/5 (?:qualifying )?different (?:Demo )?sellers/i);
   await expectTier(progress, "Trusted", 5);
+});
+
+test("custom Seller selector is keyboard-operable and trust cards use the viewport", async ({
+  page,
+}, testInfo) => {
+  const progress = await openTrustDemo(page);
+  const summary = page.getByRole("region", { name: "Trust Summary preview" });
+  const sellerSelect = page.getByRole("combobox", { name: "Qualifying Demo Seller" });
+
+  await sellerSelect.press("ArrowDown");
+  const sellerOptions = page.getByRole("listbox");
+  const firstOption = sellerOptions.getByRole("option", { name: /Dimas P./ });
+  const secondOption = sellerOptions.getByRole("option", { name: /Sari N./ });
+  await expect(firstOption).toBeFocused();
+  await firstOption.press("ArrowDown");
+  await expect(secondOption).toBeFocused();
+  await secondOption.press("Enter");
+  await expect(sellerSelect).toContainText("Sari N.");
+  await expect(sellerSelect).toBeFocused();
+
+  const boxes = await page.locator(".trust-overview").evaluate((overview) => {
+    const progressElement = overview.querySelector('[aria-label="Tier Progress"]');
+    const summaryElement = overview.querySelector('[aria-label="Trust Summary preview"]');
+    if (!(progressElement instanceof HTMLElement) || !(summaryElement instanceof HTMLElement)) {
+      return null;
+    }
+    const progressBox = progressElement.getBoundingClientRect();
+    const summaryBox = summaryElement.getBoundingClientRect();
+    return {
+      progress: { x: progressBox.x, y: progressBox.y, width: progressBox.width, height: progressBox.height },
+      summary: { x: summaryBox.x, y: summaryBox.y },
+    };
+  });
+  if (!boxes) throw new Error("Trust overview layout unavailable");
+  if (testInfo.project.name === "desktop") {
+    expect(boxes.summary.x).toBeGreaterThan(boxes.progress.x + boxes.progress.width);
+    expect(Math.abs(boxes.summary.y - boxes.progress.y)).toBeLessThan(8);
+  } else {
+    expect(boxes.summary.y).toBeGreaterThan(boxes.progress.y + boxes.progress.height);
+  }
 });
 
 test("a first strike resets and warns while a second overlapping strike suspends both roles", async ({

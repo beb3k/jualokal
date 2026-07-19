@@ -100,8 +100,26 @@ function RegistrationPanel({
 
 function App() {
   const [registrationOpen, setRegistrationOpen] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(
+    () => new URLSearchParams(window.location.search).get("demo") === "1",
+  );
   const [memberVerified, setMemberVerified] = useState(false);
+
+  function openDemo() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("demo", "1");
+    window.history.replaceState(null, "", url);
+    setDemoOpen(true);
+  }
+
+  function closeDemo() {
+    const url = new URL(window.location.href);
+    for (const key of ["demo", "account", "workspace", "category", "view", "seller"]) {
+      url.searchParams.delete(key);
+    }
+    window.history.replaceState(null, "", url);
+    setDemoOpen(false);
+  }
 
   if (memberVerified) {
     return <VerifiedMemberExperience onExit={() => setMemberVerified(false)} />;
@@ -110,7 +128,7 @@ function App() {
   if (demoOpen) {
     return (
       <Suspense fallback={<p className="loading">Opening the fictional demo…</p>}>
-        <DemoExperience onExit={() => setDemoOpen(false)} />
+        <DemoExperience onExit={closeDemo} />
       </Suspense>
     );
   }
@@ -124,7 +142,7 @@ function App() {
           </span>
           <span>jualokal</span>
         </a>
-        <button className="button button-compact button-outline" onClick={() => setDemoOpen(true)}>
+        <button className="button button-compact button-outline" onClick={openDemo}>
           Demo Mode
           <span aria-hidden="true">↗</span>
         </button>
@@ -145,7 +163,7 @@ function App() {
                 Begin registration
                 <span aria-hidden="true">→</span>
               </button>
-              <button className="button button-quiet" onClick={() => setDemoOpen(true)}>
+              <button className="button button-quiet" onClick={openDemo}>
                 Explore Demo Mode
                 <span aria-hidden="true">↗</span>
               </button>
@@ -208,7 +226,7 @@ function App() {
               and 25 simulated listings in an Indonesian setting. Each browser session is
               isolated and resettable; nothing shown is real marketplace activity.
             </p>
-            <button className="button button-light" onClick={() => setDemoOpen(true)}>
+            <button className="button button-light" onClick={openDemo}>
               Open the fictional demo
               <span aria-hidden="true">→</span>
             </button>
