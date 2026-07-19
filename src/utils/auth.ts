@@ -27,10 +27,53 @@ type OAuthCallbackResult =
 
 type CallbackInput = { code: string };
 
+type VerificationInput = {
+  publicFirstName: string;
+  publicLastName: string | null;
+};
+
+type PublicProfileInput = { memberId: string };
+
+type ProfilePictureInput = { path: string | null };
+
 type VerificationResult =
   | { status: "verified" }
   | { status: "authentication-required" }
   | { status: "error" };
+
+type PublicMemberProfile = {
+  memberId: string;
+  publicFirstName: string;
+  publicLastInitial: string | null;
+  profilePicturePath: string | null;
+  identityVerified: boolean;
+  successfulHandoverCount: number;
+  transactionPartnerCount: number;
+  buyerTier: "verified_buyer" | "reliable_buyer" | "trusted_buyer";
+  available: boolean;
+};
+
+type CurrentMemberBase = {
+  id: string;
+  email: string;
+  profilePicturePath: string | null;
+  successfulHandoverCount: number;
+  transactionPartnerCount: number;
+  buyerTier: "verified_buyer" | "reliable_buyer" | "trusted_buyer";
+  restricted: boolean;
+};
+
+type CurrentMember =
+  | (CurrentMemberBase & {
+      identityVerified: false;
+      publicFirstName: null;
+      publicLastInitial: null;
+    })
+  | (CurrentMemberBase & {
+      identityVerified: true;
+      publicFirstName: string;
+      publicLastInitial: string | null;
+    });
 
 function parseCredentials(input: unknown): AuthCredentials {
   if (
@@ -66,13 +109,69 @@ function parseCallbackInput(input: unknown): CallbackInput {
   return { code: input.code };
 }
 
-function hasSimulatedIdentityVerification(metadata: unknown): boolean {
-  return (
-    typeof metadata === "object" &&
-    metadata !== null &&
-    "identity_verification" in metadata &&
-    metadata.identity_verification === "simulated"
-  );
+function parseVerificationInput(input: unknown): VerificationInput {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("publicFirstName" in input) ||
+    typeof input.publicFirstName !== "string"
+  ) {
+    throw new Error("Public first name is required.");
+  }
+
+  const publicFirstName = input.publicFirstName.trim();
+  const publicLastName =
+    "publicLastName" in input && typeof input.publicLastName === "string"
+      ? input.publicLastName.trim()
+      : "";
+
+  if (publicFirstName.length === 0 || publicFirstName.length > 50 || publicLastName.length > 100) {
+    throw new Error("Enter a valid Public Identity name.");
+  }
+
+  return {
+    publicFirstName,
+    publicLastName: publicLastName.length === 0 ? null : publicLastName,
+  };
+}
+
+function parsePublicProfileInput(input: unknown): PublicProfileInput {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("memberId" in input) ||
+    typeof input.memberId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      input.memberId,
+    )
+  ) {
+    throw new Error("Valid member ID is required.");
+  }
+
+  return { memberId: input.memberId };
+}
+
+function parseProfilePictureInput(input: unknown): ProfilePictureInput {
+  if (typeof input !== "object" || input === null || !("path" in input)) {
+    throw new Error("Profile picture path is required.");
+  }
+
+  if (input.path === null) return { path: null };
+  if (typeof input.path !== "string" || input.path.trim() === "") {
+    throw new Error("Profile picture path is invalid.");
+  }
+
+  return { path: input.path.trim() };
+}
+
+async function loadCurrentProfile(supabase: ReturnType<typeof createSupabaseServerClient>) {
+  const { data, error } = await supabase.rpc("get_current_member_profile").maybeSingle();
+
+  if (error || data === null) {
+    throw new Error("Authenticated member profile is unavailable.");
+  }
+
+  return data;
 }
 
 export const registerAccount = createServerFn({ method: "POST" })
@@ -104,15 +203,17 @@ export const signIn = createServerFn({ method: "POST" })
   .validator(parseCredentials)
   .handler(async ({ data }): Promise<SignInResult> => {
     const supabase = createSupabaseServerClient();
-    const { data: login, error } = await supabase.auth.signInWithPassword(data);
+    const { error } = await supabase.auth.signInWithPassword(data);
 
     if (error) {
       return { status: "error", message: "Email or password is incorrect." };
     }
 
+    const profile = await loadCurrentProfile(supabase);
+
     return {
       status: "authenticated",
-      identityVerified: hasSimulatedIdentityVerification(login.user.user_metadata),
+      identityVerified: profile.identity_verification_status === "simulated_verified",
     };
   });
 
@@ -139,18 +240,46 @@ export const startGoogleSignIn = createServerFn({ method: "POST" }).handler(
   },
 );
 
-export const getCurrentMember = createServerFn({ method: "GET" }).handler(async () => {
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
+export const getCurrentMember = createServerFn({ method: "GET" }).handler(
+  async (): Promise<CurrentMember | null> => {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
 
-  if (error || data.user === null) return null;
+    if (error || data.user === null) return null;
 
-  return {
-    id: data.user.id,
-    email: data.user.email ?? "",
-    identityVerified: hasSimulatedIdentityVerification(data.user.user_metadata),
-  };
-});
+    const profile = await loadCurrentProfile(supabase);
+
+    const currentMember = {
+      id: data.user.id,
+      email: data.user.email ?? "",
+      profilePicturePath: profile.profile_picture_path,
+      successfulHandoverCount: profile.successful_handover_count,
+      transactionPartnerCount: profile.transaction_partner_count,
+      buyerTier: profile.buyer_tier,
+      restricted: profile.is_restricted,
+    };
+
+    if (profile.identity_verification_status === "unverified") {
+      return {
+        ...currentMember,
+        identityVerified: false,
+        publicFirstName: null,
+        publicLastInitial: null,
+      };
+    }
+
+    if (profile.public_first_name === null) {
+      throw new Error("Verified member Public Identity is incomplete.");
+    }
+
+    return {
+      ...currentMember,
+      identityVerified: true,
+      publicFirstName: profile.public_first_name,
+      publicLastInitial: profile.public_last_initial,
+    };
+  },
+);
 
 export const confirmEmail = createServerFn({ method: "POST" })
   .validator(parseCallbackInput)
@@ -160,9 +289,11 @@ export const confirmEmail = createServerFn({ method: "POST" })
 
     if (error || callback.user === null) return { status: "error" };
 
+    const profile = await loadCurrentProfile(supabase);
+
     return {
       status: "authenticated",
-      identityVerified: hasSimulatedIdentityVerification(callback.user.user_metadata),
+      identityVerified: profile.identity_verification_status === "simulated_verified",
     };
   });
 
@@ -172,8 +303,9 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: error === null };
 });
 
-export const completeSimulatedIdentityVerification = createServerFn({ method: "POST" }).handler(
-  async (): Promise<VerificationResult> => {
+export const completeSimulatedIdentityVerification = createServerFn({ method: "POST" })
+  .validator(parseVerificationInput)
+  .handler(async ({ data }): Promise<VerificationResult> => {
     const supabase = createSupabaseServerClient();
     const { data: current, error: currentError } = await supabase.auth.getUser();
 
@@ -181,12 +313,50 @@ export const completeSimulatedIdentityVerification = createServerFn({ method: "P
       return { status: "authentication-required" };
     }
 
-    const { error } = await supabase.auth.updateUser({
-      data: { identity_verification: "simulated" },
+    const { error } = await supabase.rpc("complete_simulated_identity_verification", {
+      public_first_name: data.publicFirstName,
+      public_last_name: data.publicLastName,
     });
 
     return error === null
       ? { status: "verified" }
       : { status: "error" };
-  },
-);
+  });
+
+export const getPublicMemberProfile = createServerFn({ method: "GET" })
+  .validator(parsePublicProfileInput)
+  .handler(async ({ data }): Promise<PublicMemberProfile | null> => {
+    const supabase = createSupabaseServerClient();
+    const { data: profile, error } = await supabase
+      .rpc("get_public_member_profile", { target_member_id: data.memberId })
+      .maybeSingle();
+
+    if (error) throw new Error("Public member profile is unavailable.");
+    if (profile === null) return null;
+    if (profile.public_first_name === null) {
+      throw new Error("Public Identity is incomplete.");
+    }
+
+    return {
+      memberId: profile.member_id,
+      publicFirstName: profile.public_first_name,
+      publicLastInitial: profile.public_last_initial,
+      profilePicturePath: profile.profile_picture_path,
+      identityVerified: profile.identity_verified,
+      successfulHandoverCount: profile.successful_handover_count,
+      transactionPartnerCount: profile.transaction_partner_count,
+      buyerTier: profile.buyer_tier,
+      available: profile.available,
+    };
+  });
+
+export const updateCurrentProfilePicture = createServerFn({ method: "POST" })
+  .validator(parseProfilePictureInput)
+  .handler(async ({ data }) => {
+    const supabase = createSupabaseServerClient();
+    const { error } = await supabase.rpc("update_current_member_profile", {
+      profile_picture_path: data.path,
+    });
+
+    return { ok: error === null };
+  });

@@ -30,8 +30,8 @@ contract changes.
 | Phase | State | Evidence |
 |---|---|---|
 | Authentication foundation | Complete | Commit `78ba652`; typecheck, 18 focused phone/desktop checks, production build passed |
-| Member profile persistence | Active next task | Not started |
-| Seller Activation and encrypted Home Anchor | Pending | Blocked by member profile persistence |
+| Member profile persistence | Complete | Hosted migration, remote lint and anonymous boundary; local RLS, typecheck, 18 focused checks, build passed |
+| Seller Activation and encrypted Home Anchor | Active next task | Unblocked by member profile persistence |
 | Listing publication and private photos | Pending | Blocked by Seller Activation |
 | Privacy-safe discovery | Pending | Blocked by listings and protected location service |
 | Structured Questions | Pending | Blocked by listings |
@@ -45,6 +45,9 @@ contract changes.
 
 Objective: persist one authenticated member profile and enforce the admission boundary for
 the real marketplace.
+
+Implementation status: complete and verified locally and against hosted Supabase. Project-owner
+phone and desktop acceptance remains pending.
 
 ### Deliverables
 
@@ -90,7 +93,19 @@ the real marketplace.
 - GitNexus: 11 files, 20 symbols, two expected flows, MEDIUM risk
 - Live phone and desktop acceptance: pending project owner
 
+### 2026-07-19 — persisted member foundation
+
+- Branch: `codex/issue-1-real-auth`
+- Migration: `202607190001_member_profiles.sql`
+- Isolated PostgreSQL 17 migration and RLS checks: passed
+- Typecheck: passed
+- Focused auth checks: 18/18 across phone and desktop
+- Production build: passed
+- Hosted migration history: local and remote version `202607190001` match
+- Hosted database lint: passed, no public-schema errors
+- Hosted anonymous boundary: table and all member RPCs deny access
+- Live phone and desktop acceptance: pending project owner
+
 ## Open inputs
 
-- Hosted Supabase project connection values are required before migration verification.
 - Project owner will supply approved listing photographs before photo-flow acceptance.

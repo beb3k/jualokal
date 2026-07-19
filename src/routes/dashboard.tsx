@@ -29,6 +29,10 @@ function DashboardPage() {
 
   if (!member.identityVerified) return <OnboardingStage />;
 
+  const publicIdentity = [member.publicFirstName, member.publicLastInitial]
+    .filter((namePart) => namePart !== null)
+    .join(" ");
+
   return (
     <div className="flex min-h-svh bg-background text-foreground">
       <AppSidebar className="sticky top-0 hidden md:flex" />
@@ -64,7 +68,9 @@ function DashboardPage() {
           <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <Badge>Verified member</Badge>
-              <h2 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">Welcome back, Dimas.</h2>
+              <h2 className="mt-3 font-serif text-3xl tracking-tight sm:text-4xl">
+                Welcome back, {publicIdentity}.
+              </h2>
               <p className="mt-2 text-sm text-muted-foreground">Here’s what is happening nearby today.</p>
             </div>
             <Button className="sm:hidden">
@@ -123,6 +129,8 @@ function DashboardPage() {
 function OnboardingStage() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publicFirstName, setPublicFirstName] = useState("");
+  const [publicLastName, setPublicLastName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function finishVerification() {
@@ -130,7 +138,9 @@ function OnboardingStage() {
     setSubmitting(true);
 
     try {
-      const result = await completeSimulatedIdentityVerification();
+      const result = await completeSimulatedIdentityVerification({
+        data: { publicFirstName, publicLastName },
+      });
       if (result.status === "verified") {
         window.location.assign("/dashboard");
         return;
@@ -171,6 +181,39 @@ function OnboardingStage() {
             This is not a real identity check. Do not enter or upload real ID, selfies,
             biometrics, passwords, payment methods, or other sensitive evidence.
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="public-first-name">
+                Public first name
+              </label>
+              <input
+                autoComplete="given-name"
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                id="public-first-name"
+                maxLength={50}
+                onChange={(event) => setPublicFirstName(event.target.value)}
+                required
+                value={publicFirstName}
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="public-last-name">
+                Last name (optional)
+              </label>
+              <input
+                autoComplete="family-name"
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                id="public-last-name"
+                maxLength={100}
+                onChange={(event) => setPublicLastName(event.target.value)}
+                value={publicLastName}
+              />
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+              Other Verified Members see only your first name and, when supplied, last initial.
+              The full last name is discarded after this simulation.
+            </p>
+          </div>
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4 text-sm leading-6">
             <input
               checked={acknowledged}
@@ -186,7 +229,7 @@ function OnboardingStage() {
             </p>
           )}
           <Button
-            disabled={!acknowledged || submitting}
+            disabled={!acknowledged || publicFirstName.trim() === "" || submitting}
             onClick={finishVerification}
             size="lg"
           >
