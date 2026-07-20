@@ -175,19 +175,87 @@ function App() {
             </p>
           </div>
 
-          <div aria-label="Jualokal privacy promise" className="promise-card" role="img">
-            <div className="promise-orbit promise-orbit-one" />
-            <div className="promise-orbit promise-orbit-two" />
-            <div className="promise-centre">
-              <span className="promise-lock" aria-hidden="true">
-                ⌂
-              </span>
-              <strong>Close to home.</strong>
-              <span>Private from the start.</span>
+          <div aria-label="Jualokal privacy promise" className="marketplace-window" role="img">
+            <div className="marketplace-window-heading">
+              <span>Private marketplace</span>
+              <strong>Bandung · nearby</strong>
             </div>
-            <span className="promise-label label-top">Portable goods</span>
-            <span className="promise-label label-right">Nearby handover</span>
-            <span className="promise-label label-bottom">Protected location</span>
+            <div className="marketplace-window-path">
+              <span>01</span>
+              <div>
+                <strong>Verified access</strong>
+                <small>Accountable members enter first</small>
+              </div>
+            </div>
+            <div className="marketplace-window-path marketplace-window-path-featured">
+              <span>02</span>
+              <div>
+                <strong>Nearby discovery</strong>
+                <small>Portable goods within a fixed local area</small>
+              </div>
+            </div>
+            <div className="marketplace-window-path">
+              <span>03</span>
+              <div>
+                <strong>Protected handover</strong>
+                <small>Meet nearby without publishing a home</small>
+              </div>
+            </div>
+            <div className="marketplace-window-footer">
+              <span aria-hidden="true">⌂</span>
+              <div>
+                <strong>Close to home.</strong>
+                <small>Private from the start.</small>
+                <span className="marketplace-window-terms">
+                  <span>Portable goods</span>
+                  <span>Nearby handover</span>
+                  <span>Protected location</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="Marketplace paths" className="marketplace-paths">
+          <div className="marketplace-paths-heading">
+            <p className="eyebrow">Choose your path</p>
+            <h2 id="marketplace-paths-title">One local marketplace. Two clear ways in.</h2>
+            <p>
+              Every participant begins with accountable membership. Selling becomes available
+              through a separate Seller Activation step.
+            </p>
+          </div>
+          <div className="marketplace-path-grid">
+            <article className="marketplace-path marketplace-path-buyer">
+              <span className="path-label">Buyer · included with membership</span>
+              <h3>Buy nearby</h3>
+              <p>
+                Discover portable secondhand goods, inspect the full listing, and complete a
+                protected in-person handover.
+              </p>
+              <button
+                className="button button-primary"
+                onClick={() => setRegistrationOpen(true)}
+              >
+                Join Jualokal to buy
+                <span aria-hidden="true">→</span>
+              </button>
+            </article>
+            <article className="marketplace-path marketplace-path-seller">
+              <span className="path-label">Seller · activated separately</span>
+              <h3>Sell nearby</h3>
+              <p>
+                Join as a member first, then activate selling while keeping your exact Home
+                Anchor private.
+              </p>
+              <button
+                className="button button-outline"
+                onClick={() => setRegistrationOpen(true)}
+              >
+                Join Jualokal to sell
+                <span aria-hidden="true">→</span>
+              </button>
+            </article>
           </div>
         </section>
 

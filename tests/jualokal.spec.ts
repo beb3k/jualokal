@@ -1,4 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function expectHorizontallyContained(page: Page, locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(-1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width + 1);
+}
 
 async function enterVerifiedMember(page: Page) {
   await page.goto("/");
@@ -23,6 +32,38 @@ test("public visitors can understand Jualokal and begin registration without see
     page.getByRole("heading", { name: /secondhand goods, handed over nearby/i }),
   ).toBeVisible();
   await expect(page.getByText(/private, hyperlocal marketplace/i)).toBeVisible();
+  await expect(page.getByText("Portable goods", { exact: true })).toBeVisible();
+  await expect(page.getByText("Nearby handover", { exact: true })).toBeVisible();
+  await expect(page.getByText("Protected location", { exact: true })).toBeVisible();
+
+  const marketplacePaths = page.getByRole("region", { name: "Marketplace paths" });
+  await expect(marketplacePaths).toBeVisible();
+  await expect(marketplacePaths.getByRole("heading", { name: "Buy nearby" })).toBeVisible();
+  await expect(marketplacePaths.getByRole("heading", { name: "Sell nearby" })).toBeVisible();
+  await expect(
+    marketplacePaths.getByRole("button", { name: "Join Jualokal to buy" }),
+  ).toBeVisible();
+  await expect(
+    marketplacePaths.getByRole("button", { name: "Join Jualokal to sell" }),
+  ).toBeVisible();
+
+  await expectHorizontallyContained(
+    page,
+    page.getByRole("img", { name: "Jualokal privacy promise" }),
+  );
+  await expectHorizontallyContained(page, marketplacePaths);
+  for (const pathCard of await marketplacePaths.locator("article").all()) {
+    await expectHorizontallyContained(page, pathCard);
+  }
+  await expectHorizontallyContained(
+    page,
+    marketplacePaths.getByRole("button", { name: "Join Jualokal to buy" }),
+  );
+  await expectHorizontallyContained(
+    page,
+    marketplacePaths.getByRole("button", { name: "Join Jualokal to sell" }),
+  );
+
   await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
   await expect(page.getByText(/Rp\s?\d/)).toHaveCount(0);
 
@@ -92,6 +133,16 @@ test("completed verification creates a buyer-only Verified Member", async ({ pag
   await expect(marketplace.getByRole("heading", { name: "Verified Member" })).toBeVisible();
   await expect(marketplace.getByText("Browse enabled", { exact: true })).toBeVisible();
   await expect(marketplace.getByText("Buy enabled", { exact: true })).toBeVisible();
+
+  const nextSteps = marketplace.getByRole("region", { name: "Marketplace next steps" });
+  await expect(nextSteps).toBeVisible();
+  await expect(nextSteps.getByRole("heading", { name: "Discover nearby" })).toBeVisible();
+  await expect(nextSteps.getByRole("heading", { name: "Purchase with confidence" })).toBeVisible();
+  await expect(nextSteps.getByRole("heading", { name: "Sell when ready" })).toBeVisible();
+  await expectHorizontallyContained(page, nextSteps);
+  for (const nextStep of await nextSteps.locator("article").all()) {
+    await expectHorizontallyContained(page, nextStep);
+  }
 
   const sellerActivation = marketplace.getByRole("region", { name: "Seller Activation" });
   await expect(sellerActivation).toContainText("Not activated");
