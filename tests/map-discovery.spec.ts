@@ -67,6 +67,60 @@ test("Map View opens one privacy-preserving Seller Preview and the full listing"
   await expect(listing).toBeFocused();
 });
 
+test("List View prioritizes marketplace controls and opens a complete Listing inspection", async ({
+  page,
+}) => {
+  await openDemo(page);
+
+  const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
+  const viewControl = page.getByRole("group", { name: "Discovery View" });
+  await viewControl.getByRole("button", { name: "List" }).click();
+
+  await expect(page.getByRole("searchbox")).toHaveCount(0);
+  await expect(page.getByLabel("Category Filter")).toHaveValue("All");
+
+  const card = discovery.getByRole("article", {
+    name: "Nearby simulated listing: Handwoven rattan market basket",
+  });
+  await expect(
+    card.getByRole("img", {
+      name: "Synthetic presentation for Handwoven rattan market basket",
+    }),
+  ).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Handwoven rattan market basket" })).toBeVisible();
+  await expect(card.getByText("Portable household goods", { exact: true })).toBeVisible();
+  await expect(card.getByText("Good", { exact: true })).toBeVisible();
+  await expect(card.getByText("Under 1 km", { exact: true })).toBeVisible();
+  await expect(card.getByText("Rp 185.000", { exact: true })).toBeVisible();
+
+  const credibility = card.getByRole("region", { name: "Seller credibility: Dimas P." });
+  await expect(credibility.getByRole("button", { name: "Dimas P." })).toBeVisible();
+  await expect(credibility).toContainText("Simulated as verified");
+  await expect(credibility).toContainText(/successful handovers/i);
+
+  const discoveryBox = await discovery.boundingBox();
+  const commitmentsBox = await page
+    .getByRole("region", { name: "Purchase Commitments" })
+    .boundingBox();
+  expect(discoveryBox).not.toBeNull();
+  expect(commitmentsBox).not.toBeNull();
+  expect(discoveryBox!.y).toBeLessThan(commitmentsBox!.y);
+
+  const queryBefore = new URL(page.url()).search;
+  await card.getByRole("button", { name: "View item" }).click();
+
+  const listing = page.getByRole("region", { name: "Demo Listing" });
+  await expect(listing).toBeFocused();
+  await expect(
+    listing.getByRole("heading", { name: "Handwoven rattan market basket" }),
+  ).toBeVisible();
+  await expect(listing.getByRole("region", { name: "Checkout" })).toBeVisible();
+  await expect(
+    listing.getByRole("region", { name: "Structured listing questions" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).search).toBe(queryBefore);
+});
+
 test("Map and List use one filtered result while only explicit view preference persists", async ({
   page,
 }) => {

@@ -2333,68 +2333,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           {discoveryAnnouncement}
         </p>
 
-        <section aria-label="Purchase Commitments" className="registration-panel">
-          <p className="eyebrow">Purchase Commitments - Simulation</p>
-          <h2>
-            {selectedBuyerActiveCommitments.length} of {selectedTierProgress?.activePurchaseLimit ?? 0} active
-            Purchase Commitments
-          </h2>
-          {selectedBuyerCommitments.length ? (
-            selectedBuyerCommitments.map((commitment) => (
-              <article
-                aria-label={`Purchase Commitment: ${commitment.snapshot.title}`}
-                className="checkout-panel"
-                key={commitment.id}
-              >
-                <p className="eyebrow">Purchase Commitment - Simulation</p>
-                <h3>{commitment.snapshot.title}</h3>
-                <p>Transaction status: {commitment.lifecycleStatus}</p>
-                <p>
-                  Simulated Escrow:{" "}
-                  {commitment.escrowStatus === "Held - simulated"
-                    ? "Held"
-                    : commitment.escrowStatus === "Refunded - simulated"
-                      ? "Refunded in full"
-                      : "Released"}
-                </p>
-                <p>
-                  Simulated payout:{" "}
-                  {commitment.payoutStatus === "Pending - simulated"
-                    ? "Pending"
-                    : commitment.payoutStatus === "Not paid - simulated"
-                      ? "Not paid"
-                      : "Paid"}
-                </p>
-                {commitment.trustOutcome === "Successful handover" ? (
-                  <p>Successful handover recorded for private Tier Progress.</p>
-                ) : null}
-                <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
-                  <h4>Purchase Snapshot - unchangeable</h4>
-                  <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
-                  <p><strong>Category:</strong> {commitment.snapshot.category}</p>
-                  <p><strong>Description:</strong> {commitment.snapshot.description}</p>
-                  <p><strong>Condition Disclosure:</strong> {commitment.snapshot.conditionDisclosure}</p>
-                  <p><strong>Condition Grade:</strong> {commitment.snapshot.conditionGrade}</p>
-                  <p><strong>Measurements / specifications:</strong> {commitment.snapshot.specifications}</p>
-                  <p><strong>Included parts:</strong> {commitment.snapshot.includedParts}</p>
-                  <p><strong>Frozen fictional item photos:</strong></p>
-                  <ul>
-                    {commitment.snapshot.photos.map((photo) => <li key={photo}>{photo}</li>)}
-                  </ul>
-                  <p>Buyer total: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
-                  <p>Seller payout: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
-                  <p>No platform or payment fee - simulation only.</p>
-                </section>
-              </article>
-            ))
-          ) : (
-            <p>No active Purchase Commitments. Successful simulated payments will appear here.</p>
-          )}
-        </section>
-        {checkoutNotice ? (
-          <p role="status">{checkoutNotice}</p>
-        ) : null}
-
         <section aria-label="Demo marketplace listings" className="discovery-catalog">
           <div className="inventory-heading discovery-heading">
             <div>
@@ -2639,34 +2577,78 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 const seller = demoSellers.find(
                   (candidate) => candidate.id === listing.sellerId,
                 );
+                const sellerTrustSummary = seller
+                  ? getPublicTrustSummary(trustStates[seller.id], clockNowMs)
+                  : undefined;
+                const listingIsHeld = checkoutState.holds.some(
+                  (hold) => hold.listingId === listing.id,
+                );
                 return (
-                  <article aria-label={`Nearby simulated listing: ${listing.title}`} key={listing.id}>
-                    <span className="fictional-label">Simulated Demo Listing</span>
-                    <h3>{listing.title}</h3>
-                    {seller ? (
-                      <p>
-                        <button
-                          className="text-button seller-identity-button"
-                          onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
-                        >
-                          {seller.publicName}
-                        </button>{" "}
-                        - Fictional Demo Seller
-                      </p>
-                    ) : null}
-                    <div className="inventory-facts">
-                      <span>{listing.category}</span>
-                      <span>{listing.condition}</span>
-                      <span>{distanceBand}</span>
-                      <span>{formatRupiah(listing.price)}</span>
-                    </div>
-                    <small>{listing.imageLabel}</small>
-                    <button
-                      className="button button-outline"
-                      onClick={() => loadListingForEditing(listing)}
+                  <article
+                    aria-label={`Nearby simulated listing: ${listing.title}`}
+                    className="marketplace-listing-card"
+                    key={listing.id}
+                  >
+                    <div
+                      aria-label={`Synthetic presentation for ${listing.title}`}
+                      className="listing-card-media"
+                      role="img"
                     >
-                      View item
-                    </button>
+                      <span aria-hidden="true">{listing.category.slice(0, 1)}</span>
+                      <small>Fictional item presentation</small>
+                      <strong>{listing.imageLabel}</strong>
+                    </div>
+                    <div className="listing-card-content">
+                      <div className="listing-card-topline">
+                        <span className="fictional-label">Simulated Demo Listing</span>
+                        <span className={listingIsHeld ? "listing-availability is-held" : "listing-availability"}>
+                          {listingIsHeld ? "Checkout in progress" : "Available"}
+                        </span>
+                      </div>
+                      <h3>{listing.title}</h3>
+                      {seller ? (
+                        <section
+                          aria-label={`Seller credibility: ${seller.publicName}`}
+                          className="listing-seller-credibility"
+                        >
+                          <div className="avatar avatar-seller" aria-hidden="true">
+                            {seller.initials}
+                          </div>
+                          <div>
+                            <button
+                              className="text-button seller-identity-button"
+                              onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
+                            >
+                              {seller.publicName}
+                            </button>
+                            <span>{seller.identityStatus}</span>
+                          </div>
+                          <small>
+                            {sellerTrustSummary?.successfulHandoverCount ?? 0} successful handovers
+                          </small>
+                        </section>
+                      ) : null}
+                      <div className="inventory-facts listing-card-facts">
+                        <span>{listing.category}</span>
+                        <span>{listing.condition}</span>
+                        <span>{distanceBand}</span>
+                      </div>
+                      <div className="listing-card-footer">
+                        <div>
+                          <small>Transaction Price</small>
+                          <strong>{formatRupiah(listing.price)}</strong>
+                        </div>
+                        <button
+                          className="button button-primary"
+                          onClick={() => {
+                            loadListingForEditing(listing);
+                            window.requestAnimationFrame(() => listingDetailRef.current?.focus());
+                          }}
+                        >
+                          View item
+                        </button>
+                      </div>
+                    </div>
                   </article>
                 );
               })}
@@ -2751,18 +2733,30 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 {previewListings.map(({ listing }) => (
                   <article
                     aria-label={`Seller Preview Listing: ${listing.title}`}
+                    className="seller-preview-listing-card"
                     key={listing.id}
                   >
-                    <span className="fictional-label">Simulated Demo Listing</span>
-                    <h3>{listing.title}</h3>
-                    <p>{listing.category} · {listing.condition}</p>
-                    <p>{formatRupiah(listing.price)}</p>
-                    <button
-                      className="button button-outline"
-                      onClick={() => openPreviewListing(listing)}
+                    <div
+                      aria-label={`Synthetic presentation for ${listing.title}`}
+                      className="seller-preview-listing-media"
+                      role="img"
                     >
-                      View item
-                    </button>
+                      <span aria-hidden="true">{listing.category.slice(0, 1)}</span>
+                    </div>
+                    <div>
+                      <span className="fictional-label">Simulated Demo Listing</span>
+                      <h3>{listing.title}</h3>
+                      <p>{listing.category} · {listing.condition}</p>
+                      <div className="seller-preview-listing-footer">
+                        <strong>{formatRupiah(listing.price)}</strong>
+                        <button
+                          className="button button-primary"
+                          onClick={() => openPreviewListing(listing)}
+                        >
+                          View item
+                        </button>
+                      </div>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -2771,6 +2765,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ) : null}
 
         <div className="demo-layout">
+          <div className="listing-inspection-heading">
+            <div>
+              <p className="eyebrow">Selected Listing · Simulation</p>
+              <h2>Inspect the item before checkout.</h2>
+            </div>
+            <p>
+              Review the shared Listing, Seller context, condition details, and protected
+              checkout entry without leaving nearby discovery.
+            </p>
+          </div>
           {discoveryOutcome.kind === "results" &&
           selectedListingDistanceKm !== undefined &&
           selectedListingDistanceKm > prototypeDiscoveryRadiusKm ? (
@@ -3094,6 +3098,68 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             </div>
           </aside>
         </div>
+        <section aria-label="Purchase Commitments" className="registration-panel">
+          <p className="eyebrow">Purchase Commitments - Simulation</p>
+          <h2>
+            {selectedBuyerActiveCommitments.length} of {selectedTierProgress?.activePurchaseLimit ?? 0} active
+            Purchase Commitments
+          </h2>
+          {selectedBuyerCommitments.length ? (
+            selectedBuyerCommitments.map((commitment) => (
+              <article
+                aria-label={`Purchase Commitment: ${commitment.snapshot.title}`}
+                className="checkout-panel"
+                key={commitment.id}
+              >
+                <p className="eyebrow">Purchase Commitment - Simulation</p>
+                <h3>{commitment.snapshot.title}</h3>
+                <p>Transaction status: {commitment.lifecycleStatus}</p>
+                <p>
+                  Simulated Escrow:{" "}
+                  {commitment.escrowStatus === "Held - simulated"
+                    ? "Held"
+                    : commitment.escrowStatus === "Refunded - simulated"
+                      ? "Refunded in full"
+                      : "Released"}
+                </p>
+                <p>
+                  Simulated payout:{" "}
+                  {commitment.payoutStatus === "Pending - simulated"
+                    ? "Pending"
+                    : commitment.payoutStatus === "Not paid - simulated"
+                      ? "Not paid"
+                      : "Paid"}
+                </p>
+                {commitment.trustOutcome === "Successful handover" ? (
+                  <p>Successful handover recorded for private Tier Progress.</p>
+                ) : null}
+                <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
+                  <h4>Purchase Snapshot - unchangeable</h4>
+                  <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
+                  <p><strong>Category:</strong> {commitment.snapshot.category}</p>
+                  <p><strong>Description:</strong> {commitment.snapshot.description}</p>
+                  <p><strong>Condition Disclosure:</strong> {commitment.snapshot.conditionDisclosure}</p>
+                  <p><strong>Condition Grade:</strong> {commitment.snapshot.conditionGrade}</p>
+                  <p><strong>Measurements / specifications:</strong> {commitment.snapshot.specifications}</p>
+                  <p><strong>Included parts:</strong> {commitment.snapshot.includedParts}</p>
+                  <p><strong>Frozen fictional item photos:</strong></p>
+                  <ul>
+                    {commitment.snapshot.photos.map((photo) => <li key={photo}>{photo}</li>)}
+                  </ul>
+                  <p>Buyer total: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                  <p>Seller payout: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                  <p>No platform or payment fee - simulation only.</p>
+                </section>
+              </article>
+            ))
+          ) : (
+            <p>No active Purchase Commitments. Successful simulated payments will appear here.</p>
+          )}
+        </section>
+        {checkoutNotice ? (
+          <p role="status">{checkoutNotice}</p>
+        ) : null}
+
         </main>
       ) : activeWorkspace === "inventory" ? (
         <main className="demo-main">
