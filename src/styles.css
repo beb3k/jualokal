@@ -2930,3 +2930,369 @@ textarea:focus-visible,
   margin-left: 12px;
   content: "·";
 }
+
+/* Ticket #38: task-focused Demo Mode shell */
+.demo-shell {
+  color: var(--jl-color-ink);
+  background:
+    radial-gradient(circle at 94% 2%, rgba(217, 142, 62, 0.12), transparent 25rem),
+    linear-gradient(180deg, #f7f4ed 0%, var(--jl-color-canvas) 48%, #ebece3 100%);
+}
+
+.demo-shell .demo-notice {
+  min-height: 42px;
+  justify-content: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-inline: max(16px, calc((100vw - var(--jl-container)) / 2));
+  background: #8f4824;
+  box-shadow: none;
+}
+
+.demo-shell .demo-header {
+  border-bottom: 1px solid var(--jl-color-line);
+  padding-block: 20px;
+}
+
+.demo-shell .demo-header .button {
+  min-height: 40px;
+}
+
+.demo-shell .demo-summary {
+  grid-template-columns: minmax(0, 0.8fr) minmax(300px, 1.2fr);
+  gap: 16px 22px;
+  margin-top: 20px;
+  border: 1px solid var(--jl-color-line);
+  border-left: 4px solid var(--jl-color-accent);
+  border-radius: 8px 24px 24px 24px;
+  padding: 18px 20px;
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: var(--jl-shadow-soft);
+}
+
+.demo-shell .demo-summary > div:first-child {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.demo-shell .demo-summary > div:first-child > strong {
+  border: 1px solid rgba(23, 60, 43, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(232, 235, 223, 0.72);
+}
+
+.demo-shell .demo-summary select {
+  min-height: 44px;
+  border-color: var(--jl-color-line);
+  border-radius: 8px;
+  background: var(--jl-color-surface);
+}
+
+.demo-shell .selected-account-card {
+  display: grid;
+  grid-template-columns: auto auto repeat(3, minmax(0, auto));
+  justify-content: start;
+  gap: 7px 16px;
+  border-top-color: var(--jl-color-line);
+  padding-top: 14px;
+}
+
+.demo-shell .selected-account-card > div {
+  grid-column: 1 / -1;
+  border-left: 3px solid var(--jl-color-accent);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 12px;
+  background: rgba(241, 223, 202, 0.68);
+}
+
+.demo-shell .persistent-privacy-note {
+  border: 0;
+  border-top: 1px solid var(--jl-color-line);
+  border-radius: 0;
+  padding: 13px 0 0;
+  background: transparent;
+}
+
+.demo-task-shell {
+  display: grid;
+  width: min(var(--jl-container), calc(100% - 32px));
+  grid-template-columns: minmax(210px, 0.48fr) minmax(0, 1.52fr);
+  align-items: center;
+  gap: 24px;
+  margin: 18px auto 0;
+  border-radius: 24px 8px 24px 24px;
+  padding: 18px;
+  color: #fff9ed;
+  background: var(--jl-color-brand);
+  box-shadow: var(--jl-shadow-raised);
+}
+
+.demo-task-heading {
+  display: grid;
+  gap: 4px;
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 4px 24px 4px 6px;
+}
+
+.shell-region-label {
+  color: #e6aa69;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.demo-task-heading strong {
+  font-family: var(--jl-font-display);
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.demo-task-heading small {
+  color: #b9c8bd;
+}
+
+.demo-task-shell .workspace-tabs {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.demo-task-shell .workspace-tabs .button {
+  position: relative;
+  min-width: 0;
+  min-height: 54px;
+  justify-content: flex-start;
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 9px 13px;
+  color: #d8e2db;
+  background: rgba(255, 255, 255, 0.06);
+  line-height: 1.25;
+  text-align: left;
+}
+
+.demo-task-shell .workspace-tabs .button:hover:not(:disabled) {
+  color: #fffdf8;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.demo-task-shell .workspace-tabs [aria-current="page"] {
+  border-color: #fffdf8;
+  padding-right: 54px;
+  color: var(--jl-color-brand);
+  background: #fffdf8;
+  box-shadow: inset 0 -4px 0 var(--jl-color-accent);
+  font-weight: 850;
+  transform: none;
+}
+
+.demo-task-shell .workspace-active-label {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  border-radius: 6px;
+  padding: 3px 5px;
+  color: #fffdf8;
+  background: var(--jl-color-accent-ink);
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+}
+
+.demo-shell > .handover-panel {
+  margin-top: 24px;
+}
+
+.demo-shell > .demo-main:not(.trust-overview) {
+  position: relative;
+}
+
+.demo-shell > .demo-main:not(.trust-overview)::before {
+  display: block;
+  width: min(var(--jl-container), calc(100% - 32px));
+  height: 1px;
+  margin: 0 auto;
+  background: var(--jl-color-line);
+  content: "";
+}
+
+.demo-support-region {
+  position: relative;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 18px;
+  margin-top: 82px;
+  border-top: 1px solid var(--jl-color-line);
+  padding-top: 32px;
+}
+
+.demo-support-heading {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 8px 18px;
+  margin-bottom: 4px;
+}
+
+.demo-support-heading strong {
+  font-family: var(--jl-font-display);
+  font-size: clamp(1.7rem, 3vw, 2.7rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.demo-support-heading small {
+  grid-column: 2;
+  color: var(--jl-color-muted);
+}
+
+.demo-support-region .registration-panel {
+  border: 1px solid var(--jl-color-line);
+  border-radius: 12px 24px 24px 24px;
+  padding: 28px;
+  background: rgba(255, 253, 248, 0.72);
+  box-shadow: var(--jl-shadow-soft);
+}
+
+.demo-support-region .registration-panel:last-child {
+  align-self: start;
+  border-radius: 24px 8px 24px 24px;
+}
+
+.demo-shell .demo-intro {
+  padding-top: 48px;
+}
+
+.demo-shell .demo-footer {
+  margin-top: 28px;
+  border-top-color: var(--jl-color-line);
+}
+
+@media (max-width: 900px) {
+  .demo-shell .demo-summary,
+  .demo-task-shell,
+  .demo-support-region {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-task-heading {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 0 0 15px;
+  }
+
+  .demo-support-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-support-heading small {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .demo-shell .demo-notice {
+    padding-inline: 12px;
+  }
+
+  .demo-shell .demo-header {
+    align-items: center;
+  }
+
+  .demo-shell .demo-summary,
+  .demo-task-shell {
+    width: min(100% - 24px, var(--jl-container));
+  }
+
+  .demo-shell .demo-summary {
+    margin-top: 12px;
+    border-radius: 6px 18px 18px 18px;
+    padding: 16px;
+  }
+
+  .demo-shell .demo-summary > div:first-child {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .demo-shell .demo-summary > div:first-child > strong {
+    flex: 1 1 120px;
+  }
+
+  .demo-shell .selected-account-card {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  .demo-shell .selected-account-card .fictional-label,
+  .demo-shell .selected-account-card > strong,
+  .demo-shell .selected-account-card > div {
+    grid-column: 1 / -1;
+  }
+
+  .demo-task-shell {
+    gap: 14px;
+    border-radius: 18px 6px 18px 18px;
+    padding: 14px;
+  }
+
+  .demo-task-shell .workspace-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .demo-task-shell .workspace-tabs .button {
+    min-height: 64px;
+    font-size: 0.77rem;
+  }
+
+  .demo-task-shell .workspace-tabs [aria-current="page"] {
+    padding-right: 13px;
+    padding-bottom: 25px;
+  }
+
+  .demo-task-shell .workspace-active-label {
+    top: auto;
+    right: auto;
+    bottom: 5px;
+    left: 12px;
+    transform: none;
+  }
+
+  .demo-support-region {
+    margin-top: 58px;
+    padding-top: 26px;
+  }
+
+  .demo-support-region .registration-panel {
+    padding: 22px;
+  }
+}
+
+.demo-support-region .demo-reviewer-panel {
+  grid-column: 1 / -1;
+  border-top: 3px solid var(--jl-color-accent);
+  border-radius: 8px 24px 24px 24px;
+  background:
+    linear-gradient(110deg, rgba(241, 223, 202, 0.72), rgba(255, 253, 248, 0.84));
+}
+
+.demo-reviewer-panel > p:not(.eyebrow) {
+  max-width: 760px;
+  color: var(--jl-color-muted);
+  line-height: 1.6;
+}
+
+.demo-reviewer-panel .listing-actions {
+  border-top: 1px solid var(--jl-color-line);
+  padding-top: 18px;
+}
+
+.demo-support-region .shell-region-label {
+  color: var(--jl-color-accent-ink);
+}
