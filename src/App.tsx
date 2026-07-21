@@ -8,6 +8,13 @@ function App() {
     () => new URLSearchParams(window.location.search).get("demo") === "1",
   );
 
+  function openDemo() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("demo", "1");
+    window.history.replaceState(null, "", url);
+    setDemoOpen(true);
+  }
+
   function closeDemo() {
     const url = new URL(window.location.href);
     for (const key of ["demo", "account", "workspace", "category", "view", "seller"]) {
@@ -55,11 +62,7 @@ function App() {
                 See listing
                 <span aria-hidden="true">→</span>
               </a>
-              <button
-                className="button button-outline"
-                onClick={() => setDemoOpen(true)}
-                type="button"
-              >
+              <button className="button button-outline" onClick={openDemo} type="button">
                 Explore Demo Mode
                 <span aria-hidden="true">↗</span>
               </button>
@@ -70,25 +73,81 @@ function App() {
             </div>
           </div>
 
-          <div aria-label="Jualokal privacy promise" className="promise-card" role="img">
-            <div className="promise-orbit promise-orbit-one" />
-            <div className="promise-orbit promise-orbit-two" />
-            <div className="promise-centre">
-              <span className="promise-lock" aria-hidden="true">
-                ⌂
-              </span>
-              <strong>Close to home.</strong>
-              <span>Private from the start.</span>
+          <div aria-label="Jualokal privacy promise" className="marketplace-window" role="img">
+            <div className="marketplace-window-heading">
+              <span>Private marketplace</span>
+              <strong>Bandung · nearby</strong>
             </div>
-            <span className="promise-label-orbit orbit-top">
-              <span className="promise-label label-top">Portable goods</span>
-            </span>
-            <span className="promise-label-orbit orbit-right">
-              <span className="promise-label label-right">Nearby handover</span>
-            </span>
-            <span className="promise-label-orbit orbit-bottom">
-              <span className="promise-label label-bottom">Protected location</span>
-            </span>
+            <div className="marketplace-window-path">
+              <span>01</span>
+              <div>
+                <strong>Verified access</strong>
+                <small>Accountable members enter first</small>
+              </div>
+            </div>
+            <div className="marketplace-window-path marketplace-window-path-featured">
+              <span>02</span>
+              <div>
+                <strong>Nearby discovery</strong>
+                <small>Portable goods within a fixed local area</small>
+              </div>
+            </div>
+            <div className="marketplace-window-path">
+              <span>03</span>
+              <div>
+                <strong>Protected handover</strong>
+                <small>Meet nearby without publishing a home</small>
+              </div>
+            </div>
+            <div className="marketplace-window-footer">
+              <span aria-hidden="true">⌂</span>
+              <div>
+                <strong>Close to home.</strong>
+                <small>Private from the start.</small>
+                <span className="marketplace-window-terms">
+                  <span>Portable goods</span>
+                  <span>Nearby handover</span>
+                  <span>Protected location</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="Marketplace paths" className="marketplace-paths">
+          <div className="marketplace-paths-heading">
+            <p className="eyebrow">Choose your path</p>
+            <h2 id="marketplace-paths-title">One local marketplace. Two clear ways in.</h2>
+            <p>
+              Every participant begins with accountable membership. Selling becomes available
+              through a separate Seller Activation step.
+            </p>
+          </div>
+          <div className="marketplace-path-grid">
+            <article className="marketplace-path marketplace-path-buyer">
+              <span className="path-label">Buyer · included with membership</span>
+              <h3>Buy nearby</h3>
+              <p>
+                Discover portable secondhand goods, inspect the full listing, and complete a
+                protected in-person handover.
+              </p>
+              <a className="button button-primary" href="/register">
+                Join Jualokal to buy
+                <span aria-hidden="true">→</span>
+              </a>
+            </article>
+            <article className="marketplace-path marketplace-path-seller">
+              <span className="path-label">Seller · activated separately</span>
+              <h3>Sell nearby</h3>
+              <p>
+                Join as a member first, then activate selling while keeping your exact Home
+                Anchor private.
+              </p>
+              <a className="button button-outline" href="/register">
+                Join Jualokal to sell
+                <span aria-hidden="true">→</span>
+              </a>
+            </article>
           </div>
         </section>
 
@@ -133,18 +192,18 @@ function App() {
 
         <section className="demo-invitation">
           <div>
-            <p className="eyebrow">Already a member?</p>
-            <h2>Your neighbourhood marketplace is waiting.</h2>
+            <p className="eyebrow">Safe to explore</p>
+            <h2>See the marketplace without sharing anything private.</h2>
           </div>
           <div className="invitation-copy">
             <p>
-              Sign in to browse nearby secondhand goods, manage your listings, and arrange
-              private in-person handovers.
+              Demo Mode uses isolated fictional accounts, listings, locations, and transaction
+              history. Nothing shown is real marketplace activity.
             </p>
-            <a className="button button-light" href="/login">
-              Log in to Jualokal
+            <button className="button button-light" onClick={openDemo} type="button">
+              Open the fictional demo
               <span aria-hidden="true">→</span>
-            </a>
+            </button>
           </div>
         </section>
       </main>
@@ -158,12 +217,11 @@ function App() {
         </a>
         <p>Nearby secondhand handovers, designed around privacy.</p>
         <nav aria-label="Footer">
-          <a href="https://github.com/zulfaza/jualokal">GitHub</a>
+          <a href="https://github.com/beb3k/jualokal">GitHub</a>
           <a href="/terms">Terms</a>
           <a href="/privacy">Privacy</a>
         </nav>
       </footer>
-
     </div>
   );
 }

@@ -3,6 +3,27 @@ import { getRequestUrl } from "@tanstack/react-start/server";
 
 import { createSupabaseServerClient } from "./supabase.server";
 
+function getApplicationOrigin() {
+  const configuredOrigin = process.env.APP_ORIGIN?.trim();
+  if (configuredOrigin) {
+    const parsedOrigin = new URL(configuredOrigin);
+    const isLocalOrigin = ["localhost", "127.0.0.1", "[::1]"].includes(
+      parsedOrigin.hostname,
+    );
+    if (parsedOrigin.protocol !== "https:" && !(parsedOrigin.protocol === "http:" && isLocalOrigin)) {
+      throw new Error("APP_ORIGIN must use HTTPS outside local development.");
+    }
+    return parsedOrigin.origin;
+  }
+
+  const requestUrl = new URL(getRequestUrl());
+  if (requestUrl.hostname === "localhost" || requestUrl.hostname === "127.0.0.1") {
+    return requestUrl.origin;
+  }
+
+  throw new Error("APP_ORIGIN is required outside local development.");
+}
+
 type AuthCredentials = {
   email: string;
   password: string;
@@ -178,7 +199,7 @@ export const registerAccount = createServerFn({ method: "POST" })
   .validator(parseCredentials)
   .handler(async ({ data }): Promise<RegisterResult> => {
     const supabase = createSupabaseServerClient();
-    const callbackUrl = new URL("/auth/callback", getRequestUrl()).toString();
+    const callbackUrl = new URL("/auth/callback", getApplicationOrigin()).toString();
     const { data: signup, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -220,7 +241,7 @@ export const signIn = createServerFn({ method: "POST" })
 export const startGoogleSignIn = createServerFn({ method: "POST" }).handler(
   async (): Promise<OAuthStartResult> => {
     const supabase = createSupabaseServerClient();
-    const callbackUrl = new URL("/auth/callback", getRequestUrl()).toString();
+    const callbackUrl = new URL("/auth/callback", getApplicationOrigin()).toString();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

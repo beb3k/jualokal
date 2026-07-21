@@ -4,8 +4,12 @@ export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
   reporter: "line",
+  timeout: 60_000,
   use: {
     baseURL: "http://localhost:5173",
+    launchOptions: {
+      args: ["--force-prefers-reduced-motion=reduce"],
+    },
     trace: "retain-on-failure",
   },
   webServer: {

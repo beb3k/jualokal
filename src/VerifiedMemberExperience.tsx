@@ -1,5 +1,14 @@
 import { useState } from "react";
 
+type VerifiedMemberExperienceProps = {
+  buyerTier: "Verified Buyer" | "Reliable Buyer" | "Trusted Buyer";
+  differentPartnerCount: number;
+  onExit: () => Promise<boolean>;
+  profilePictureAdded: boolean;
+  publicIdentity: string;
+  successfulHandoverCount: number;
+};
+
 function SellerActivationPanel({
   onActivated,
   onClose,
@@ -89,9 +98,35 @@ function SellerActivationPanel({
   );
 }
 
-function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
+function VerifiedMemberExperience({
+  buyerTier,
+  differentPartnerCount,
+  onExit,
+  profilePictureAdded,
+  publicIdentity,
+  successfulHandoverCount,
+}: VerifiedMemberExperienceProps) {
   const [activationOpen, setActivationOpen] = useState(false);
   const [sellerActivated, setSellerActivated] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const initials = publicIdentity
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  async function handleSignOut() {
+    setSignOutError(null);
+    setSigningOut(true);
+    const completed = await onExit();
+    if (!completed) {
+      setSignOutError("Sign out failed. Your session remains active; try again.");
+      setSigningOut(false);
+    }
+  }
 
   return (
     <div className="member-shell">
@@ -102,9 +137,16 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
           </span>
           <span>jualokal</span>
         </div>
-        <button className="button button-compact button-outline" onClick={onExit}>
-          Leave member preview
-        </button>
+        <div className="member-header-actions">
+          {signOutError ? <p role="alert">{signOutError}</p> : null}
+          <button
+            className="button button-compact button-outline"
+            disabled={signingOut}
+            onClick={handleSignOut}
+          >
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
       </header>
 
       <main aria-label="Verified Member marketplace" className="member-main">
@@ -118,6 +160,34 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
             </p>
           </div>
           <span className="member-status">Identity · Simulated as verified</span>
+        </section>
+
+        <section aria-label="Marketplace next steps" className="member-next-steps">
+          <div className="member-next-steps-heading">
+            <p className="eyebrow">Your marketplace path</p>
+            <h2>Ready for the next local exchange.</h2>
+            <p>
+              Membership unlocks buying now. Seller Activation remains a separate choice when
+              you are ready to list an item.
+            </p>
+          </div>
+          <div className="member-next-steps-grid">
+            <article>
+              <span>01</span>
+              <h3>Discover nearby</h3>
+              <p>Browse private local inventory using a current Browsing Location.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Purchase with confidence</h3>
+              <p>Review the full listing before a protected Checkout Hold and handover.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Sell when ready</h3>
+              <p>Complete Seller Activation separately without publishing a Home Anchor.</p>
+            </article>
+          </div>
         </section>
 
         <section aria-label="Marketplace access" className="member-card">
@@ -154,13 +224,13 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
         <section aria-label="Public Identity" className="member-card public-identity-card">
           <div className="public-identity-profile">
             <div className="public-identity-avatar" aria-hidden="true">
-              MS
+              {initials}
             </div>
             <div>
               <p className="eyebrow">Visible to other Verified Members</p>
-              <h2>Maya S.</h2>
+              <h2>{publicIdentity}</h2>
               <p className="profile-picture-status">
-                Profile picture <strong>Optional · Not added</strong>
+                Profile picture <strong>{profilePictureAdded ? "Optional · Added" : "Optional · Not added"}</strong>
               </p>
             </div>
           </div>
@@ -176,15 +246,15 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
             </article>
             <article>
               <small>Handovers</small>
-              <strong>0 successful handovers</strong>
+              <strong>{successfulHandoverCount} successful handovers</strong>
             </article>
             <article>
               <small>Transaction partners</small>
-              <strong>0 different partners</strong>
+              <strong>{differentPartnerCount} different partners</strong>
             </article>
             <article>
               <small>Buyer Tier</small>
-              <strong>Verified Buyer</strong>
+              <strong>{buyerTier}</strong>
             </article>
           </section>
 
@@ -214,16 +284,11 @@ function VerifiedMemberExperience({ onExit }: { onExit: () => void }) {
             )}
           </div>
           <div className="seller-activation-action">
-            <span
-              className={sellerActivated ? "status-pill status-success" : "status-pill"}
-            >
+            <span className={sellerActivated ? "status-pill status-success" : "status-pill"}>
               {sellerActivated ? "Activated" : "Not activated"}
             </span>
             {sellerActivated ? null : (
-              <button
-                className="button button-primary"
-                onClick={() => setActivationOpen(true)}
-              >
+              <button className="button button-primary" onClick={() => setActivationOpen(true)}>
                 Activate selling
               </button>
             )}

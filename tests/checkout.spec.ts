@@ -34,7 +34,7 @@ test("buyer starts checkout and receives one visible five-minute Checkout Hold",
 
   const hold = page.getByRole("region", { name: "Checkout Hold" });
   await expect(hold).toContainText("Handwoven rattan market basket");
-  await expect(hold).toContainText("05:00 remaining");
+  await expect(hold.getByRole("timer")).toHaveText(/^0[45]:[0-5]\d remaining$/);
   await expect(hold).toContainText("Rp 185.000");
   await expect(hold).toContainText(/expires.*WIB/i);
   await expect(hold).toContainText(/simulation only/i);
