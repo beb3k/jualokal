@@ -1,109 +1,12 @@
 import { lazy, Suspense, useState } from "react";
-import VerifiedMemberExperience from "./VerifiedMemberExperience";
+import { House, MapPin, Package, ShieldCheck, UserRoundCheck } from "lucide-react";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
-function RegistrationPanel({
-  onClose,
-  onVerified,
-}: {
-  onClose: () => void;
-  onVerified: () => void;
-}) {
-  const [step, setStep] = useState<"registration" | "verification">("registration");
-  const [simulationAcknowledged, setSimulationAcknowledged] = useState(false);
-
-  if (step === "verification") {
-    return (
-      <div className="dialog-backdrop">
-        <section
-          aria-labelledby="verification-title"
-          aria-modal="true"
-          className="registration-panel"
-          role="dialog"
-        >
-          <button aria-label="Close verification" className="icon-button" onClick={onClose}>
-            ×
-          </button>
-          <p className="eyebrow">Identity Verification walkthrough · Simulation</p>
-          <h2 id="verification-title">Identity Verification walkthrough</h2>
-          <p className="panel-lead">
-            This simulated admission check shows how Jualokal establishes accountable
-            membership before marketplace access.
-          </p>
-          <div className="registration-note">
-            <span aria-hidden="true">!</span>
-            <p>
-              This is not a real identity check. Do not enter or upload real ID, selfies,
-              biometrics, passwords, payment methods, or other sensitive evidence.
-            </p>
-          </div>
-          <label className="verification-confirmation">
-            <input
-              checked={simulationAcknowledged}
-              onChange={(event) => setSimulationAcknowledged(event.target.checked)}
-              type="checkbox"
-            />
-            <span>
-              I understand this is a simulation and will not provide real personal data.
-            </span>
-          </label>
-          <button
-            className="button button-primary"
-            disabled={!simulationAcknowledged}
-            onClick={onVerified}
-          >
-            Complete simulated verification
-          </button>
-          <button className="text-button" onClick={() => setStep("registration")}>
-            Back to registration
-          </button>
-        </section>
-      </div>
-    );
-  }
-
-  return (
-    <div className="dialog-backdrop">
-      <section
-        aria-labelledby="registration-title"
-        aria-modal="true"
-        className="registration-panel"
-        role="dialog"
-      >
-        <button aria-label="Close registration" className="icon-button" onClick={onClose}>
-          ×
-        </button>
-        <p className="eyebrow">Registration · Step 1</p>
-        <h2 id="registration-title">Begin registration</h2>
-        <p className="panel-lead">
-          Create your accountable membership before entering the private marketplace.
-          Identity Verification comes next as a clearly simulated walkthrough.
-        </p>
-        <div className="registration-note">
-          <span aria-hidden="true">✓</span>
-          <p>
-            This prototype does not ask for a name, password, identity document, payment
-            method, or physical location here.
-          </p>
-        </div>
-        <button className="button button-primary" onClick={() => setStep("verification")}>
-          Continue to simulated verification
-        </button>
-        <button className="text-button" onClick={onClose}>
-          Back to the public explanation
-        </button>
-      </section>
-    </div>
-  );
-}
-
 function App() {
-  const [registrationOpen, setRegistrationOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(
     () => new URLSearchParams(window.location.search).get("demo") === "1",
   );
-  const [memberVerified, setMemberVerified] = useState(false);
 
   function openDemo() {
     const url = new URL(window.location.href);
@@ -119,10 +22,6 @@ function App() {
     }
     window.history.replaceState(null, "", url);
     setDemoOpen(false);
-  }
-
-  if (memberVerified) {
-    return <VerifiedMemberExperience onExit={() => setMemberVerified(false)} />;
   }
 
   if (demoOpen) {
@@ -142,10 +41,10 @@ function App() {
           </span>
           <span>jualokal</span>
         </a>
-        <button className="button button-compact button-outline" onClick={openDemo}>
-          Demo Mode
-          <span aria-hidden="true">↗</span>
-        </button>
+        <a className="button button-compact button-outline" href="/login">
+          Log in
+          <span aria-hidden="true">→</span>
+        </a>
       </header>
 
       <main id="top">
@@ -159,20 +58,19 @@ function App() {
               into a public catalogue.
             </p>
             <div className="hero-actions">
-              <button className="button button-primary" onClick={() => setRegistrationOpen(true)}>
-                Begin registration
+              <a className="button button-primary" href="/register">
+                See listing
                 <span aria-hidden="true">→</span>
-              </button>
-              <button className="button button-quiet" onClick={openDemo}>
+              </a>
+              <button className="button button-outline" onClick={openDemo} type="button">
                 Explore Demo Mode
                 <span aria-hidden="true">↗</span>
               </button>
+              <a className="button button-quiet" href="/login">
+                Log in
+                <span aria-hidden="true">→</span>
+              </a>
             </div>
-            <p className="access-note">
-              <span aria-hidden="true">●</span>
-              Listings stay private until Identity Verification—or inside the clearly
-              fictional demo.
-            </p>
           </div>
 
           <div aria-label="Jualokal privacy promise" className="marketplace-window" role="img">
@@ -233,13 +131,10 @@ function App() {
                 Discover portable secondhand goods, inspect the full listing, and complete a
                 protected in-person handover.
               </p>
-              <button
-                className="button button-primary"
-                onClick={() => setRegistrationOpen(true)}
-              >
+              <a className="button button-primary" href="/register">
                 Join Jualokal to buy
                 <span aria-hidden="true">→</span>
-              </button>
+              </a>
             </article>
             <article className="marketplace-path marketplace-path-seller">
               <span className="path-label">Seller · activated separately</span>
@@ -248,13 +143,10 @@ function App() {
                 Join as a member first, then activate selling while keeping your exact Home
                 Anchor private.
               </p>
-              <button
-                className="button button-outline"
-                onClick={() => setRegistrationOpen(true)}
-              >
+              <a className="button button-outline" href="/register">
                 Join Jualokal to sell
                 <span aria-hidden="true">→</span>
-              </button>
+              </a>
             </article>
           </div>
         </section>
@@ -267,16 +159,31 @@ function App() {
           <div className="principle-grid">
             <article>
               <span className="principle-number">01</span>
+              <div aria-hidden="true" className="principle-art principle-art-access">
+                <UserRoundCheck className="art-access-person" />
+                <span className="art-access-gate" />
+              </div>
               <h3>Accountable access</h3>
               <p>Registration begins publicly. Marketplace details wait behind verification.</p>
             </article>
             <article>
               <span className="principle-number">02</span>
+              <div aria-hidden="true" className="principle-art principle-art-nearby">
+                <House className="art-nearby-home art-nearby-home-start" />
+                <span className="art-nearby-path" />
+                <Package className="art-nearby-package" />
+                <House className="art-nearby-home art-nearby-home-end" />
+              </div>
               <h3>Neighbourhood scale</h3>
               <p>Portable goods move through short, in-person handovers—not delivery.</p>
             </article>
             <article>
               <span className="principle-number">03</span>
+              <div aria-hidden="true" className="principle-art principle-art-private">
+                <span className="art-private-radius" />
+                <MapPin className="art-private-pin" />
+                <ShieldCheck className="art-private-shield" />
+              </div>
               <h3>Location stays protected</h3>
               <p>People can meet nearby without publishing where a seller lives.</p>
             </article>
@@ -286,15 +193,14 @@ function App() {
         <section className="demo-invitation">
           <div>
             <p className="eyebrow">Safe to explore</p>
-            <h2>See the idea without sharing anything private.</h2>
+            <h2>See the marketplace without sharing anything private.</h2>
           </div>
           <div className="invitation-copy">
             <p>
-              Demo Mode opens immediately with three fictional buyers, five fictional sellers,
-              and 25 simulated listings in an Indonesian setting. Each browser session is
-              isolated and resettable; nothing shown is real marketplace activity.
+              Demo Mode uses isolated fictional accounts, listings, locations, and transaction
+              history. Nothing shown is real marketplace activity.
             </p>
-            <button className="button button-light" onClick={openDemo}>
+            <button className="button button-light" onClick={openDemo} type="button">
               Open the fictional demo
               <span aria-hidden="true">→</span>
             </button>
@@ -310,18 +216,12 @@ function App() {
           <span>jualokal</span>
         </a>
         <p>Nearby secondhand handovers, designed around privacy.</p>
-        <span>Prototype · English / Indonesia</span>
+        <nav aria-label="Footer">
+          <a href="https://github.com/beb3k/jualokal">GitHub</a>
+          <a href="/terms">Terms</a>
+          <a href="/privacy">Privacy</a>
+        </nav>
       </footer>
-
-      {registrationOpen ? (
-        <RegistrationPanel
-          onClose={() => setRegistrationOpen(false)}
-          onVerified={() => {
-            setRegistrationOpen(false);
-            setMemberVerified(true);
-          }}
-        />
-      ) : null}
     </div>
   );
 }

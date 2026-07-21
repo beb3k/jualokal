@@ -702,7 +702,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setPreviewSellerId(null);
     setMapViewport({ panX: 0, zoom: 1 });
   }, [discoveryCategory, selectedAccountId]);
-
   useEffect(() => {
     let pageWasHidden = document.visibilityState === "hidden";
     const markPersistedResumeStale = (event: PageTransitionEvent) => {
@@ -973,6 +972,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const mapFrameKm = sellerMapMarkers.some(({ projection }) => projection.frameKm === 3)
     ? 3
     : 2;
+  const mapFallbackActive =
+    browsingLocationIsAvailable &&
+    discoverySucceeded &&
+    discoveryView === "map" &&
+    mapRendering === "failed";
+  const presentedDiscoveryView: DiscoveryView = mapFallbackActive
+    ? "list"
+    : discoveryView;
   const expandedSellerId = expandedGroupId
     ? demoSellerMarkerGroups.find((group) => group.id === expandedGroupId)?.sellerIds[0]
     : undefined;
@@ -987,14 +994,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         return seller ? [seller] : [];
       })
     : [];
-  const mapFallbackActive =
-    browsingLocationIsAvailable &&
-    discoverySucceeded &&
-    discoveryView === "map" &&
-    mapRendering === "failed";
-  const presentedDiscoveryView: DiscoveryView = mapFallbackActive
-    ? "list"
-    : discoveryView;
   const previewSeller = previewSellerId
     ? demoSellers.find((seller) => seller.id === previewSellerId)
     : undefined;
@@ -2035,14 +2034,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setBrowsingLocation("current");
     setBrowsingLocationSnapshot(initialBrowsingLocationSnapshot);
     setDiscoveryCategory("All");
+    setMapRendering("ready");
     setDiscoveryView("map");
     window.localStorage.setItem(discoveryViewStorageKey, "map");
     setPreviewSellerId(null);
     setExpandedGroupId(null);
     setChooserGroupId(null);
-    setMapViewport({ panX: 0, zoom: 1 });
-    setMapStatus("Buyer-centered view ready");
-    setMapRendering("ready");
     setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view ready");
     setDiscoveryAnnouncement("Demo reset with simulated snapshot 1");
