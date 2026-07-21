@@ -551,6 +551,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [demoClockPaused, setDemoClockPaused] = useState(false);
   const [selectedListingId, setSelectedListingId] = useState(initialSelectedListingId);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [title, setTitle] = useState<string>(demoListing.title);
   const [category, setCategory] = useState<string>(demoListing.category);
@@ -807,7 +808,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         (commitment) => commitment.sellerId === selectedSeller.id,
       )
     : [];
-  const visibleHandoverCommitment = selectedBuyer
+  const visibleCommitments = selectedBuyer
+    ? selectedBuyerCommitments
+    : selectedSellerCommitments;
+  const fallbackHandoverCommitment = selectedBuyer
     ? selectedBuyerCommitments.find(
         (commitment) => commitment.lifecycleStatus === "Active",
       ) ?? selectedBuyerCommitments[0]
@@ -816,6 +820,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           (commitment) => commitment.listingId === selectedListingId,
         ) ?? selectedSellerCommitments[0]
       : undefined;
+  const visibleHandoverCommitment =
+    visibleCommitments.find((commitment) => commitment.id === selectedOrderId) ??
+    fallbackHandoverCommitment;
   const storedVisibleHandoverState = visibleHandoverCommitment
     ? handoverStates[visibleHandoverCommitment.id]
     : undefined;
@@ -2237,55 +2244,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         </p>
       </section>
 
-      {visibleHandoverCommitment && visibleHandoverState ? (
-        <HandoverPanel
-          actionsBlocked={
-            visibleContactBlocked || visibleSafetyTransactionResolved
-          }
-          actorRole={selectedBuyer ? "buyer" : "seller"}
-          commitment={visibleHandoverCommitment}
-          contactBlocked={visibleContactBlocked}
-          handover={visibleHandoverState}
-          notice={handoverNotices[visibleHandoverCommitment.id] ?? ""}
-          nowMs={clockNowMs}
-          safetyContent={
-            visibleSafetyState ? (
-              <SafetyPanel
-                actorId={selectedAccountId}
-                commitment={visibleHandoverCommitment}
-                key={visibleHandoverCommitment.id + ":" + selectedAccountId}
-                nowMs={clockNowMs}
-                safety={visibleSafetyState}
-                onAppeal={appealVisibleSafety}
-                onReport={reportVisibleSafety}
-                onResolveAppeal={resolveVisibleSafetyAppeal}
-                onReview={reviewVisibleSafety}
-                onSetAppealTime={setVisibleAppealTime}
-              />
-            ) : null
-          }
-          onAccept={acceptVisibleHandover}
-          onAdvance={advanceToHandoverWindow}
-          onApproveAdjustment={approveVisibleAdjustment}
-          onBuyerConfirm={confirmVisibleBuyerHandover}
-          onCloseIncomplete={closeVisibleIncompleteHandover}
-          onOpenDispute={openVisibleIncompleteHandoverDispute}
-          onRaiseMismatch={raiseVisibleMaterialMismatch}
-          onRespondMismatch={respondToVisibleMaterialMismatch}
-          onResolveMismatch={resolveVisibleMaterialMismatch}
-          onPropose={proposeVisibleHandover}
-          onProposeRepeat={proposeVisibleRepeatHandover}
-          onRecordPresence={recordVisiblePresence}
-          onRequestAdjustment={requestVisibleAdjustment}
-          onSellerConfirm={confirmVisibleSellerHandover}
-          onSetBoundaryTime={setVisibleBoundaryTime}
-          onExpireScheduling={expireVisibleScheduling}
-          onCancel={cancelVisibleHandover}
-          onReportNoShow={reportVisibleNoShow}
-          onReportSellerUnavailability={reportVisibleSellerUnavailability}
-        />
-      ) : null}
-
       {(selectedAccountRestricted || selectedAccountSuspended) && activeWorkspace !== "inventory" ? (
         <main className="demo-main">
           <section aria-label="Restricted simulated account" className="registration-panel">
@@ -3176,64 +3134,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             </div>
           </aside>
         </div>
-        <section aria-label="Purchase Commitments" className="registration-panel">
-          <p className="eyebrow">Purchase Commitments - Simulation</p>
-          <h2>
-            {selectedBuyerActiveCommitments.length} of {selectedTierProgress?.activePurchaseLimit ?? 0} active
-            Purchase Commitments
-          </h2>
-          {selectedBuyerCommitments.length ? (
-            selectedBuyerCommitments.map((commitment) => (
-              <article
-                aria-label={`Purchase Commitment: ${commitment.snapshot.title}`}
-                className="checkout-panel"
-                key={commitment.id}
-              >
-                <p className="eyebrow">Purchase Commitment - Simulation</p>
-                <h3>{commitment.snapshot.title}</h3>
-                <p>Transaction status: {commitment.lifecycleStatus}</p>
-                <p>
-                  Simulated Escrow:{" "}
-                  {commitment.escrowStatus === "Held - simulated"
-                    ? "Held"
-                    : commitment.escrowStatus === "Refunded - simulated"
-                      ? "Refunded in full"
-                      : "Released"}
-                </p>
-                <p>
-                  Simulated payout:{" "}
-                  {commitment.payoutStatus === "Pending - simulated"
-                    ? "Pending"
-                    : commitment.payoutStatus === "Not paid - simulated"
-                      ? "Not paid"
-                      : "Paid"}
-                </p>
-                {commitment.trustOutcome === "Successful handover" ? (
-                  <p>Successful handover recorded for private Tier Progress.</p>
-                ) : null}
-                <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
-                  <h4>Purchase Snapshot - unchangeable</h4>
-                  <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
-                  <p><strong>Category:</strong> {commitment.snapshot.category}</p>
-                  <p><strong>Description:</strong> {commitment.snapshot.description}</p>
-                  <p><strong>Condition Disclosure:</strong> {commitment.snapshot.conditionDisclosure}</p>
-                  <p><strong>Condition Grade:</strong> {commitment.snapshot.conditionGrade}</p>
-                  <p><strong>Measurements / specifications:</strong> {commitment.snapshot.specifications}</p>
-                  <p><strong>Included parts:</strong> {commitment.snapshot.includedParts}</p>
-                  <p><strong>Frozen fictional item photos:</strong></p>
-                  <ul>
-                    {commitment.snapshot.photos.map((photo) => <li key={photo}>{photo}</li>)}
-                  </ul>
-                  <p>Buyer total: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
-                  <p>Seller payout: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
-                  <p>No platform or payment fee - simulation only.</p>
-                </section>
-              </article>
-            ))
-          ) : (
-            <p>No active Purchase Commitments. Successful simulated payments will appear here.</p>
-          )}
-        </section>
         {checkoutNotice ? (
           <p role="status">{checkoutNotice}</p>
         ) : null}
@@ -3502,6 +3402,295 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </section>
         </main>
       )}
+
+      {(selectedBuyer || selectedSeller) && activeWorkspace !== "inventory" ? (
+        <section aria-label="Purchase Commitments" className="registration-panel orders-workspace">
+          <header className="orders-heading">
+            <div>
+              <p className="eyebrow">Orders · Transaction workspace</p>
+              <h2>Orders</h2>
+              <p>
+                Review each frozen purchase, settlement state, deadline, and next permitted
+                action without exposing private contact or location information.
+              </p>
+            </div>
+            <div className="orders-capacity" aria-label="Active Order capacity">
+              <small>Current capacity</small>
+              <strong>
+                {selectedBuyer
+                  ? `${selectedBuyerActiveCommitments.length} of ${selectedTierProgress?.activePurchaseLimit ?? 0} active Purchase Commitments`
+                  : `${selectedSellerCommitments.filter((commitment) => commitment.lifecycleStatus === "Active").length} active seller Orders`}
+              </strong>
+            </div>
+          </header>
+
+          {(selectedBuyer ? selectedBuyerCommitments : selectedSellerCommitments).length ? (
+            <div className="orders-list">
+              {(selectedBuyer ? selectedBuyerCommitments : selectedSellerCommitments).map(
+                (commitment) => {
+                  const handover = handoverStates[commitment.id];
+                  const safety = safetyStates[commitment.id];
+                  const actorRole = selectedBuyer ? "buyer" : "seller";
+                  const counterpart = selectedBuyer
+                    ? commitment.snapshot.sellerPublicName
+                    : demoBuyers.find((buyer) => buyer.id === commitment.buyerId)?.publicName ??
+                      "Fictional Demo Buyer";
+                  const actorPresence =
+                    actorRole === "buyer" ? handover?.buyerPresence : handover?.sellerPresence;
+                  const actorConfirmedAtMs =
+                    actorRole === "buyer"
+                      ? handover?.buyerConfirmedAtMs
+                      : handover?.sellerConfirmedAtMs;
+                  const contactBlocked = Boolean(
+                    safety && isPairContactBlocked(safety, safety.buyerId, safety.sellerId),
+                  );
+                  const bothEligible = Boolean(
+                    handover?.buyerPresence?.eligible && handover?.sellerPresence?.eligible,
+                  );
+                  const insideAcceptedWindow = Boolean(
+                    handover?.schedule &&
+                      clockNowMs >= handover.schedule.window.startsAtMs &&
+                      clockNowMs <= handover.schedule.window.endsAtMs,
+                  );
+                  const actorCanConfirm = Boolean(
+                    handover?.schedule &&
+                      bothEligible &&
+                      insideAcceptedWindow &&
+                      actorConfirmedAtMs === null &&
+                      handover.meetingClosedAtMs === null &&
+                      handover.activeDispute === null &&
+                      handover.materialMismatchClaim === null &&
+                      !contactBlocked,
+                  );
+                  const agreementDeadlineBase =
+                    handover?.meetingNumber && handover.meetingNumber > 1 && handover.proposal
+                      ? handover.proposal.proposedAtMs
+                      : handover?.committedAtMs;
+                  const deadline =
+                    commitment.lifecycleStatus === "Completed"
+                      ? "Closed"
+                      : !handover
+                        ? "Transaction setup pending"
+                        : !handover.proposal
+                          ? `Seller proposal · ${formatWibTime(handover.committedAtMs + SELLER_PROPOSAL_DEADLINE_MS)}`
+                          : !handover.schedule
+                            ? `Schedule agreement · ${formatWibTime((agreementDeadlineBase ?? handover.committedAtMs) + SCHEDULE_AGREEMENT_DEADLINE_MS)}`
+                            : `Handover window ends · ${formatWibTime(handover.schedule.window.endsAtMs)}`;
+                  const nextAction = contactBlocked
+                    ? "Leave the unsafe situation and await the private safety outcome"
+                    : commitment.lifecycleStatus === "Completed"
+                      ? commitment.trustOutcome === "Successful handover"
+                        ? "Review the final settlement and frozen Purchase Snapshot"
+                        : "Review the final refund outcome and frozen Purchase Snapshot"
+                      : !handover
+                        ? "Wait for transaction setup"
+                        : handover.materialMismatchClaim
+                          ? handover.materialMismatchClaim.status === "raised"
+                            ? actorRole === "seller"
+                              ? "Acknowledge or contest the Material Mismatch Claim"
+                              : "Await the Seller response to the Material Mismatch Claim"
+                            : handover.materialMismatchClaim.status === "contested"
+                              ? "Continue the guided Active Dispute review"
+                              : "Review the completed Material Mismatch refund"
+                          : handover.activeDispute
+                            ? "Continue the guided Active Dispute review"
+                            : handover.meetingClosedAtMs !== null
+                              ? "Review the closed meeting outcome or use the guided ending actions"
+                              : !handover.proposal
+                                ? actorRole === "seller"
+                                  ? "Propose two handover windows"
+                                  : "Wait for the Seller to propose a Handover Point and windows"
+                                : handover.pendingAdjustment
+                                  ? actorRole === "seller"
+                                    ? "Approve the requested schedule adjustment"
+                                    : "Wait for Seller approval of the schedule adjustment"
+                                  : !handover.schedule
+                                    ? actorRole === "buyer"
+                                      ? "Accept a proposed window or request an adjustment"
+                                      : "Wait for the Buyer schedule response"
+                                    : !actorPresence?.eligible
+                                      ? `Record ${actorRole} Presence Check`
+                                      : !bothEligible
+                                        ? "Wait for the counterpart's eligible Presence Check"
+                                        : !insideAcceptedWindow
+                                          ? "Set simulated handover time inside the accepted window"
+                                          : actorCanConfirm
+                                            ? actorRole === "buyer"
+                                              ? "Buyer confirms inspected and accepted"
+                                              : "Seller confirms handover"
+                                            : "Await the counterpart confirmation or use the guided ending actions";
+                  const escrowLabel =
+                    commitment.escrowStatus === "Held - simulated"
+                      ? "Held"
+                      : commitment.escrowStatus === "Refunded - simulated"
+                        ? "Refunded in full"
+                        : "Released";
+                  const payoutLabel =
+                    commitment.payoutStatus === "Pending - simulated"
+                      ? "Pending"
+                      : commitment.payoutStatus === "Not paid - simulated"
+                        ? "Not paid"
+                        : "Paid";
+                  const refundLabel =
+                    commitment.escrowStatus === "Refunded - simulated" ||
+                    Boolean(handover?.failureRecord) ||
+                    handover?.materialMismatchClaim?.status === "acknowledged" ||
+                    handover?.materialMismatchClaim?.status === "refunded"
+                      ? "Full refund issued"
+                      : "Not issued";
+                  const orderIsSelected = commitment.id === visibleHandoverCommitment?.id;
+
+                  return (
+                    <article
+                      aria-label={`Purchase Commitment: ${commitment.snapshot.title}`}
+                      className={`checkout-panel order-card order-card-${commitment.lifecycleStatus.toLowerCase()}${orderIsSelected ? " order-card-selected" : ""}`}
+                      key={commitment.id}
+                    >
+                      <header className="order-card-heading">
+                        <div>
+                          <span className="order-kicker">
+                            {commitment.lifecycleStatus === "Active" ? "Action required" : "Order history"}
+                          </span>
+                          <h3>{commitment.snapshot.title}</h3>
+                          <p>
+                            {actorRole === "buyer" ? "Seller" : "Buyer"}: {counterpart} ·
+                            Fictional Verified Member
+                          </p>
+                        </div>
+                        <div className="order-card-controls">
+                          <strong className={`order-status order-status-${commitment.lifecycleStatus.toLowerCase()}`}>
+                            {commitment.lifecycleStatus}
+                          </strong>
+                          <button
+                            aria-pressed={orderIsSelected}
+                            className="button button-outline order-select-button"
+                            onClick={() => setSelectedOrderId(commitment.id)}
+                            type="button"
+                          >
+                            {orderIsSelected ? "Selected Order" : `Open transaction for ${commitment.snapshot.title}`}
+                          </button>
+                        </div>
+                      </header>
+
+                      <dl className="order-summary-grid">
+                        <div>
+                          <dt>Simulated Escrow:</dt>
+                          <dd>{" "}{escrowLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Simulated payout:</dt>
+                          <dd>{" "}{payoutLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Simulated refund:</dt>
+                          <dd>{" "}{refundLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Deadline</dt>
+                          <dd>{deadline}</dd>
+                        </div>
+                        <div className="order-next-action">
+                          <dt>Next permitted action</dt>
+                          <dd>{nextAction}</dd>
+                        </div>
+                      </dl>
+
+                      {commitment.trustOutcome === "Successful handover" ? (
+                        <p className="order-outcome">Successful handover recorded for private Tier Progress.</p>
+                      ) : null}
+
+                      <details
+                        className="order-snapshot"
+                        open={orderIsSelected}
+                      >
+                        <summary>Purchase Snapshot - unchangeable</summary>
+                        <section aria-label={`Purchase Snapshot: ${commitment.snapshot.title}`}>
+                          <p>{commitment.snapshot.sellerPublicName} - Fictional Demo Seller</p>
+                          <p><strong>Category:</strong> {commitment.snapshot.category}</p>
+                          <p><strong>Description:</strong> {commitment.snapshot.description}</p>
+                          <p><strong>Condition Disclosure:</strong> {commitment.snapshot.conditionDisclosure}</p>
+                          <p><strong>Condition Grade:</strong> {commitment.snapshot.conditionGrade}</p>
+                          <p><strong>Measurements / specifications:</strong> {commitment.snapshot.specifications}</p>
+                          <p><strong>Included parts:</strong> {commitment.snapshot.includedParts}</p>
+                          <p><strong>Frozen fictional item photos:</strong></p>
+                          <ul>
+                            {commitment.snapshot.photos.map((photo) => <li key={photo}>{photo}</li>)}
+                          </ul>
+                          <p>Buyer total: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                          <p>Seller payout: {formatRupiah(commitment.snapshot.transactionPrice)}</p>
+                          <p>No platform or payment fee - simulation only.</p>
+                        </section>
+                      </details>
+                    </article>
+                  );
+                },
+              )}
+            </div>
+          ) : (
+            <div className="orders-empty">
+              <strong>No active Purchase Commitments</strong>
+              <p>Successful simulated payments will appear here as task-oriented Orders.</p>
+            </div>
+          )}
+
+          {visibleHandoverCommitment && visibleHandoverState ? (
+            <div className="order-workflow">
+              <header className="order-workflow-heading">
+                <span>Selected Order</span>
+                <h3>Transaction communication and actions</h3>
+                <p>
+                  Scheduling, system messages, safety, presence, confirmations, disputes, and
+                  settlement stay inside this Order. Free-form chat and contact exchange remain unavailable.
+                </p>
+              </header>
+              <HandoverPanel
+                actionsBlocked={visibleContactBlocked || visibleSafetyTransactionResolved}
+                actorRole={selectedBuyer ? "buyer" : "seller"}
+                commitment={visibleHandoverCommitment}
+                contactBlocked={visibleContactBlocked}
+                handover={visibleHandoverState}
+                notice={handoverNotices[visibleHandoverCommitment.id] ?? ""}
+                nowMs={clockNowMs}
+                safetyContent={
+                  visibleSafetyState ? (
+                    <SafetyPanel
+                      actorId={selectedAccountId}
+                      commitment={visibleHandoverCommitment}
+                      key={visibleHandoverCommitment.id + ":" + selectedAccountId}
+                      nowMs={clockNowMs}
+                      safety={visibleSafetyState}
+                      onAppeal={appealVisibleSafety}
+                      onReport={reportVisibleSafety}
+                      onResolveAppeal={resolveVisibleSafetyAppeal}
+                      onReview={reviewVisibleSafety}
+                      onSetAppealTime={setVisibleAppealTime}
+                    />
+                  ) : null
+                }
+                onAccept={acceptVisibleHandover}
+                onAdvance={advanceToHandoverWindow}
+                onApproveAdjustment={approveVisibleAdjustment}
+                onBuyerConfirm={confirmVisibleBuyerHandover}
+                onCloseIncomplete={closeVisibleIncompleteHandover}
+                onOpenDispute={openVisibleIncompleteHandoverDispute}
+                onRaiseMismatch={raiseVisibleMaterialMismatch}
+                onRespondMismatch={respondToVisibleMaterialMismatch}
+                onResolveMismatch={resolveVisibleMaterialMismatch}
+                onPropose={proposeVisibleHandover}
+                onProposeRepeat={proposeVisibleRepeatHandover}
+                onRecordPresence={recordVisiblePresence}
+                onRequestAdjustment={requestVisibleAdjustment}
+                onSellerConfirm={confirmVisibleSellerHandover}
+                onSetBoundaryTime={setVisibleBoundaryTime}
+                onExpireScheduling={expireVisibleScheduling}
+                onCancel={cancelVisibleHandover}
+                onReportNoShow={reportVisibleNoShow}
+                onReportSellerUnavailability={reportVisibleSellerUnavailability}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {selectedBuyer && selectedTrustState && selectedTierProgress &&
       selectedPublicTrustSummary && selectedTradingAvailability ? (
