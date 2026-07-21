@@ -600,34 +600,173 @@ separately.
 - PR #35 merged as `372bb0b75e628285017ef4d99de53b1c79bf0159`; issue #21 closed.
 - With issues #17-#21 complete, parent issue #16 closed on 2026-07-19.
 
-### 2026-07-19 - Real-auth integration stabilization
+### 2026-07-19 to 2026-07-20 - Public and member presentation foundation
 
-- **Session role:** Integration, regression repair, testing, and coordination
+- **Session role:** Supporting presentation implementation, testing, review, and manual acceptance
 - **Primary Core Build Session:** No
-- **Working branch:** `codex/issue-1-real-auth`
-- **Pull request:** [#34](https://github.com/beb3k/jualokal/pull/34)
-- **Integration commit:** `1a46dafbd3182b1a06665837590987be0e7d4769`
-- **Objective:** Reconcile real authentication and persisted member profiles with the completed
-  Demo discovery and Checkout Hold work.
+- **Team participants:** Jualokal maintainer and Kiro
+- **Environment:** Kiro CLI using GPT 5.6 Sol; this entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `21e3f64336143a205c7f975d6c7cad0f1d4a47ec`
+- **Working branch:** `codex/issue-37-public-member-foundation`
+- **Feature commit:** `fb267b2eb3ab53d423bd87bb3cd626640d82293a`
+- **Merge commit:** `33b9747d54e2b7f88fb67d1f90f89c6552559b3d`
+- **Related issue:** [#37](https://github.com/beb3k/jualokal/issues/37)
+- **Objective:** Establish the reusable visual system and refresh the public admission and Verified Member presentation without changing routes, admission behavior, privacy boundaries, or marketplace logic.
 
 #### Work completed
 
-- Resolved integration conflicts while preserving discovery recovery, grouped markers, and
-  Checkout Hold consistency.
-- Restored the visible judge-facing Demo Mode entry.
-- Updated obsolete registration tests for `/register`, `/login`, and protected `/dashboard`.
-- Enabled reduced motion during browser automation to prevent smooth-scroll instability without
-  changing product behavior.
+- Added shared brand, typography, spacing, border, shadow, radius, focus, status, and responsive-container tokens.
+- Reworked the public hierarchy around nearby secondhand exchange, privacy-first access, and explicit Buyer and Seller admission paths.
+- Reorganized the Verified Member presentation to distinguish Marketplace, Buyer access, Seller access, Public Identity, Trust Summary, and Seller Activation.
+- Preserved the asymmetric J logo, lowercase `jualokal` treatment, registration and verification form order, protected copy, accessible names, routes, query parameters, metadata, and dependencies.
+- Updated the lazy-loading fallback and responsive states while retaining visible focus, usable dialogs, and phone/desktop containment.
 
 #### Verification and outcome
 
-- Focused integration checks passed 38/38; the final complete suite passed **342/342**.
-- Typecheck, production build, desktop preview, and iPhone preview passed.
-- GitNexus staged impact was LOW with no affected execution flows.
-- Project-owner acceptance and commit authorization completed; commit pushed.
-- PR #34 is draft, mergeable, and awaiting final review/merge.
-- Issue #36/#37 coordination risk was recorded on GitHub: their old admission assumptions must be
-  reconciled with PR #34 before presentation-overhaul implementation begins.
+- `tests/jualokal.spec.ts` passed **16/16** across phone and desktop.
+- Type checking and `git diff --check` passed.
+- GitNexus found five changed files, three symbols, LOW risk, and zero affected processes.
+- Independent review approved the change with no blocking findings.
+- The project owner completed phone and desktop visual acceptance before commit authorization.
+- The accepted branch was committed, pushed, merged into `main`, and issue #37 was closed. User-owned environment and skill files were excluded.
+
+### 2026-07-19 to 2026-07-20 - Task-focused Demo Mode marketplace shell
+
+- **Session role:** Supporting presentation implementation, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Kiro
+- **Environment:** Kiro CLI using GPT 5.6 Sol; this entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `fb267b2eb3ab53d423bd87bb3cd626640d82293a`
+- **Working branch:** `codex/issue-38-demo-shell`
+- **Feature commit:** `591d563ea282b1ee89d20888936016d17b2c87b7`
+- **Merge commit:** `83d4398a79b0dc18584200c4c97ae3da992d326b`
+- **Related issue:** [#38](https://github.com/beb3k/jualokal/issues/38)
+- **Objective:** Replace console-first Demo Mode framing with a responsive, task-focused marketplace shell while preserving all existing workspace names, URL state, simulation disclosures, and behavior.
+
+#### Work completed
+
+- Moved current buyer or Seller work ahead of account/session context and made the active workspace structurally clear.
+- Preserved the primary labels **Buyer discovery**, **View discovery as selected Seller**, **Seller workspace**, and **Demo inventory**.
+- Kept fictional identity, marketplace counts, privacy boundaries, Reset Demo, exit, reviewer controls, Trust Summary, and private Tier Progress available as supporting context.
+- Added text and structural active-state indicators with `aria-current`, while preserving keyboard and screen-reader behavior.
+- Kept the `demo`, `account`, `workspace`, `category`, `view`, and `seller` query parameters and their refresh semantics unchanged.
+- Changed presentation only: no marketplace state transition, persistence rule, privacy copy, dependency, or business logic was altered.
+
+#### Verification and outcome
+
+- Focused Demo Mode, public-page, and trust regression coverage passed **50/50** across phone and desktop.
+- An independent complete-suite audit passed **318/318**.
+- Type checking and `git diff --check` passed.
+- GitNexus found two changed symbols, LOW risk, and zero affected processes.
+- Independent final review returned APPROVED with no findings.
+- The project owner completed phone and desktop visual acceptance before commit authorization.
+- The accepted branch was committed, pushed, merged into `main`, and issue #38 was closed. User-owned environment and skill files were excluded.
+
+### 2026-07-20 - Buyer discovery and Listing inspection modernization
+
+- **Session role:** Supporting presentation implementation, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Kiro
+- **Environment:** Kiro CLI using GPT 5.6 Sol; this entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `591d563ea282b1ee89d20888936016d17b2c87b7`
+- **Working branch:** `codex/issue-39-buyer-discovery`
+- **Feature commit:** `090b4a1720f58b92401242a6f9445762523439de`
+- **Merge commit:** `ef52882cd4293190180568b70c5fb86416fb5634`
+- **Related issue:** [#39](https://github.com/beb3k/jualokal/issues/39)
+- **Objective:** Modernize Buyer discovery, Seller Preview, and full Listing inspection inside the accepted Demo shell without changing discovery rules, URL state, checkout behavior, or privacy constraints.
+
+#### Work completed
+
+- Moved nearby discovery and Category Filter ahead of transaction history and retained the existing Map/List model without adding text search.
+- Rebuilt List cards around item title, Seller Public Identity, permitted Trust Summary access, category, condition, Distance Band, Transaction Price, availability, and a clear `View item` action.
+- Applied the same concise hierarchy to Seller Preview while preserving its phone bottom sheet, desktop side panel, focus containment, Escape handling, focus return, and filtered inventory.
+- Made `View item` transfer focus into the existing full `Demo Listing`, retaining checkout and Structured Question Request behavior without changing the query string.
+- Preserved result parity, ordering, marker privacy, held/unavailable states, empty and location-recovery states, Map Fallback, selected Listing state, and all business logic.
+- Used local synthetic presentation only; no remote media, new filter behavior, or private Seller location information was introduced.
+
+#### Verification and outcome
+
+- Final `tests/map-discovery.spec.ts` coverage passed **22/22** across phone and desktop.
+- The new focused List-to-inspection journey passed on both projects.
+- Larger parallel regression runs exposed only existing worker/timing races; each exact failed scenario passed focused phone/desktop reruns.
+- Type checking and `git diff --check` passed.
+- GitNexus reported LOW risk, one changed symbol (`DemoExperience`), and zero affected processes.
+- Independent review returned APPROVED and included phone/desktop smoke checks for hierarchy, preview focus, unchanged URL state, content order, and horizontal containment.
+- The project owner completed phone and desktop visual acceptance before commit authorization.
+- The accepted branch was committed, pushed, merged into `main`, and issue #39 was closed. Unrelated workspace files remained excluded.
+
+### 2026-07-19 to 2026-07-21 - Real-auth reconciliation and accepted marketplace integration
+
+- **Session role:** External contribution integration, conflict reconciliation, regression repair, testing, review, and manual acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer, contributor Zul Faza Makarima, and Kiro
+- **Environment:** Kiro CLI using GPT 5.6 Sol; this entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Original working branch:** `codex/issue-1-real-auth`
+- **Original pull request:** [#34](https://github.com/beb3k/jualokal/pull/34)
+- **Maintainer reconciliation branch:** `codex/pr-34-reconcile`
+- **Reconciliation commit:** `0a8cde6e83d80a7a4cf41d38fe1b859dc862082f`
+- **Replacement pull request:** [#44](https://github.com/beb3k/jualokal/pull/44)
+- **Merge commit:** `8dc27a9848fe6c0a849e5a0878436a2dc0da19eb`
+- **Objective:** Preserve the contributor's TanStack Start, Supabase authentication, and protected-profile foundation while reconciling it with the already accepted issue #37–#39 presentation stack.
+
+#### Work completed
+
+- Preserved real `/register`, `/login`, `/auth/callback`, and protected `/dashboard` routes alongside the judge-facing Demo Mode experience.
+- Preserved persisted protected member profiles and separated public identity from verified identity.
+- Reconciled the accepted public/member foundation, Demo shell, and buyer discovery rather than merging PR #34 over those changes.
+- Corrected restricted-member marketplace admission and retained a profile-backed verified dashboard instead of fictional authenticated activity.
+- Preserved `demo=1` URL state through the integrated shell.
+- Restricted non-local callback origins to trusted HTTPS configuration through `APP_ORIGIN`.
+- Made sign-out redirect only after successful session invalidation and retained a retryable session on failure.
+- Pinned dependency versions, moved `shadcn` to development dependencies, set Playwright's 60-second timeout and reduced-motion browser flag, and removed a brittle exact-second checkout assumption.
+- Kept contributor authorship in the original history. PR #34 was closed as superseded only after replacement PR #44 carried the reconciled history.
+
+#### Verification and outcome
+
+- Authentication coverage passed **18/18** across phone and desktop.
+- Focused integration coverage passed **72/72**.
+- Type checking and the production build passed.
+- Production smoke checks returned 200 for `/`, `/login`, and `/register`; anonymous `/dashboard` returned a 307 redirect to `/login`; an invalid callback redirected to `/login?confirmation=invalid`.
+- The broad browser run reached **338/340**; both worker-timeout scenarios passed focused single-worker reruns.
+- Fresh semantic review returned APPROVED with no blocking defects.
+- GitNexus reported MEDIUM expected integration risk across one dashboard execution flow.
+- The project owner completed phone and desktop acceptance before the reconciliation commit and publication.
+- PR #44 merged into `main`; PR #34 was closed as superseded. External provider configuration and production deployment remain separate operational follow-ups.
+
+### 2026-07-21 - Task-oriented Orders transaction experience
+
+- **Session role:** Supporting presentation implementation, testing, review, manual acceptance, and publication
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and Kiro
+- **Environment:** Kiro CLI using GPT 5.6 Sol; this entry does not claim Codex app, Codex `/feedback`, or Primary Core Build Session evidence
+- **Starting commit:** `8dc27a9848fe6c0a849e5a0878436a2dc0da19eb`
+- **Working branch:** `codex/issue-40-transaction-experience`
+- **Feature commit:** `0b0731b0022f57103e9efbd09e9813bd48f304bb`
+- **Pull request:** [#45](https://github.com/beb3k/jualokal/pull/45)
+- **Merge commit:** `41773d604ff7a9ebd19148e18983ea0d5f2c312c`
+- **Related issue:** [#40](https://github.com/beb3k/jualokal/issues/40)
+- **Objective:** Present each existing Purchase Commitment as a coherent, task-oriented Order without changing transaction, handover, safety, trust, privacy, timer, location, or payment-simulation rules.
+
+#### Work completed
+
+- Replaced the long Purchase Commitments block with an Orders workspace placed after the active marketplace task.
+- Made item, role-safe counterpart Public Identity, lifecycle status, simulated Escrow, payout, refund, deadline, and next permitted action directly visible from existing state.
+- Kept the immutable Purchase Snapshot in keyboard-native disclosure controls and preserved every frozen field.
+- Moved the unchanged handover and safety panels into the selected Order's transaction communication and actions region without adding chat or contact exchange.
+- Added keyboard-operable Order selection for Buyers and Sellers with multiple permitted transactions; the selected Order controls the nested workflow.
+- Derived summary actions from the same presence, accepted-window, confirmation, meeting-closure, dispute, mismatch, and contact-blocking conditions as the existing handover controls.
+- Added text/structure-backed selected, active, completed, warning, and settlement presentation with responsive phone/desktop containment.
+- Left transaction state modules, callbacks, timers, eligibility, evidence, privacy, and settlement behavior unchanged.
+
+#### Verification and outcome
+
+- The issue-specific transaction experience suite passed **4/4** across phone and desktop, covering multi-Order keyboard selection, workflow binding, horizontal containment, explicit refund state, privacy, and summary/action consistency.
+- Authentication, checkout, handover, safety, trust, and map-discovery regression coverage passed across phone and desktop. A combined 154-case command reached 141 passes without failure before its command timeout; the uncovered handover slices then passed separately.
+- Type checking and the production build passed.
+- Final semantic review returned APPROVED with no blocking or material defects.
+- GitNexus final change detection reported LOW risk, one changed symbol (`DemoExperience`), and zero affected processes.
+- The project owner completed phone and desktop acceptance before commit authorization.
+- PR #45 was CLEAN and MERGEABLE with no configured repository CI checks, merged into `main`, and automatically closed issue #40. Completion evidence was added to the issue.
 
 ## Supporting session template
 
