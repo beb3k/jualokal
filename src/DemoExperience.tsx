@@ -180,7 +180,7 @@ function initialActiveWorkspace(accountId: string): DemoWorkspace {
   const workspace = new URLSearchParams(window.location.search).get("workspace");
   if (workspace === "inventory") return "inventory";
   if (workspace === "orders") return "orders";
-  if (workspace === "trust") return "trust";
+  if (workspace === "trust" && !accountId.startsWith("seller-")) return "trust";
   if (workspace === "seller") return "seller";
   if (workspace === "buyer") return "buyer";
   return accountId.startsWith("seller-") ? "seller" : "buyer";
@@ -1346,7 +1346,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setActiveWorkspace("buyer");
     setDiscoveryAnnouncement("Returned to the map. Map state is preserved.");
     window.requestAnimationFrame(() => {
-      resultPillRef.current?.focus();
+      if (resultPillRef.current) {
+        resultPillRef.current.focus();
+        return;
+      }
+      document.querySelector<HTMLElement>(".maplibregl-canvas")?.focus();
     });
   }
 

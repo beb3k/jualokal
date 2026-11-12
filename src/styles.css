@@ -5262,7 +5262,7 @@ textarea:focus-visible,
 .demo-screen-bar {
   position: sticky;
   z-index: 3;
-  top: 0;
+  top: 72px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5378,4 +5378,16 @@ textarea:focus-visible,
 
 .demo-shell .dialog-backdrop {
   z-index: 60;
+}
+
+@media (max-width: 1023px) {
+  .demo-screen-bar {
+    top: 128px;
+  }
+}
+
+@media (max-width: 680px) {
+  .demo-screen-bar {
+    top: 172px;
+  }
 }
