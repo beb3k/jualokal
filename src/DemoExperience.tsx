@@ -15,7 +15,9 @@ import DiscoveryMap, {
   type DiscoverySellerGroupMarker,
   type DiscoverySellerMarker,
 } from "./DiscoveryMap";
-import DiscoveryPanel from "./DiscoveryPanels";
+import DiscoveryPanel, {
+  type DiscoveryPanelHandle,
+} from "./DiscoveryPanels";
 import { kmOffset, offsetFromKm, offsetPoint } from "./map-points";
 import {
   completeSimulatedPayment,
@@ -626,6 +628,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const panelWasOpenRef = useRef(false);
   const resultPillRef = useRef<HTMLButtonElement | null>(null);
   const discoveryMapRef = useRef<DiscoveryMapHandle | null>(null);
+  const discoveryPanelRef = useRef<DiscoveryPanelHandle | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
   const demoControlsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -1563,6 +1566,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function fitMaximumMap() {
+    // On phones the sheet moves out of the way first, so the fit can use the
+    // smallest snap's camera padding.
+    discoveryPanelRef.current?.collapseToSmallest();
+    window.requestAnimationFrame(() => {
+      discoveryMapRef.current?.fitMaximumBoundary();
+    });
     setMapStatus("Maximum browsing boundary fitted");
     setDiscoveryAnnouncement(
       "Fit maximum area. The full 10 km Maximum Browsing Boundary is visible.",
@@ -2974,7 +2983,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         <section
           aria-hidden={!mapScreenActive}
           aria-label="Seller discovery map"
-          className={`demo-map-frame${mapScreenActive ? "" : " is-covered"}`}
+          className={`demo-map-frame${mapScreenActive ? "" : " is-covered"}${
+            panelOpen ? " is-panel-open" : ""
+          }`}
           inert={!mapScreenActive}
           role="region"
         >
@@ -3049,6 +3060,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               label={panelLabel}
               onBack={backPanelStage}
               onClose={closePanel}
+              ref={discoveryPanelRef}
               stage={panelStage.kind}
               stageKey={panelStageKey}
               title={panelTitle}

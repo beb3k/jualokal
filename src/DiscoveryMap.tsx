@@ -103,6 +103,32 @@ type SavedCamera = Readonly<{
   padding: Readonly<{ top: number; right: number; bottom: number; left: number }>;
 }>;
 
+// Reads the live panel box so camera moves account for the sheet or side panel
+// without remounting or refitting the map when the panel opens or snaps.
+function readPanelCoverage(map: MapLibreMap, container: HTMLElement | null) {
+  const panel = container
+    ?.closest(".demo-shell")
+    ?.querySelector<HTMLElement>(".discovery-panel");
+  if (!panel) return { right: 0, bottom: 0 };
+
+  const mapRect = map.getCanvas().getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  if (panelRect.width < 1 || panelRect.height < 1) {
+    return { right: 0, bottom: 0 };
+  }
+
+  const isSheet = panelRect.width >= mapRect.width - 2;
+  return isSheet
+    ? {
+        right: 0,
+        bottom: Math.max(0, Math.round(mapRect.bottom - panelRect.top)),
+      }
+    : {
+        right: Math.max(0, Math.round(mapRect.right - panelRect.left)),
+        bottom: 0,
+      };
+}
+
 type MapPhase = "loading" | "ready" | "error";
 type MapLibreModule = typeof import("maplibre-gl");
 type MapStyle = Exclude<NonNullable<MapOptions["style"]>, string>;
@@ -303,8 +329,25 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       bounds.extend([point.lng, point.lat]);
     }
 
+    const canvas = map.getCanvas();
+    const wide = canvas.clientWidth >= 1024;
+    const coverage = readPanelCoverage(map, containerRef.current);
     map.fitBounds(bounds, {
-      padding: { top: 120, bottom: 32, left: 48, right: 48 },
+      padding: wide
+        ? {
+            top: 120,
+            bottom: 32,
+            left: 48,
+            right: Math.max(48, coverage.right + 8),
+          }
+        : {
+            top: 120,
+            bottom: panelOpenRef.current
+              ? Math.max(120, coverage.bottom + 24)
+              : 32,
+            left: 24,
+            right: 24,
+          },
       maxZoom: FIRST_FIT_MAX_ZOOM,
       duration: prefersReducedMotion() ? 0 : 450,
     });
@@ -393,18 +436,19 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     savedCameraRef.current = null;
     const canvas = map.getCanvas();
     const wide = canvas.clientWidth >= 1024;
+    const coverage = readPanelCoverage(map, containerRef.current);
     map.fitBounds(bounds, {
       padding: wide
         ? {
             top: 120,
             bottom: 40,
             left: 40,
-            right: panelOpenRef.current ? 480 : 40,
+            right: Math.max(40, coverage.right + 8),
           }
         : {
             top: 160,
             bottom: panelOpenRef.current
-              ? Math.min(canvas.clientHeight * 0.7, 540)
+              ? Math.max(40, coverage.bottom + 24)
               : 40,
             left: 24,
             right: 24,
@@ -421,17 +465,18 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     const canvas = map.getCanvas();
     const point = map.project([anchor.lng, anchor.lat]);
     const wide = canvas.clientWidth >= 1024;
+    const coverage = readPanelCoverage(map, containerRef.current);
     const padding = wide
       ? {
           top: 120,
           bottom: 80,
           left: 48,
-          right: panelOpenRef.current ? 480 : 80,
+          right: Math.max(80, coverage.right + 8),
         }
       : {
           top: 160,
           bottom: panelOpenRef.current
-            ? Math.min(canvas.clientHeight * 0.7, 540)
+            ? Math.max(120, coverage.bottom + 24)
             : 120,
           left: 24,
           right: 24,
@@ -878,6 +923,21 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
             >
               Recenter map
             </button>
+            {boundaryCenter ? (
+              <button
+                className="button button-compact button-outline map-fit-control"
+                onClick={() => {
+                  if (callbacksRef.current.onFitMaximum) {
+                    callbacksRef.current.onFitMaximum();
+                  } else {
+                    fitMaximumBoundary();
+                  }
+                }}
+                type="button"
+              >
+                Fit maximum area
+              </button>
+            ) : null}
           </div>
           {boundaryCenter ? (
             <div
@@ -890,8 +950,11 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
               <button
                 className="button button-compact button-outline"
                 onClick={() => {
-                  fitMaximumBoundary();
-                  callbacksRef.current.onFitMaximum?.();
+                  if (callbacksRef.current.onFitMaximum) {
+                    callbacksRef.current.onFitMaximum();
+                  } else {
+                    fitMaximumBoundary();
+                  }
                 }}
                 type="button"
               >

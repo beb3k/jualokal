@@ -2514,6 +2514,10 @@ footer nav a:hover {
   background: rgba(255, 253, 248, 0.94);
 }
 
+.map-fit-control {
+  display: none;
+}
+
 .map-status {
   left: 16px;
   right: auto;
@@ -4974,6 +4978,8 @@ textarea:focus-visible,
 }
 
 .demo-shell {
+  --demo-panel-width: 400px;
+  --demo-panel-inset: 16px;
   position: relative;
   height: 100dvh;
   min-height: 100dvh;
@@ -5129,10 +5135,10 @@ textarea:focus-visible,
   position: absolute;
   z-index: 35;
   top: 84px;
-  right: 16px;
-  bottom: 16px;
+  right: var(--demo-panel-inset, 16px);
+  bottom: var(--demo-panel-inset, 16px);
   display: flex;
-  width: min(440px, calc(100% - 32px));
+  width: var(--demo-panel-width, 400px);
   max-height: calc(100dvh - 100px);
   flex-direction: column;
   overflow: hidden;
@@ -5140,6 +5146,10 @@ textarea:focus-visible,
   border-radius: 10px 28px 28px 28px;
   background: #fffdf8;
   box-shadow: -18px 24px 70px rgba(23, 37, 30, 0.2);
+}
+
+.discovery-sheet-handle {
+  display: none;
 }
 
 .discovery-panel-heading {
@@ -5167,7 +5177,7 @@ textarea:focus-visible,
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 20px 22px 28px;
+  padding: 20px 22px calc(28px + env(safe-area-inset-bottom));
   touch-action: pan-y;
 }
 
@@ -5311,15 +5321,87 @@ textarea:focus-visible,
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 70dvh;
+    height: calc(var(--sheet-available, 70dvh) * var(--sheet-snap, 0.55));
+    max-height: calc(100dvh - 8px);
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
     border-radius: 22px 22px 0 0;
   }
 
+  .discovery-sheet-handle {
+    display: grid;
+    width: 100%;
+    height: 26px;
+    flex: none;
+    place-items: center;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .discovery-sheet-handle::before {
+    content: "";
+    width: 42px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(23, 60, 43, 0.26);
+  }
+
+  .discovery-sheet-handle.is-dragging {
+    cursor: grabbing;
+  }
+
+  .discovery-sheet-handle:focus-visible {
+    outline: 3px solid #d98e3e;
+    outline-offset: -4px;
+  }
+
   .discovery-panel-heading {
-    border-radius: 22px 22px 0 0;
+    border-radius: 0;
+  }
+
+  .demo-shell {
+    --sheet-height: calc(
+      var(--sheet-available, 70dvh) * var(--sheet-snap, 0.55)
+    );
+  }
+
+  .demo-map-frame.is-panel-open .maplibregl-ctrl-bottom-right {
+    right: 10px;
+    bottom: calc(var(--sheet-height) + 6px);
+    margin: 0;
+  }
+
+  .demo-map-frame.is-panel-open .map-controls {
+    bottom: calc(var(--sheet-height) + 34px);
+  }
+
+  .demo-map-frame.is-panel-open .map-controls .button {
+    min-height: 32px;
+    padding-block: 3px;
+    font-size: 0.72rem;
+  }
+
+  .demo-map-frame.is-panel-open .map-fit-control {
+    display: inline-flex;
+  }
+
+  .demo-map-frame.is-panel-open .map-legend .button {
+    display: none;
+  }
+
+  .demo-map-frame.is-panel-open .map-status {
+    bottom: calc(var(--sheet-height) + 70px);
+  }
+
+  .demo-shell[data-sheet-snap="expanded"] .map-context,
+  .demo-shell[data-sheet-snap="expanded"] .map-legend,
+  .demo-shell[data-sheet-snap="expanded"] .map-status {
+    display: none;
   }
 
   .discovery-result-pill,
@@ -5447,6 +5529,71 @@ textarea:focus-visible,
 
 @media (max-width: 1023px) {
   .demo-map-frame .maplibregl-ctrl-top-right {
-    top: 142px;
+    top: calc(var(--demo-header-bottom, 132px) + 10px);
+  }
+
+  /* Keep the zoom pair inside the thin map band left by the 90 percent snap. */
+  .demo-shell[data-sheet-snap="expanded"]
+    .demo-map-frame
+    .maplibregl-ctrl-top-right {
+    top: calc(var(--demo-header-bottom, 132px) + 1px);
+  }
+
+  .demo-shell[data-sheet-snap="expanded"] .maplibregl-ctrl-group button {
+    width: 26px;
+    height: 26px;
+  }
+
+  .demo-shell[data-sheet-snap="expanded"]
+    .maplibregl-ctrl-top-right
+    .maplibregl-ctrl {
+    margin-top: 0;
+  }
+
+  .demo-shell[data-sheet-snap="expanded"]
+    .demo-map-frame
+    .maplibregl-ctrl-bottom-right {
+    top: calc(var(--demo-header-bottom, 132px) + 2px);
+    right: auto;
+    bottom: auto;
+    left: 10px;
+    margin: 0;
+    max-width: calc(100% - 64px);
+  }
+
+  .demo-shell[data-sheet-snap="expanded"] .demo-map-frame .map-controls {
+    bottom: calc(var(--sheet-height) + 2px);
+  }
+
+  .demo-shell[data-sheet-snap="expanded"]
+    .demo-map-frame
+    .map-controls
+    .button {
+    min-height: 30px;
+    padding-block: 2px;
+    font-size: 0.7rem;
+  }
+}
+
+/* Wider sheet viewports can keep the map chrome on one row above the sheet. */
+@media (min-width: 681px) and (max-width: 1023px) {
+  .demo-map-frame.is-panel-open .map-controls {
+    bottom: calc(var(--sheet-height) + 8px);
+  }
+}
+
+@media (min-width: 1440px) {
+  .demo-shell {
+    --demo-panel-width: 440px;
+  }
+}
+
+/* The side panel floats over the map, so move the map chrome out from under it. */
+@media (min-width: 1024px) {
+  .demo-map-frame.is-panel-open .maplibregl-ctrl-bottom-right,
+  .demo-map-frame.is-panel-open .maplibregl-ctrl-top-right {
+    right: calc(
+      var(--demo-panel-width, 400px) + var(--demo-panel-inset, 16px) + 8px
+    );
   }
 }
