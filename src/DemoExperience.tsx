@@ -2944,10 +2944,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       </header>
 
       {!selectedAccountRestricted && !selectedAccountSuspended ? (
-        <div
+        <section
           aria-hidden={!mapScreenActive}
+          aria-label="Seller discovery map"
           className={`demo-map-frame${mapScreenActive ? "" : " is-covered"}`}
           inert={!mapScreenActive}
+          role="region"
         >
           {discoveryOutcome.kind === "results" ? (
             <DiscoveryMap
@@ -2970,7 +2972,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           ) : (
             <div className="demo-state-screen">{renderDiscoveryState()}</div>
           )}
-        </div>
+        </section>
       ) : null}
 
       {(selectedAccountRestricted || selectedAccountSuspended) && activeWorkspace !== "inventory" ? (
