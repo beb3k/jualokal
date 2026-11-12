@@ -22,7 +22,14 @@ import {
   type ListingClaimability,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
+import ListingPanel, {
+  SellerPreviewPanel,
+  type ListingPanelCheckout,
+  type ListingPanelNotice,
+  type SellerPreviewListing,
+} from "./ListingPanel";
 import SafetyPanel from "./SafetyPanel";
+import { formatRupiah, formatWibTime } from "./format";
 import {
   buyerAcceptHandover,
   buyerConfirmHandover,
@@ -427,6 +434,10 @@ function checkoutAvailabilityLabel(claimability: ListingClaimability) {
   return null;
 }
 
+function getDemoSellerDistanceKm(sellerId: DemoListingSeed["sellerId"]) {
+  return demoSellers.find((seller) => seller.id === sellerId)?.distanceKm ?? 0;
+}
+
 type SessionListing = DemoListingSeed & {
   status: ListingStatus;
   originalPublicationTimeMs: number;
@@ -480,25 +491,6 @@ const initialPublishedListing: PublishedListing = {
   photos: ["Complete-item view", "Detail view", "Second detail view"],
   photoPrivacyConfirmed: true,
 };
-
-function formatRupiah(price: number) {
-  return `Rp ${price.toLocaleString("id-ID")}`;
-}
-
-function formatWibTime(timestampMs: number) {
-  return `${new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Jakarta",
-  }).format(new Date(timestampMs))} WIB`;
-}
-
-function formatCountdown(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
 function createDemoHandoverWindows(committedAtMs: number) {
   const wibDate = new Date(committedAtMs + 7 * 60 * 60 * 1000);
@@ -915,7 +907,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       distanceKm:
         emptyDiscoveryCategory === listing.category
           ? prototypeDiscoveryRadiusKm + 0.01
-          : browsingDistanceOverrideKm ?? listing.distanceKm,
+          : browsingDistanceOverrideKm ?? getDemoSellerDistanceKm(listing.sellerId),
       originalPublicationTimeMs: listing.originalPublicationTimeMs,
       status: listing.status,
       sellerAvailable:
@@ -963,8 +955,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       discoveryResults,
     });
     if (!marker) return [];
-    const homeDistanceKm =
-      browsingDistanceOverrideKm ?? sellerListings[0]?.distanceKm ?? 0;
+    const homeDistanceKm = browsingDistanceOverrideKm ?? seller.distanceKm;
     return [{
       seller,
       marker,
@@ -1014,7 +1005,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     ? getPublicTrustSummary(trustStates[previewSeller.id], clockNowMs)
     : undefined;
   const selectedListingDistanceKm =
-    browsingDistanceOverrideKm ?? selectedSessionListing?.distanceKm;
+    browsingDistanceOverrideKm ??
+    (selectedSessionListing ? selectedListingSeller.distanceKm : undefined);
   const listingIsDiscoverable = Boolean(selectedListingDistanceBand);
   const selectedListingClaimability: ListingClaimability = selectedSessionListing
     ? getListingClaimability(checkoutState, {
@@ -1026,6 +1018,75 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedListingAvailabilityLabel = checkoutAvailabilityLabel(
     selectedListingClaimability,
   );
+  const sellerPreviewListings: SellerPreviewListing[] = previewListings.map(
+    ({ listing }) => ({
+      id: listing.id,
+      title: listing.title,
+      category: listing.category,
+      condition: listing.condition,
+      price: listing.price,
+      availabilityLabel: checkoutAvailabilityLabel(
+        getListingClaimability(checkoutState, {
+          listingId: listing.id,
+          viewerId: selectedAccountId,
+          nowMs: clockNowMs,
+        }),
+      ),
+    }),
+  );
+  const listingPanelNotice: ListingPanelNotice =
+    discoveryOutcome.kind === "results" &&
+    selectedListingDistanceKm !== undefined &&
+    selectedListingDistanceKm > prototypeDiscoveryRadiusKm
+      ? {
+          title: "No nearby listings",
+          body: "This item is outside the 2 km Discovery Radius.",
+        }
+      : discoveryOutcome.kind === "results" &&
+          selectedListingDistanceKm !== undefined &&
+          selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
+          listingStatus !== "active"
+        ? {
+            title: "Listing unavailable",
+            body:
+              listingStatus === "deactivated"
+                ? "The seller deactivated this listing before checkout."
+                : "This cross-listed item is unavailable before checkout.",
+          }
+        : null;
+  const listingPanelCheckout: ListingPanelCheckout | null =
+    selectedBuyer && selectedSessionListing
+      ? selectedBuyerHold
+        ? {
+            kind: "hold",
+            listingTitle: selectedBuyerHold.listingTitle,
+            transactionPrice: selectedBuyerHold.transactionPrice,
+            expiresAtMs: selectedBuyerHold.expiresAtMs,
+            remainingSeconds: selectedHoldRemainingSeconds,
+            onAdvanceToExpiryBoundary: advanceSelectedHoldToExpiryBoundary,
+            onExpire: expireSelectedHold,
+            onAbandon: abandonSelectedHold,
+            onSimulateFailedPayment: simulateFailedSelectedPayment,
+            onSimulateSuccessfulPayment: simulateSuccessfulSelectedPayment,
+          }
+        : {
+            kind: "entry",
+            disabled: Boolean(
+              selectedListingHold || !selectedCheckoutAllowance?.allowed,
+            ),
+            heldByOther: Boolean(selectedListingHold),
+            currentHoldTitle: currentBuyerHold?.listingTitle ?? null,
+            blockedReason:
+              selectedCheckoutAllowance?.reason === "account-suspended"
+                ? "account-suspended"
+                : selectedCheckoutAllowance?.reason === "purchase-capacity-reached"
+                  ? "purchase-capacity-reached"
+                  : null,
+            tierLabel: buyerTierLabel(selectedTierProgress?.tier ?? "Verified"),
+            activePurchaseLimit: selectedTierProgress?.activePurchaseLimit ?? 1,
+            onStart: startSelectedCheckoutHold,
+          }
+      : null;
 
   function selectDiscoveryView(nextView: DiscoveryView) {
     setDiscoveryView(nextView);
@@ -1125,7 +1186,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     window.requestAnimationFrame(() => previewTriggerRef.current?.focus());
   }
 
-  function openPreviewListing(listing: SessionListing) {
+  function openPreviewListing(listingId: string) {
+    const listing = sessionListings.find((candidate) => candidate.id === listingId);
+    if (!listing) return;
     loadListingForEditing(listing);
     setPreviewSellerId(null);
     window.requestAnimationFrame(() => listingDetailRef.current?.focus());
@@ -1207,6 +1270,94 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         },
         nowMs: actionNowMs,
       }),
+    );
+  }
+
+  function advanceSelectedHoldToExpiryBoundary() {
+    if (!selectedBuyerHold) return;
+    setDemoClockPaused(true);
+    setClockOffsetMs(selectedBuyerHold.expiresAtMs - 1000 - Date.now());
+    setClockNowMs(selectedBuyerHold.expiresAtMs - 1000);
+  }
+
+  function expireSelectedHold() {
+    if (!selectedBuyerHold) return;
+    setClockOffsetMs(selectedBuyerHold.expiresAtMs - Date.now());
+    setClockNowMs(selectedBuyerHold.expiresAtMs);
+    setDemoClockPaused(false);
+    setCheckoutState((currentState) =>
+      expireCheckoutHolds(currentState, selectedBuyerHold.expiresAtMs),
+    );
+    setCheckoutNotice(
+      "Checkout Hold expired. The item returned to sale with no commitment or money movement.",
+    );
+  }
+
+  function abandonSelectedHold() {
+    if (!selectedBuyerHold) return;
+    setCheckoutState((currentState) =>
+      endCheckoutHold(
+        currentState,
+        selectedBuyerHold.buyerId,
+        selectedBuyerHold.listingId,
+      ),
+    );
+    setCheckoutNotice("Checkout abandoned. The item returned to sale with no commitment.");
+  }
+
+  function simulateFailedSelectedPayment() {
+    if (!selectedBuyerHold) return;
+    setCheckoutState((currentState) =>
+      endCheckoutHold(
+        currentState,
+        selectedBuyerHold.buyerId,
+        selectedBuyerHold.listingId,
+      ),
+    );
+    setCheckoutNotice("Simulated payment failed. The item returned to sale with no commitment.");
+  }
+
+  function simulateSuccessfulSelectedPayment() {
+    if (!selectedBuyerHold || !selectedSessionListing) return;
+    const actionNowMs = demoClockPaused ? clockNowMs : Date.now() + clockOffsetMs;
+    const nextState = completeSimulatedPayment(checkoutState, {
+      buyerId: selectedBuyerHold.buyerId,
+      sellerId: selectedSessionListing.sellerId,
+      listingId: selectedBuyerHold.listingId,
+      nowMs: actionNowMs,
+      activePurchaseLimit: selectedTierProgress?.activePurchaseLimit ?? 1,
+    });
+    const createdCommitment = nextState.commitments.find(
+      (commitment) =>
+        !checkoutState.commitments.some((current) => current.id === commitment.id),
+    );
+    const commitmentCreated = Boolean(createdCommitment);
+    setCheckoutState(nextState);
+    if (createdCommitment) {
+      setHandoverStates((current) => ({
+        ...current,
+        [createdCommitment.id]: createInitialHandoverState({
+          commitmentId: createdCommitment.id,
+          buyerId: createdCommitment.buyerId,
+          sellerId: createdCommitment.sellerId,
+          listingId: createdCommitment.listingId,
+          committedAtMs: createdCommitment.createdAtMs,
+          buyerTier: buyerTierLabel(selectedTierProgress?.tier ?? "Verified"),
+        }),
+      }));
+      setSafetyStates((current) => ({
+        ...current,
+        [createdCommitment.id]: createInitialSafetyState({
+          transactionId: createdCommitment.id,
+          buyerId: createdCommitment.buyerId,
+          sellerId: createdCommitment.sellerId,
+        }),
+      }));
+    }
+    setCheckoutNotice(
+      commitmentCreated
+        ? "Simulated payment succeeded. Purchase Commitment, unchangeable Purchase Snapshot, and simulated Escrow created."
+        : "Simulated payment did not complete. The hold expired or the buyer reached the active purchase limit.",
     );
   }
 
@@ -2718,81 +2869,20 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ) : null}
 
         {previewSeller && previewDistanceBand && previewTrustSummary ? (
-          <div className="seller-preview-backdrop">
-            <section
-              aria-label={`Seller Preview: ${previewSeller.publicName}`}
-              aria-modal="true"
-              className="seller-preview"
-              ref={previewDialogRef}
-              role="dialog"
-            >
-              <div className="seller-preview-heading">
-                <div>
-                  <p className="eyebrow">Seller Preview · Fictional Demo Seller</p>
-                  <h2>{previewSeller.publicName}</h2>
-                </div>
-                <button
-                  aria-label="Close Seller Preview"
-                  className="button button-compact button-outline"
-                  onClick={closeSellerPreview}
-                  ref={previewCloseButtonRef}
-                >
-                  Close
-                </button>
-              </div>
-              <section aria-label="Trust Summary" className="seller-preview-summary">
-                <strong>Trust Summary</strong>
-                <span>{previewSeller.identityStatus}</span>
-                <span>{previewTrustSummary.successfulHandoverCount} successful handovers</span>
-                <span>{previewTrustSummary.differentPartnerCount} different partners</span>
-                <span>{buyerTierLabel(previewTrustSummary.tier)}</span>
-                <span>{previewDistanceBand}</span>
-              </section>
-              <div className="seller-preview-listings">
-                {previewListings.map(({ listing }) => {
-                  const availabilityLabel = checkoutAvailabilityLabel(
-                    getListingClaimability(checkoutState, {
-                      listingId: listing.id,
-                      viewerId: selectedAccountId,
-                      nowMs: clockNowMs,
-                    }),
-                  );
-                  return (
-                    <article
-                      aria-label={`Seller Preview Listing: ${listing.title}`}
-                      className="seller-preview-listing-card"
-                      key={listing.id}
-                    >
-                      <div
-                        aria-label={`Synthetic presentation for ${listing.title}`}
-                        className="seller-preview-listing-media"
-                        role="img"
-                      >
-                        <span aria-hidden="true">{listing.category.slice(0, 1)}</span>
-                      </div>
-                      <div>
-                        <span className="fictional-label">Simulated Demo Listing</span>
-                        <h3>{listing.title}</h3>
-                        {availabilityLabel ? (
-                          <p className="checkout-availability-badge">{availabilityLabel}</p>
-                        ) : null}
-                        <p>{listing.category} · {listing.condition}</p>
-                        <div className="seller-preview-listing-footer">
-                          <strong>{formatRupiah(listing.price)}</strong>
-                          <button
-                            className="button button-primary"
-                            onClick={() => openPreviewListing(listing)}
-                          >
-                            View item
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
+          <SellerPreviewPanel
+            seller={previewSeller}
+            distanceBand={previewDistanceBand}
+            trustSummary={{
+              successfulHandoverCount: previewTrustSummary.successfulHandoverCount,
+              differentPartnerCount: previewTrustSummary.differentPartnerCount,
+              tierLabel: buyerTierLabel(previewTrustSummary.tier),
+            }}
+            listings={sellerPreviewListings}
+            dialogRef={previewDialogRef}
+            closeButtonRef={previewCloseButtonRef}
+            onClose={closeSellerPreview}
+            onViewItem={openPreviewListing}
+          />
         ) : null}
 
         <div className="demo-layout">
@@ -2806,296 +2896,25 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               checkout entry without leaving nearby discovery.
             </p>
           </div>
-          {discoveryOutcome.kind === "results" &&
-          selectedListingDistanceKm !== undefined &&
-          selectedListingDistanceKm > prototypeDiscoveryRadiusKm ? (
-            <section className="registration-panel marketplace-empty">
-              <h2>No nearby listings</h2>
-              <p>This item is outside the 2 km Discovery Radius.</p>
-            </section>
-          ) : null}
-          {discoveryOutcome.kind === "results" &&
-          selectedListingDistanceKm !== undefined &&
-          selectedListingDistanceKm <= prototypeDiscoveryRadiusKm &&
-          listingStatus !== "active" ? (
-            <section className="registration-panel marketplace-empty">
-              <h2>Listing unavailable</h2>
-              <p>
-                {listingStatus === "deactivated"
-                  ? "The seller deactivated this listing before checkout."
-                  : "This cross-listed item is unavailable before checkout."}
-              </p>
-            </section>
-          ) : null}
-          <section
-            aria-label="Demo Listing"
-            className="listing-card"
-            hidden={!listingIsDiscoverable}
-            ref={listingDetailRef}
-            tabIndex={-1}
-          >
-            <div
-              aria-label="Synthetic fallback illustration, not an item photo"
-              className="listing-art"
-              role="img"
-            >
-              <div className="sun-shape" />
-              <div className="basket-handle" />
-              <div className="basket-body">
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-              <span className="fictional-image-label">
-                Synthetic fallback image · not an item photo
-              </span>
-            </div>
-            <div className="listing-body">
-              <section aria-label="Published item photos" className="listing-photo-gallery">
-                {publishedListing.photos.map((photo, index) => (
-                  <div
-                    aria-label={`Fictional simulated item photo ${index + 1}: ${photo}`}
-                    className="published-photo"
-                    key={photo}
-                    role="img"
-                  >
-                    <span>Fictional simulated item photo {index + 1}</span>
-                    <strong>{photo}</strong>
-                  </div>
-                ))}
-              </section>
-              <div className="listing-meta">
-                <span>{publishedListing.category}</span>
-                <span>{selectedListingSeller.publicName} - Fictional Demo Seller</span>
-                <span>{selectedListingDistanceBand}</span>
-              </div>
-              <h2>{publishedListing.title}</h2>
-              <p className="listing-description">{publishedListing.description}</p>
-              <p className="listing-description">
-                <strong>Condition Disclosure:</strong> {publishedListing.conditionDisclosure}
-              </p>
-              <p className="listing-description">
-                <strong>Measurements / specifications:</strong> {publishedListing.specifications}
-              </p>
-              <p className="listing-description">
-                <strong>Included parts:</strong> {publishedListing.includedParts}
-              </p>
-              <p className="listing-description">
-                {publishedListing.photos.length} item photos · complete-item view included ·{" "}
-                {publishedListing.photoPrivacyConfirmed
-                  ? "location metadata removed"
-                  : "photo privacy not confirmed"}
-              </p>
-              <div className="listing-facts">
-                <span>
-                  <small>Condition Grade</small>
-                  <strong>{publishedListing.conditionGrade}</strong>
-                </span>
-                <span>
-                  <small>Example handover</small>
-                  <strong>
-                    {selectedSessionListing?.handoverTime ?? demoListing.handoverTime}
-                  </strong>
-                </span>
-              </div>
-              <div className="listing-footer">
-                <div>
-                  <small>Transaction Price</small>
-                  <strong>{formatRupiah(publishedListing.price)}</strong>
-                </div>
-                <span className="read-only-badge">Shared listing</span>
-              </div>
-              {selectedListingAvailabilityLabel ? (
-                <p className="checkout-availability-badge">
-                  {selectedListingAvailabilityLabel}
-                </p>
-              ) : null}
-              {selectedBuyer && selectedSessionListing ? (
-                selectedBuyerHold ? (
-                  <section aria-label="Checkout Hold" className="checkout-panel">
-                    <p className="eyebrow">Checkout Hold - Simulation</p>
-                    <h3>{selectedBuyerHold.listingTitle}</h3>
-                    <strong role="timer">
-                      {formatCountdown(selectedHoldRemainingSeconds)} remaining
-                    </strong>
-                    <p>Expires {formatWibTime(selectedBuyerHold.expiresAtMs)}</p>
-                    <p>Transaction Price: {formatRupiah(selectedBuyerHold.transactionPrice)}</p>
-                    <p>
-                      Simulation only. No real payment information or money is requested.
-                    </p>
-                    <div className="listing-actions">
-                      <button
-                        className="button button-outline"
-                        onClick={() => {
-                          setDemoClockPaused(true);
-                          setClockOffsetMs(
-                            selectedBuyerHold.expiresAtMs - 1000 - Date.now(),
-                          );
-                          setClockNowMs(selectedBuyerHold.expiresAtMs - 1000);
-                        }}
-                      >
-                        Advance to one second before hold expiry
-                      </button>
-                      <button
-                        className="button button-outline"
-                        onClick={() => {
-                          setClockOffsetMs(selectedBuyerHold.expiresAtMs - Date.now());
-                          setClockNowMs(selectedBuyerHold.expiresAtMs);
-                          setDemoClockPaused(false);
-                          setCheckoutState((currentState) =>
-                            expireCheckoutHolds(currentState, selectedBuyerHold.expiresAtMs),
-                          );
-                          setCheckoutNotice(
-                            "Checkout Hold expired. The item returned to sale with no commitment or money movement.",
-                          );
-                        }}
-                      >
-                        Advance to exact hold expiry
-                      </button>
-                      <button
-                        className="button button-outline"
-                        onClick={() => {
-                          setCheckoutState((currentState) =>
-                            endCheckoutHold(
-                              currentState,
-                              selectedBuyerHold.buyerId,
-                              selectedBuyerHold.listingId,
-                            ),
-                          );
-                          setCheckoutNotice("Checkout abandoned. The item returned to sale with no commitment.");
-                        }}
-                      >
-                        Abandon checkout
-                      </button>
-                      <button
-                        className="button button-outline"
-                        onClick={() => {
-                          setCheckoutState((currentState) =>
-                            endCheckoutHold(
-                              currentState,
-                              selectedBuyerHold.buyerId,
-                              selectedBuyerHold.listingId,
-                            ),
-                          );
-                          setCheckoutNotice("Simulated payment failed. The item returned to sale with no commitment.");
-                        }}
-                      >
-                        Simulate failed payment
-                      </button>
-                      <button
-                        className="button button-primary"
-                        onClick={() => {
-                          const actionNowMs = demoClockPaused
-                            ? clockNowMs
-                            : Date.now() + clockOffsetMs;
-                          const nextState = completeSimulatedPayment(checkoutState, {
-                            buyerId: selectedBuyerHold.buyerId,
-                            sellerId: selectedSessionListing.sellerId,
-                            listingId: selectedBuyerHold.listingId,
-                            nowMs: actionNowMs,
-                            activePurchaseLimit: selectedTierProgress?.activePurchaseLimit ?? 1,
-                          });
-                          const createdCommitment = nextState.commitments.find(
-                            (commitment) =>
-                              !checkoutState.commitments.some(
-                                (current) => current.id === commitment.id,
-                              ),
-                          );
-                          const commitmentCreated = Boolean(createdCommitment);
-                          setCheckoutState(nextState);
-                          if (createdCommitment) {
-                            setHandoverStates((current) => ({
-                              ...current,
-                              [createdCommitment.id]: createInitialHandoverState({
-                                commitmentId: createdCommitment.id,
-                                buyerId: createdCommitment.buyerId,
-                                sellerId: createdCommitment.sellerId,
-                                listingId: createdCommitment.listingId,
-                                committedAtMs: createdCommitment.createdAtMs,
-                                buyerTier: buyerTierLabel(selectedTierProgress?.tier ?? "Verified"),
-                              }),
-                            }));
-                            setSafetyStates((current) => ({
-                              ...current,
-                              [createdCommitment.id]: createInitialSafetyState({
-                                transactionId: createdCommitment.id,
-                                buyerId: createdCommitment.buyerId,
-                                sellerId: createdCommitment.sellerId,
-                              }),
-                            }));
-                          }
-                          setCheckoutNotice(
-                            commitmentCreated
-                              ? "Simulated payment succeeded. Purchase Commitment, unchangeable Purchase Snapshot, and simulated Escrow created."
-                              : "Simulated payment did not complete. The hold expired or the buyer reached the active purchase limit.",
-                          );
-                        }}
-                      >
-                        Simulate successful payment
-                      </button>
-                    </div>
-                  </section>
-                ) : (
-                  <section aria-label="Checkout" className="checkout-panel">
-                    <p className="eyebrow">Single-item checkout - Simulation</p>
-                    <button
-                      className="button button-primary"
-                      disabled={Boolean(selectedListingHold || !selectedCheckoutAllowance?.allowed)}
-                      onClick={startSelectedCheckoutHold}
-                    >
-                      Start 5-minute Checkout Hold
-                    </button>
-                    {selectedListingHold ? (
-                      <p>
-                        Checkout is already in progress for another buyer. The holder's identity stays private.
-                      </p>
-                    ) : currentBuyerHold ? (
-                      <p>
-                        You already have a Checkout Hold for {currentBuyerHold.listingTitle}.
-                        Finish or abandon it before starting another.
-                      </p>
-                    ) : selectedCheckoutAllowance?.reason === "account-suspended" ? (
-                      <p>Buying and selling are suspended in this simulated session.</p>
-                    ) : selectedCheckoutAllowance?.reason === "purchase-capacity-reached" ? (
-                      <p>
-                        {buyerTierLabel(selectedTierProgress?.tier ?? "Verified")} limit of {selectedTierProgress?.activePurchaseLimit ?? 1} active {(selectedTierProgress?.activePurchaseLimit ?? 1) === 1
-                          ? "Purchase Commitment" : "Purchase Commitments"} reached.
-                      </p>
-                    ) : null}
-                    <p>No real payment information or money is requested.</p>
-                  </section>
-                )
-              ) : null}
-              <section aria-label="Structured listing questions" className="listing-questions">
-                <h3>Ask about this item</h3>
-                <label>
-                  Structured question
-                  <select
-                    value={selectedQuestion}
-                    onChange={(event) => setSelectedQuestion(event.target.value)}
-                  >
-                    {structuredQuestions.map((question) => (
-                      <option key={question}>{question}</option>
-                    ))}
-                  </select>
-                </label>
-                <button className="button button-outline" onClick={requestListingUpdate}>
-                  Request listing update
-                </button>
-                {selectedPendingQuestion ? (
-                  <p role="status">
-                    Request sent: {selectedPendingQuestion}. Simulated activity; the seller must update the shared listing.
-                  </p>
-                ) : null}
-                {questionUpdateNotice ? <p role="status">{questionUpdateNotice}</p> : null}
-                <p>
-                  No free-form chat, contact exchange, price negotiation, or off-platform
-                  arrangements are available.
-                </p>
-              </section>
-            </div>
-          </section>
+          <ListingPanel
+            sectionRef={listingDetailRef}
+            isDiscoverable={listingIsDiscoverable}
+            listing={publishedListing}
+            seller={selectedListingSeller}
+            distanceBand={selectedListingDistanceBand}
+            handoverTime={selectedSessionListing?.handoverTime ?? demoListing.handoverTime}
+            availabilityLabel={selectedListingAvailabilityLabel}
+            notice={listingPanelNotice}
+            checkout={listingPanelCheckout}
+            questions={{
+              options: structuredQuestions,
+              selected: selectedQuestion,
+              pendingQuestion: selectedPendingQuestion,
+              updateNotice: questionUpdateNotice,
+              onSelect: setSelectedQuestion,
+              onRequestUpdate: requestListingUpdate,
+            }}
+          />
 
           <aside className="people-panel" aria-label="Fictional demo accounts">
             <div className="people-heading">
