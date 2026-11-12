@@ -61,6 +61,51 @@ export type ListingPanelCheckout =
       onStart: () => void;
     }>;
 
+export type CheckoutHoldView = Extract<ListingPanelCheckout, { kind: "hold" }>;
+
+export function CheckoutHoldPanel({ checkout }: { checkout: CheckoutHoldView }) {
+  return (
+    <section aria-label="Checkout Hold" className="checkout-panel">
+      <p className="eyebrow">Checkout Hold - Simulation</p>
+      <h3>{checkout.listingTitle}</h3>
+      <strong role="timer">
+        {formatCountdown(checkout.remainingSeconds)} remaining
+      </strong>
+      <p>Expires {formatWibTime(checkout.expiresAtMs)}</p>
+      <p>Transaction Price: {formatRupiah(checkout.transactionPrice)}</p>
+      <p>
+        Simulation only. No real payment information or money is requested.
+      </p>
+      <div className="listing-actions">
+        <button
+          className="button button-outline"
+          onClick={checkout.onAdvanceToExpiryBoundary}
+        >
+          Advance to one second before hold expiry
+        </button>
+        <button className="button button-outline" onClick={checkout.onExpire}>
+          Advance to exact hold expiry
+        </button>
+        <button className="button button-outline" onClick={checkout.onAbandon}>
+          Abandon checkout
+        </button>
+        <button
+          className="button button-outline"
+          onClick={checkout.onSimulateFailedPayment}
+        >
+          Simulate failed payment
+        </button>
+        <button
+          className="button button-primary"
+          onClick={checkout.onSimulateSuccessfulPayment}
+        >
+          Simulate successful payment
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export type ListingPanelQuestions = Readonly<{
   options: readonly string[];
   selected: string;
@@ -79,9 +124,6 @@ type SellerPreviewPanelProps = Readonly<{
     tierLabel: string;
   }>;
   listings: readonly SellerPreviewListing[];
-  dialogRef: RefObject<HTMLElement | null>;
-  closeButtonRef: RefObject<HTMLButtonElement | null>;
-  onClose: () => void;
   onViewItem: (listingId: string) => void;
 }>;
 
@@ -90,82 +132,66 @@ export function SellerPreviewPanel({
   distanceBand,
   trustSummary,
   listings,
-  dialogRef,
-  closeButtonRef,
-  onClose,
   onViewItem,
 }: SellerPreviewPanelProps) {
   return (
-    <div className="seller-preview-backdrop">
-      <section
-        aria-label={`Seller Preview: ${seller.publicName}`}
-        aria-modal="true"
-        className="seller-preview"
-        ref={dialogRef}
-        role="dialog"
-      >
-        <div className="seller-preview-heading">
-          <div>
-            <p className="eyebrow">Seller Preview · Fictional Demo Seller</p>
-            <h2>{seller.publicName}</h2>
-          </div>
-          <button
-            aria-label="Close Seller Preview"
-            className="button button-compact button-outline"
-            onClick={onClose}
-            ref={closeButtonRef}
-          >
-            Close
-          </button>
+    <section
+      aria-label={`Seller Preview: ${seller.publicName}`}
+      className="seller-preview"
+    >
+      <div className="seller-preview-heading">
+        <div>
+          <p className="eyebrow">Seller Preview · Fictional Demo Seller</p>
+          <h2>{seller.publicName}</h2>
         </div>
-        <section aria-label="Trust Summary" className="seller-preview-summary">
-          <strong>Trust Summary</strong>
-          <span>{seller.identityStatus}</span>
-          <span>{trustSummary.successfulHandoverCount} successful handovers</span>
-          <span>{trustSummary.differentPartnerCount} different partners</span>
-          <span>{trustSummary.tierLabel}</span>
-          <span>{distanceBand}</span>
-        </section>
-        <div className="seller-preview-listings">
-          {listings.map((listing) => (
-            <article
-              aria-label={`Seller Preview Listing: ${listing.title}`}
-              className="seller-preview-listing-card"
-              key={listing.id}
-            >
-              <div
-                aria-label={`Synthetic presentation for ${listing.title}`}
-                className="seller-preview-listing-media"
-                role="img"
-              >
-                <span aria-hidden="true">{listing.category.slice(0, 1)}</span>
-              </div>
-              <div>
-                <span className="fictional-label">Simulated Demo Listing</span>
-                <h3>{listing.title}</h3>
-                {listing.availabilityLabel ? (
-                  <p className="checkout-availability-badge">
-                    {listing.availabilityLabel}
-                  </p>
-                ) : null}
-                <p>
-                  {listing.category} · {listing.condition}
-                </p>
-                <div className="seller-preview-listing-footer">
-                  <strong>{formatRupiah(listing.price)}</strong>
-                  <button
-                    className="button button-primary"
-                    onClick={() => onViewItem(listing.id)}
-                  >
-                    View item
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+      </div>
+      <section aria-label="Trust Summary" className="seller-preview-summary">
+        <strong>Trust Summary</strong>
+        <span>{seller.identityStatus}</span>
+        <span>{trustSummary.successfulHandoverCount} successful handovers</span>
+        <span>{trustSummary.differentPartnerCount} different partners</span>
+        <span>{trustSummary.tierLabel}</span>
+        <span>{distanceBand}</span>
       </section>
-    </div>
+      <div className="seller-preview-listings">
+        {listings.map((listing) => (
+          <article
+            aria-label={`Seller Preview Listing: ${listing.title}`}
+            className="seller-preview-listing-card"
+            key={listing.id}
+          >
+            <div
+              aria-label={`Synthetic presentation for ${listing.title}`}
+              className="seller-preview-listing-media"
+              role="img"
+            >
+              <span aria-hidden="true">{listing.category.slice(0, 1)}</span>
+            </div>
+            <div>
+              <span className="fictional-label">Simulated Demo Listing</span>
+              <h3>{listing.title}</h3>
+              {listing.availabilityLabel ? (
+                <p className="checkout-availability-badge">
+                  {listing.availabilityLabel}
+                </p>
+              ) : null}
+              <p>
+                {listing.category} · {listing.condition}
+              </p>
+              <div className="seller-preview-listing-footer">
+                <strong>{formatRupiah(listing.price)}</strong>
+                <button
+                  className="button button-primary"
+                  onClick={() => onViewItem(listing.id)}
+                >
+                  View item
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -179,6 +205,7 @@ type ListingPanelProps = Readonly<{
   availabilityLabel: string | null;
   notice: ListingPanelNotice;
   checkout: ListingPanelCheckout | null;
+  onOpenCheckout?: () => void;
   questions: ListingPanelQuestions;
 }>;
 
@@ -192,6 +219,7 @@ export default function ListingPanel({
   availabilityLabel,
   notice,
   checkout,
+  onOpenCheckout,
   questions,
 }: ListingPanelProps) {
   return (
@@ -295,32 +323,14 @@ export default function ListingPanel({
                 <p>
                   Simulation only. No real payment information or money is requested.
                 </p>
-                <div className="listing-actions">
-                  <button
-                    className="button button-outline"
-                    onClick={checkout.onAdvanceToExpiryBoundary}
-                  >
-                    Advance to one second before hold expiry
-                  </button>
-                  <button className="button button-outline" onClick={checkout.onExpire}>
-                    Advance to exact hold expiry
-                  </button>
-                  <button className="button button-outline" onClick={checkout.onAbandon}>
-                    Abandon checkout
-                  </button>
-                  <button
-                    className="button button-outline"
-                    onClick={checkout.onSimulateFailedPayment}
-                  >
-                    Simulate failed payment
-                  </button>
+                {onOpenCheckout ? (
                   <button
                     className="button button-primary"
-                    onClick={checkout.onSimulateSuccessfulPayment}
+                    onClick={onOpenCheckout}
                   >
-                    Simulate successful payment
+                    Open Checkout Hold
                   </button>
-                </div>
+                ) : null}
               </section>
             ) : (
               <section aria-label="Checkout" className="checkout-panel">

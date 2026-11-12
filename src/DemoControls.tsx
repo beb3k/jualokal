@@ -33,12 +33,13 @@ type DemoControlsProps = Readonly<{
   buyerCount: number;
   sellerCount: number;
   activeListingCount: number;
-  activeWorkspace: "buyer" | "seller" | "inventory";
+  activeWorkspace: "buyer" | "seller" | "inventory" | "orders" | "trust";
   onBuyerDiscovery: () => void;
   onSellerDiscovery: () => void;
   onSellerWorkspace: () => void;
   onInventory: () => void;
   onOrders: () => void;
+  onTrust: () => void;
   browsingLocation: string;
   browsingLocationOptions: readonly Readonly<{ value: string; label: string }>[];
   onBrowsingLocationChange: (value: string) => void;
@@ -70,6 +71,7 @@ export default function DemoControls({
   onSellerWorkspace,
   onInventory,
   onOrders,
+  onTrust,
   browsingLocation,
   browsingLocationOptions,
   onBrowsingLocationChange,
@@ -289,9 +291,22 @@ export default function DemoControls({
             >
               Demo inventory
             </button>
-            <button className="button button-outline" onClick={onOrders}>
+            <button
+              aria-current={activeWorkspace === "orders" ? "page" : undefined}
+              className="button button-outline"
+              onClick={onOrders}
+            >
               Orders
             </button>
+            {selectedBuyer ? (
+              <button
+                aria-current={activeWorkspace === "trust" ? "page" : undefined}
+                className="button button-outline"
+                onClick={onTrust}
+              >
+                Trust overview
+              </button>
+            ) : null}
           </nav>
         </section>
 
