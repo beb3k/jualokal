@@ -2333,14 +2333,13 @@ footer nav a:hover {
   inset: 0;
 }
 
-.discovery-map .discovery-map-canvas {
+/* Two classes outrank MapLibre's later-loaded .maplibregl-map { position: relative }. */
+.discovery-map-surface .discovery-map-canvas {
   position: absolute;
   inset: 0;
 }
 
 .discovery-map-canvas {
-  position: absolute;
-  inset: 0;
   background: #f7f1e5;
 }
 
