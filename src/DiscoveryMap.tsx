@@ -162,6 +162,13 @@ function prefersReducedMotion() {
   );
 }
 
+function isValidMapPoint(
+  point: MapPoint | null | undefined,
+): point is MapPoint {
+  if (!point) return false;
+  return Number.isFinite(point.lat) && Number.isFinite(point.lng);
+}
+
 function supportsWebGl() {
   if (typeof document === "undefined") return false;
   try {
@@ -458,9 +465,9 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     });
   }, []);
 
-  const focusSeller = useCallback((anchor: MapPoint) => {
+  const focusSeller = useCallback((anchor: MapPoint | null | undefined) => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !isValidMapPoint(anchor)) return;
 
     const canvas = map.getCanvas();
     const point = map.project([anchor.lng, anchor.lat]);

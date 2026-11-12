@@ -1114,8 +1114,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     : "closed";
   const chooserGroup =
     panelStage?.kind === "chooser"
-      ? sellerMapMarkers.find(
-          (marker) =>
+      ? discoveryMarkerViews.find(
+          (marker): marker is DiscoverySellerGroupMarker =>
             marker.kind === "group" && marker.groupId === panelStage.groupId,
         )
       : undefined;
@@ -1169,11 +1169,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       );
       if (seller) discoveryMapRef.current?.focusSeller(seller.discoveryAnchor);
     } else if (panelStage.kind === "chooser") {
-      const group = sellerMapMarkers.find(
-        (marker) =>
-          marker.kind === "group" && marker.groupId === panelStage.groupId,
-      );
-      if (group) discoveryMapRef.current?.focusSeller(group.anchor);
+      // Chooser groups are stored as projections; the rendered marker view is
+      // the source that carries the resolved coarse map anchor.
+      if (chooserGroup) {
+        discoveryMapRef.current?.focusSeller(chooserGroup.anchor);
+      }
     }
   }, [panelStageKey]);
   const selectedListingDistanceKm =
