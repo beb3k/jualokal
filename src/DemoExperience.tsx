@@ -22,6 +22,7 @@ import {
   type ListingClaimability,
 } from "./checkout";
 import HandoverPanel, { type PresenceSimulation } from "./HandoverPanel";
+import DemoControls, { type DemoControlsAccount } from "./DemoControls";
 import ListingPanel, {
   SellerPreviewPanel,
   type ListingPanelCheckout,
@@ -545,6 +546,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [selectedListingId, setSelectedListingId] = useState(initialSelectedListingId);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
+  const [demoControlsOpen, setDemoControlsOpen] = useState(false);
   const [title, setTitle] = useState<string>(demoListing.title);
   const [category, setCategory] = useState<string>(demoListing.category);
   const [conditionGrade, setConditionGrade] = useState<string>(demoListing.condition);
@@ -598,6 +600,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const chooserCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const expandedSellerMarkerRef = useRef<HTMLButtonElement | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
+  const demoControlsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (demoClockPaused) return;
@@ -878,6 +881,42 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const activeListingCount = sessionListings.filter(
     (listing) => listing.status === "active" && !committedListingIds.has(listing.id),
   ).length;
+  const currentRoleLabel =
+    activeWorkspace === "inventory"
+      ? "Demo inventory"
+      : activeWorkspace === "seller"
+        ? "Seller workspace"
+        : selectedSeller
+          ? "View discovery as selected Seller"
+          : "Buyer discovery";
+  const headerRoleLabel =
+    activeWorkspace === "inventory"
+      ? "Inventory"
+      : activeWorkspace === "seller"
+        ? "Seller"
+        : selectedSeller
+          ? "Seller discovery"
+          : "Buyer";
+  const selectedAccountName =
+    (selectedBuyer ?? selectedSeller)?.publicName ?? "No simulated account";
+  const selectedBuyerTierLabel = selectedBuyer
+    ? buyerTierLabel(selectedTierProgress?.tier ?? "Verified")
+    : null;
+  const selectedBuyerPurchaseLimit = selectedBuyer
+    ? selectedTierProgress?.activePurchaseLimit ?? selectedBuyer.activePurchaseLimit
+    : null;
+  const demoAccountOptions: DemoControlsAccount[] = [
+    ...demoBuyers.map((buyer) => ({
+      id: buyer.id,
+      group: "buyer" as const,
+      label: `${buyer.publicName} - ${buyerTierLabel(getPublicTrustSummary(trustStates[buyer.id], clockNowMs).tier)} - simulated`,
+    })),
+    ...demoSellers.map((seller) => ({
+      id: seller.id,
+      group: "seller" as const,
+      label: `${seller.publicName} - Demo Seller - simulated`,
+    })),
+  ];
   const selectedPendingQuestion =
     pendingQuestion?.listingId === selectedListingId ? pendingQuestion.question : null;
 
@@ -1087,6 +1126,114 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             onStart: startSelectedCheckoutHold,
           }
       : null;
+
+  function openDemoControls() {
+    setDemoControlsOpen(true);
+  }
+
+  function closeDemoControls() {
+    setDemoControlsOpen(false);
+    window.requestAnimationFrame(() => demoControlsTriggerRef.current?.focus());
+  }
+
+  function selectDemoAccount(nextAccountId: string) {
+    setSelectedAccountId(nextAccountId);
+    if (nextAccountId.startsWith("seller-")) {
+      const firstSellerListing = sessionListings.find(
+        (listing) => listing.sellerId === nextAccountId,
+      );
+      if (firstSellerListing) {
+        loadListingForEditing(firstSellerListing);
+      }
+    }
+    setActiveWorkspace(nextAccountId.startsWith("seller-") ? "seller" : "buyer");
+    closeDemoControls();
+  }
+
+  function selectBrowsingLocation(nextLocation: string) {
+    const selectedScenario = browsingLocations.find(
+      (scenario) => scenario.value === nextLocation,
+    );
+    if (selectedScenario) setBrowsingLocation(selectedScenario.value);
+  }
+
+  function simulateMapFailure() {
+    setBrowsingLocation("map-failure");
+    setDiscoveryAnnouncement(
+      "Map failure snapshot selected. Refresh nearby listings to apply it.",
+    );
+  }
+
+  function refreshNearbyFromControls() {
+    refreshNearbyListings();
+    closeDemoControls();
+  }
+
+  function markStaleFromControls() {
+    markBrowsingLocationStale();
+    closeDemoControls();
+  }
+
+  function openBuyerDiscovery() {
+    setSelectedAccountId(demoBuyer.id);
+    setActiveWorkspace("buyer");
+    closeDemoControls();
+  }
+
+  function openSellerDiscovery() {
+    setActiveWorkspace("buyer");
+    closeDemoControls();
+  }
+
+  function openSellerWorkspace() {
+    const nextSeller = selectedSeller ?? demoSeller;
+    setSelectedAccountId(nextSeller.id);
+    const nextListing =
+      sessionListings.find(
+        (listing) =>
+          listing.id === selectedListingId && listing.sellerId === nextSeller.id,
+      ) ?? sessionListings.find((listing) => listing.sellerId === nextSeller.id);
+    if (nextListing) loadListingForEditing(nextListing);
+    setActiveWorkspace("seller");
+    closeDemoControls();
+  }
+
+  function openInventory() {
+    setActiveWorkspace("inventory");
+    closeDemoControls();
+  }
+
+  function showOrders() {
+    if (demoControlsOpen) closeDemoControls();
+    if (activeWorkspace === "inventory") setActiveWorkspace("buyer");
+    window.requestAnimationFrame(() => {
+      const orders = document.getElementById("purchase-commitments");
+      orders?.scrollIntoView({ block: "start" });
+      orders?.focus({ preventScroll: true });
+    });
+  }
+
+  function openResetConfirmation() {
+    closeDemoControls();
+    setResetConfirmationOpen(true);
+  }
+
+  function exitDemo() {
+    setDemoControlsOpen(false);
+    onExit();
+  }
+
+  function selectDiscoveryCategory(nextCategory: string) {
+    const selectedOption = discoveryCategoryOptions.find(
+      (option) => option.value === nextCategory,
+    );
+    if (selectedOption) {
+      setDiscoveryCategory(selectedOption.value);
+      setDiscoveryAnnouncement(
+        `${selectedOption.label} Category Filter applied; Map and List updated from the same result.`,
+      );
+    }
+  }
 
   function selectDiscoveryView(nextView: DiscoveryView) {
     setDiscoveryView(nextView);
@@ -2202,21 +2349,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setMapStatus("Buyer-centered view ready");
     setDiscoveryAnnouncement("Demo reset with simulated snapshot 1");
     setResetConfirmationOpen(false);
+    setDemoControlsOpen(false);
   }
 
   return (
     <div className="demo-shell">
-      <div aria-label="Demo Mode simulation" className="demo-notice" role="status">
-        <span className="simulation-pill">
-          <span aria-hidden="true">●</span> Demo Mode · Simulation
-        </span>
-        <p>
-          Accounts, listing, location, identity status, and activity are fictional.
-          Fictional pre-verified accounts enter directly; normal admission uses the separate
-          simulated Identity Verification walkthrough.
-        </p>
-      </div>
-
       <header className="demo-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -2224,176 +2361,47 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </span>
           <span>jualokal</span>
         </div>
-        <button
-          className="button button-compact button-outline"
-          onClick={() => setResetConfirmationOpen(true)}
-        >
-          Reset Demo
-        </button>
-        <button className="button button-compact button-outline" onClick={onExit}>
-          Exit demo
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-
-      <section aria-label="Current demo task" className="demo-task-shell">
-        <div className="demo-task-heading">
-          <span className="shell-region-label">Current task</span>
-          <strong>
-            {activeWorkspace === "inventory"
-              ? "Demo inventory"
-              : activeWorkspace === "seller"
-                ? "Seller workspace"
-                : selectedSeller
-                  ? "View discovery as selected Seller"
-                  : "Buyer discovery"}
-          </strong>
-          <small>
-            {(selectedBuyer ?? selectedSeller)?.publicName} · fictional account
-          </small>
-        </div>
-        <nav aria-label="Demo workspaces" className="workspace-tabs">
-          <button
-            aria-current={activeWorkspace === "buyer" && selectedBuyer ? "page" : undefined}
-            className="button button-compact button-outline"
-            onClick={() => {
-              setSelectedAccountId(demoBuyer.id);
-              setActiveWorkspace("buyer");
-            }}
+        <div className="demo-header-actions">
+          <span
+            aria-label="Demo Mode simulation"
+            className="demo-header-simulation"
+            role="status"
           >
-            Buyer discovery
-            {activeWorkspace === "buyer" && selectedBuyer ? (
-              <span aria-hidden="true" className="workspace-active-label">Active</span>
-            ) : null}
-          </button>
-          {selectedSeller ? (
-            <button
-              aria-current={activeWorkspace === "buyer" ? "page" : undefined}
-              className="button button-compact button-outline"
-              onClick={() => setActiveWorkspace("buyer")}
+            <span aria-hidden="true">●</span> Demo - simulation
+          </span>
+          <label className="demo-header-filter">
+            Category Filter
+            <select
+              aria-label="Category Filter"
+              onChange={(event) => selectDiscoveryCategory(event.target.value)}
+              value={discoveryCategory}
             >
-              View discovery as selected Seller
-              {activeWorkspace === "buyer" ? (
-                <span aria-hidden="true" className="workspace-active-label">Active</span>
-              ) : null}
-            </button>
-          ) : null}
-          <button
-            aria-current={activeWorkspace === "seller" ? "page" : undefined}
-            className="button button-compact button-outline"
-            onClick={() => {
-              const nextSeller = selectedSeller ?? demoSeller;
-              setSelectedAccountId(nextSeller.id);
-              const nextListing =
-                sessionListings.find(
-                  (listing) =>
-                    listing.id === selectedListingId && listing.sellerId === nextSeller.id,
-                ) ??
-                sessionListings.find((listing) => listing.sellerId === nextSeller.id);
-              if (nextListing) loadListingForEditing(nextListing);
-              setActiveWorkspace("seller");
-            }}
-          >
-            Seller workspace
-            {activeWorkspace === "seller" ? (
-              <span aria-hidden="true" className="workspace-active-label">Active</span>
-            ) : null}
+              {discoveryCategoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="button button-compact button-outline" onClick={showOrders}>
+            Orders
           </button>
+          <span className="demo-account-chip">
+            <small>{headerRoleLabel}</small>
+            <strong>{selectedAccountName}</strong>
+          </span>
           <button
-            aria-current={activeWorkspace === "inventory" ? "page" : undefined}
-            className="button button-compact button-outline"
-            onClick={() => setActiveWorkspace("inventory")}
+            aria-controls="demo-controls-drawer"
+            aria-expanded={demoControlsOpen}
+            aria-haspopup="dialog"
+            className="button button-compact button-primary"
+            onClick={openDemoControls}
+            ref={demoControlsTriggerRef}
           >
-            Demo inventory
-            {activeWorkspace === "inventory" ? (
-              <span aria-hidden="true" className="workspace-active-label">Active</span>
-            ) : null}
+            Demo controls
           </button>
-        </nav>
-      </section>
-
-      <section aria-label="Demo marketplace summary" className="demo-summary">
-        <div>
-          <span className="fictional-label">Session-only simulated marketplace</span>
-          <strong>{demoBuyers.length} Demo Buyers</strong>
-          <strong>{demoSellers.length} Demo Sellers</strong>
-          <strong>{activeListingCount} active Demo Listings</strong>
         </div>
-        <label>
-          Selected fictional account
-          <select
-            aria-label="Selected fictional account"
-            value={selectedAccountId}
-            onChange={(event) => {
-              const nextAccountId = event.target.value;
-              setSelectedAccountId(nextAccountId);
-              if (nextAccountId.startsWith("seller-")) {
-                const firstSellerListing = sessionListings.find(
-                  (listing) => listing.sellerId === nextAccountId,
-                );
-                if (firstSellerListing) {
-                  loadListingForEditing(firstSellerListing);
-                }
-              }
-              setActiveWorkspace(
-                nextAccountId.startsWith("seller-") ? "seller" : "buyer",
-              );
-            }}
-          >
-            <optgroup label="Fictional Demo Buyers (3)">
-              {demoBuyers.map((buyer) => (
-                <option key={buyer.id} value={buyer.id}>
-                  {buyer.publicName} - {buyerTierLabel(getPublicTrustSummary(trustStates[buyer.id], clockNowMs).tier)} - simulated
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Fictional Demo Sellers (5)">
-              {demoSellers.map((seller) => (
-                <option key={seller.id} value={seller.id}>
-                  {seller.publicName} - Demo Seller - simulated
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-        <section aria-label="Selected simulated identity" className="selected-account-card">
-          {selectedBuyer ? (
-            <>
-              <span className="fictional-label">Fictional Demo Buyer</span>
-              <strong>{selectedBuyer.publicName}</strong>
-              <span>Current role: Buyer discovery</span>
-              <span>Identity status: {selectedBuyer.identityStatus}</span>
-              <span>
-                Buyer Tier: {selectedTierProgress
-                  ? buyerTierLabel(selectedTierProgress.tier)
-                  : selectedBuyer.tier}
-              </span>
-              <span>
-                Active Purchase Commitment limit:{" "}
-                {selectedTierProgress?.activePurchaseLimit ?? selectedBuyer.activePurchaseLimit}
-              </span>
-              <div>
-                <strong>Fictional history</strong>
-                <p>{selectedBuyer.history}</p>
-              </div>
-            </>
-          ) : selectedSeller ? (
-            <>
-              <span className="fictional-label">Fictional Demo Seller</span>
-              <strong>{selectedSeller.publicName}</strong>
-              <span>Current role: Seller workspace</span>
-              <span>Identity status: {selectedSeller.identityStatus}</span>
-              <span>{selectedSeller.activationStatus}</span>
-              <span>{selectedSeller.handovers}</span>
-            </>
-          ) : null}
-        </section>
-        <p className="persistent-privacy-note">
-          No real identity, contact, precise location, or payment information appears in Demo
-          Mode. Protected account records, internal details, Home Anchors, and raw location
-          coordinates stay absent.
-        </p>
-      </section>
+      </header>
 
       {(selectedAccountRestricted || selectedAccountSuspended) && activeWorkspace !== "inventory" ? (
         <main className="demo-main">
@@ -2414,43 +2422,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <p className="eyebrow">Simulated Browsing Location · Bandung</p>
             <h1>Nearby in Bandung</h1>
             <p>
-              Choose a fictional replacement snapshot, then refresh explicitly. Demo Mode never
-              requests device location or continuously tracks movement.
+              Demo Mode uses a fictional Browsing Location and never requests device location or
+              continuously tracks movement. Open Demo controls to replace the snapshot and refresh
+              nearby listings explicitly.
             </p>
-            <label>
-              Replacement Simulated Browsing Location
-              <select
-                aria-label="Simulated Browsing Location"
-                value={browsingLocation}
-                onChange={(event) => {
-                  const selectedScenario = browsingLocations.find(
-                    (scenario) => scenario.value === event.target.value,
-                  );
-                  if (selectedScenario) setBrowsingLocation(selectedScenario.value);
-                }}
-              >
-                {browsingLocations.map((location) => (
-                  <option key={location.value} value={location.value}>
-                    {location.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="location-refresh-actions">
-              <button className="button button-primary" onClick={refreshNearbyListings}>
-                Refresh nearby listings
-              </button>
-              <button
-                className="button button-outline"
-                onClick={markBrowsingLocationStale}
-              >
-                Simulate stale resumed session
-              </button>
-              <small>
-                Active simulated snapshot {browsingLocationSnapshot.revision}. Selection alone
-                never changes discovery.
-              </small>
-            </div>
             <p>
               Prototype Discovery Radius: 2 km · The permanent maximum is 10 km and cannot be
               overridden.
@@ -2493,30 +2468,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 List
               </button>
             </div>
-            <label className="discovery-filter">
-              Category Filter
-              <select
-                aria-label="Category Filter"
-                value={discoveryCategory}
-                onChange={(event) => {
-                  const selectedOption = discoveryCategoryOptions.find(
-                    (option) => option.value === event.target.value,
-                  );
-                  if (selectedOption) {
-                    setDiscoveryCategory(selectedOption.value);
-                    setDiscoveryAnnouncement(
-                      `${selectedOption.label} Category Filter applied; Map and List updated from the same result.`,
-                    );
-                  }
-                }}
-              >
-                {discoveryCategoryOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
 
           {mapFallbackActive ? (
@@ -3223,7 +3174,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       )}
 
       {(selectedBuyer || selectedSeller) && activeWorkspace !== "inventory" ? (
-        <section aria-label="Purchase Commitments" className="registration-panel orders-workspace">
+        <section
+          aria-label="Purchase Commitments"
+          className="registration-panel orders-workspace"
+          id="purchase-commitments"
+          tabIndex={-1}
+        >
           <header className="orders-heading">
             <div>
               <p className="eyebrow">Orders · Transaction workspace</p>
@@ -3615,6 +3571,57 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           </section>
         </div>
       ) : null}
+
+      <DemoControls
+        accountOptions={demoAccountOptions}
+        activeListingCount={activeListingCount}
+        activePurchaseLimit={selectedBuyerPurchaseLimit}
+        activeWorkspace={activeWorkspace}
+        browsingLocation={browsingLocation}
+        browsingLocationOptions={browsingLocations.map(({ value, label }) => ({
+          value,
+          label,
+        }))}
+        buyerCount={demoBuyers.length}
+        buyerTierLabel={selectedBuyerTierLabel}
+        currentRole={currentRoleLabel}
+        onAccountChange={selectDemoAccount}
+        onBrowsingLocationChange={selectBrowsingLocation}
+        onBuyerDiscovery={openBuyerDiscovery}
+        onClose={closeDemoControls}
+        onExit={exitDemo}
+        onInventory={openInventory}
+        onMarkStale={markStaleFromControls}
+        onOrders={showOrders}
+        onRefreshNearby={refreshNearbyFromControls}
+        onReset={openResetConfirmation}
+        onSellerDiscovery={openSellerDiscovery}
+        onSellerWorkspace={openSellerWorkspace}
+        onSimulateMapFailure={simulateMapFailure}
+        open={demoControlsOpen}
+        selectedAccountId={selectedAccountId}
+        selectedBuyer={
+          selectedBuyer
+            ? {
+                publicName: selectedBuyer.publicName,
+                identityStatus: selectedBuyer.identityStatus,
+                history: selectedBuyer.history,
+              }
+            : null
+        }
+        selectedSeller={
+          selectedSeller
+            ? {
+                publicName: selectedSeller.publicName,
+                identityStatus: selectedSeller.identityStatus,
+                activationStatus: selectedSeller.activationStatus,
+                handovers: selectedSeller.handovers,
+              }
+            : null
+        }
+        sellerCount={demoSellers.length}
+        snapshotRevision={browsingLocationSnapshot.revision}
+      />
 
       {resetConfirmationOpen ? (
         <div className="dialog-backdrop">
