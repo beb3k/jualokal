@@ -2324,31 +2324,41 @@ footer nav a:hover {
   overflow: hidden;
   border: 1px solid rgba(23, 60, 43, 0.16);
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(217, 142, 62, 0.13) 0 3px, transparent 4px),
-    linear-gradient(135deg, rgba(232, 235, 223, 0.92), rgba(247, 241, 229, 0.9));
+  background: #f7f1e5;
   box-shadow: 0 18px 45px rgba(46, 62, 52, 0.08);
 }
 
-.discovery-map::before,
-.discovery-map::after {
+.discovery-map-surface {
   position: absolute;
   inset: 0;
-  content: "";
-  pointer-events: none;
 }
 
-.discovery-map::before {
-  background-image:
-    linear-gradient(rgba(23, 60, 43, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(23, 60, 43, 0.06) 1px, transparent 1px);
-  background-size: 56px 56px;
+.discovery-map .discovery-map-canvas {
+  position: absolute;
+  inset: 0;
 }
 
-.discovery-map::after {
-  background:
-    linear-gradient(28deg, transparent 44%, rgba(255, 253, 248, 0.7) 45% 49%, transparent 50%),
-    linear-gradient(116deg, transparent 56%, rgba(255, 253, 248, 0.55) 57% 61%, transparent 62%);
+.discovery-map-canvas {
+  background: #f7f1e5;
+}
+
+.discovery-map-canvas .maplibregl-canvas {
+  outline: none;
+}
+
+.discovery-map-canvas .maplibregl-canvas:focus-visible {
+  outline: 3px solid #b95f37;
+  outline-offset: -3px;
+}
+
+.discovery-map .maplibregl-ctrl-bottom-right {
+  z-index: 5;
+  margin: 0 18px 16px 0;
+}
+
+.discovery-map .maplibregl-ctrl-attrib {
+  background: rgba(255, 253, 248, 0.92);
+  font-size: 0.625rem;
 }
 
 .map-context,
@@ -2369,6 +2379,7 @@ footer nav a:hover {
   color: #173c2b;
   background: rgba(255, 253, 248, 0.9);
   box-shadow: 0 8px 22px rgba(46, 62, 52, 0.08);
+  pointer-events: none;
 }
 
 .map-context span,
@@ -2377,24 +2388,26 @@ footer nav a:hover {
   font-size: 0.75rem;
 }
 
-.buyer-location-marker {
-  position: absolute;
+.map-simulation-note {
+  color: #9c4f24;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.map-buyer-marker {
   z-index: 2;
-  top: 50%;
-  left: 50%;
   width: 22px;
   height: 22px;
-  transform: translate(-50%, -50%);
+  box-sizing: border-box;
   border: 5px solid #fffdf8;
   border-radius: 50%;
   background: #316e91;
   box-shadow: 0 0 0 2px #316e91, 0 6px 18px rgba(23, 60, 43, 0.2);
 }
 
-.seller-marker-position {
-  position: absolute;
-  z-index: 4;
-  transition: left 180ms ease, transform 180ms ease;
+.map-seller-marker {
+  z-index: 3;
 }
 
 .seller-discovery-marker {
@@ -2489,9 +2502,9 @@ footer nav a:hover {
 }
 
 .map-controls {
-  right: 16px;
-  bottom: 48px;
-  display: grid;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
   gap: 7px;
 }
 
@@ -2501,12 +2514,109 @@ footer nav a:hover {
 }
 
 .map-status {
-  right: 16px;
-  bottom: 16px;
+  left: 16px;
+  right: auto;
+  bottom: 64px;
+  max-width: calc(100% - 32px);
   margin: 0;
   border-radius: 999px;
   padding: 7px 10px;
   background: rgba(255, 253, 248, 0.92);
+  pointer-events: none;
+}
+
+.map-loading,
+.map-error {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #f7f1e5;
+}
+
+.map-loading {
+  gap: 12px;
+  align-content: center;
+  color: #173c2b;
+  font-weight: 800;
+}
+
+.map-loading-indicator {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(23, 60, 43, 0.18);
+  border-top-color: #315846;
+  border-radius: 50%;
+  animation: map-loading-spin 900ms linear infinite;
+}
+
+.map-error {
+  background: rgba(247, 241, 229, 0.94);
+}
+
+.map-error-card {
+  width: min(430px, 100%);
+  border: 1px solid rgba(23, 60, 43, 0.16);
+  border-radius: 20px;
+  padding: 22px;
+  background: #fffdf8;
+  box-shadow: 0 18px 45px rgba(46, 62, 52, 0.12);
+}
+
+.map-error-card h3,
+.map-error-card p,
+.map-error-card small {
+  margin: 0;
+}
+
+.map-error-card p {
+  margin-top: 8px;
+  color: #65736b;
+}
+
+.map-error-card small {
+  display: block;
+  margin-top: 12px;
+  color: #65736b;
+}
+
+.map-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.map-tile-notice {
+  position: absolute;
+  z-index: 6;
+  left: 16px;
+  bottom: 104px;
+  max-width: min(340px, calc(100% - 32px));
+  margin: 0;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #173c2b;
+  background: rgba(255, 253, 248, 0.95);
+  box-shadow: 0 8px 22px rgba(46, 62, 52, 0.1);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+
+@keyframes map-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-loading-indicator {
+    animation: none;
+    border-color: rgba(23, 60, 43, 0.35);
+    border-top-color: #315846;
+  }
 }
 
 .seller-identity-button {
@@ -2614,17 +2724,29 @@ footer nav a:hover {
     border-radius: 22px;
   }
 
+  .map-context {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100% - 76px);
+  }
+
   .map-controls {
-    right: 12px;
-    bottom: 74px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    left: 12px;
+    bottom: 64px;
   }
 
   .map-status {
-    right: 12px;
-    bottom: 12px;
+    right: auto;
+    bottom: 112px;
     left: 12px;
+    max-width: calc(100% - 24px);
     border-radius: 12px;
+  }
+
+  .map-tile-notice {
+    left: 12px;
+    bottom: 156px;
+    max-width: calc(100% - 24px);
   }
 
   .seller-preview-backdrop {
@@ -2640,12 +2762,6 @@ footer nav a:hover {
     border-radius: 24px 24px 0 0;
     padding: 24px 20px;
     box-shadow: 0 -18px 45px rgba(23, 37, 30, 0.18);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .seller-marker-position {
-    transition: none;
   }
 }
 

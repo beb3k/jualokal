@@ -37,6 +37,8 @@ export const demoBuyers = [
   },
 ] as const;
 
+export const demoMapOrigin = { lat: -6.9105, lng: 107.6065 } as const;
+
 export const demoSellers = [
   {
     id: "seller-dimas",
@@ -44,6 +46,7 @@ export const demoSellers = [
     initials: "DP",
     handovers: "12 fictional handovers",
     distanceKm: 0.85,
+    discoveryAnchor: { lat: -6.90388, lng: 107.61035 },
     identityStatus: "Simulated as verified",
     activationStatus: "Seller Activation complete - simulated",
   },
@@ -53,6 +56,7 @@ export const demoSellers = [
     initials: "SN",
     handovers: "8 fictional handovers",
     distanceKm: 0.65,
+    discoveryAnchor: { lat: -6.912499, lng: 107.612033 },
     identityStatus: "Simulated as verified",
     activationStatus: "Seller Activation complete - simulated",
   },
@@ -62,6 +66,7 @@ export const demoSellers = [
     initials: "BA",
     handovers: "6 fictional handovers",
     distanceKm: 0.65,
+    discoveryAnchor: { lat: -6.913511, lng: 107.611547 },
     identityStatus: "Simulated as verified",
     activationStatus: "Seller Activation complete - simulated",
   },
@@ -71,6 +76,7 @@ export const demoSellers = [
     initials: "RK",
     handovers: "10 fictional handovers",
     distanceKm: 1.3,
+    discoveryAnchor: { lat: -6.914498, lng: 107.595433 },
     identityStatus: "Simulated as verified",
     activationStatus: "Seller Activation complete - simulated",
   },
@@ -80,6 +86,7 @@ export const demoSellers = [
     initials: "WH",
     handovers: "4 fictional handovers",
     distanceKm: 1.3,
+    discoveryAnchor: { lat: -6.914498, lng: 107.595433 },
     identityStatus: "Simulated as verified",
     activationStatus: "Seller Activation complete - simulated",
   },

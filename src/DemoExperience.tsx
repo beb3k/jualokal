@@ -4,11 +4,17 @@ import {
   demoBuyers,
   demoListing,
   demoListings,
+  demoMapOrigin,
   demoSeller,
   demoSellerMarkerGroups,
   demoSellers,
   type DemoListingSeed,
 } from "./demo-data";
+import DiscoveryMap, {
+  type DiscoverySellerGroupMarker,
+  type DiscoverySellerMarker,
+} from "./DiscoveryMap";
+import { kmOffset, offsetFromKm, offsetPoint } from "./map-points";
 import {
   completeSimulatedPayment,
   createInitialCheckoutState,
@@ -93,11 +99,9 @@ import {
   createSellerDiscoveryMarker,
   discoverListings,
   getSellerMarkerInitials,
-  projectSellerDiscoveryMarker,
   type ApprovedDiscoveryCategory,
   type DiscoveryCategory,
   type DistanceBand,
-  type SellerMapMarker,
 } from "./discovery";
 
 const discoveryCategoryLabels: Record<ApprovedDiscoveryCategory, string> = {
@@ -130,6 +134,7 @@ const structuredQuestions = [
 const prototypeDiscoveryRadiusKm = 2;
 const discoveryViewStorageKey = "jualokal.discovery-view";
 const mapHomeAnchorVersion = "fictional-anchor-v1";
+const separableGroupZoom = 16.5;
 const defaultIncludedParts = "Item and all parts shown in the fictional photos.";
 
 type DiscoveryView = "map" | "list";
@@ -588,9 +593,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     "Nearby discovery ready with simulated snapshot 1",
   );
   const [previewSellerId, setPreviewSellerId] = useState<string | null>(null);
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [chooserGroupId, setChooserGroupId] = useState<string | null>(null);
-  const [mapViewport, setMapViewport] = useState({ panX: 0, zoom: 1 });
+  const [mapZoom, setMapZoom] = useState(14);
+  const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewDialogRef = useRef<HTMLElement | null>(null);
@@ -598,7 +603,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const chooserTriggerRef = useRef<HTMLButtonElement | null>(null);
   const chooserDialogRef = useRef<HTMLElement | null>(null);
   const chooserCloseButtonRef = useRef<HTMLButtonElement | null>(null);
-  const expandedSellerMarkerRef = useRef<HTMLButtonElement | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
   const demoControlsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -688,15 +692,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }, [chooserGroupId]);
 
   useEffect(() => {
-    if (!expandedGroupId) return;
-    window.requestAnimationFrame(() => expandedSellerMarkerRef.current?.focus());
-  }, [expandedGroupId]);
-
-  useEffect(() => {
-    setExpandedGroupId(null);
     setChooserGroupId(null);
     setPreviewSellerId(null);
-    setMapViewport({ panX: 0, zoom: 1 });
   }, [discoveryCategory, selectedAccountId]);
   useEffect(() => {
     let pageWasHidden = document.visibilityState === "hidden";
@@ -983,6 +980,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const selectedListingDistanceBand = visibleDemoListings.find(
     ({ listing }) => listing.id === selectedListingId,
   )?.distanceBand;
+  const buyerPoint = offsetPoint(
+    demoMapOrigin,
+    0,
+    browsingDistanceOverrideKm ?? 0,
+  );
   const mapSellerMarkers = demoSellers.flatMap((seller) => {
     const sellerListings = sessionListings.filter(
       (listing) => listing.sellerId === seller.id,
@@ -994,21 +996,86 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       discoveryResults,
     });
     if (!marker) return [];
-    const homeDistanceKm = browsingDistanceOverrideKm ?? seller.distanceKm;
     return [{
-      seller,
       marker,
-      projection: projectSellerDiscoveryMarker(marker, homeDistanceKm),
+      anchorOffset: kmOffset(demoMapOrigin, seller.discoveryAnchor),
     }];
   });
+  const expandedGroupId =
+    mapZoom >= separableGroupZoom
+      ? demoSellerMarkerGroups.find((group) => group.separation === "separable")?.id ??
+        null
+      : null;
   const sellerMapMarkers = createSellerMapMarkers({
-    markers: mapSellerMarkers.map(({ marker, projection }) => ({ marker, projection })),
+    markers: mapSellerMarkers.map(({ marker, anchorOffset }) => ({
+      marker,
+      projection: {
+        stableMarkerKey: marker.stableMarkerKey,
+        offsetXKm: anchorOffset.eastKm,
+        offsetYKm: anchorOffset.northKm,
+        frameKm: 2 as const,
+      },
+    })),
     groups: demoSellerMarkerGroups,
     expandedGroupId,
   });
-  const mapFrameKm = sellerMapMarkers.some(({ projection }) => projection.frameKm === 3)
-    ? 3
-    : 2;
+  const discoveryMarkerViews: DiscoverySellerMarker[] = sellerMapMarkers.flatMap(
+    (mapMarker) => {
+      const representedSellerIds = mapMarker.kind === "group"
+        ? mapMarker.sellerIds
+        : [mapMarker.marker.sellerId];
+      const representedHeldListings = visibleHeldListings.filter(({ listing }) =>
+        representedSellerIds.includes(listing.sellerId),
+      );
+      const competingHoldCount = representedHeldListings.filter(
+        ({ claimability }) => claimability.kind === "held-by-other",
+      ).length;
+      const ownHoldCount = representedHeldListings.filter(
+        ({ claimability }) => claimability.kind === "held-by-viewer",
+      ).length;
+      const holdSummary = competingHoldCount > 0
+        ? `${competingHoldCount} held ${
+            competingHoldCount === 1 ? "Listing" : "Listings"
+          } unavailable to claim`
+        : ownHoldCount > 0
+          ? `${ownHoldCount} ${
+              ownHoldCount === 1 ? "Listing" : "Listings"
+            } in your Checkout Hold`
+          : null;
+      const anchor = offsetFromKm(
+        demoMapOrigin,
+        mapMarker.projection.offsetXKm,
+        mapMarker.projection.offsetYKm,
+      );
+
+      if (mapMarker.kind === "group") {
+        return [{
+          kind: "group" as const,
+          key: mapMarker.projection.stableMarkerKey,
+          groupId: mapMarker.groupId,
+          separation: mapMarker.separation,
+          sellerIds: mapMarker.sellerIds,
+          sellerCount: mapMarker.sellerCount,
+          anchor,
+          holdSummary,
+        }];
+      }
+
+      const seller = demoSellers.find(
+        (candidate) => candidate.id === mapMarker.marker.sellerId,
+      );
+      if (!seller) return [];
+      return [{
+        kind: "individual" as const,
+        key: mapMarker.marker.stableMarkerKey,
+        sellerId: seller.id,
+        initials: getSellerMarkerInitials(seller.publicName),
+        listingCount: mapMarker.marker.listingCount,
+        anchor,
+        holdSummary,
+      }];
+    },
+  );
   const mapFallbackActive =
     browsingLocationIsAvailable &&
     discoverySucceeded &&
@@ -1017,9 +1084,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const presentedDiscoveryView: DiscoveryView = mapFallbackActive
     ? "list"
     : discoveryView;
-  const expandedSellerId = expandedGroupId
-    ? demoSellerMarkerGroups.find((group) => group.id === expandedGroupId)?.sellerIds[0]
-    : undefined;
   const chooserGroup = chooserGroupId
     ? sellerMapMarkers.find(
         (marker) => marker.kind === "group" && marker.groupId === chooserGroupId,
@@ -1267,7 +1331,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setMapRendering(
       scenario.kind === "valid" && "mapFailure" in scenario ? "failed" : "ready",
     );
-    setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view restored after refresh");
     setPreviewSellerId(null);
 
@@ -1290,7 +1353,6 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function retryMap() {
     setMapRendering("ready");
-    setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view restored");
     setDiscoveryAnnouncement("Map rendering recovered. Map View restored.");
   }
@@ -1304,14 +1366,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function selectSellerMarkerGroup(
-    group: Extract<SellerMapMarker, { kind: "group" }>,
+    group: DiscoverySellerGroupMarker,
     trigger: HTMLButtonElement,
   ) {
     chooserTriggerRef.current = trigger;
     if (group.separation === "separable") {
-      setExpandedGroupId(group.groupId);
-      setMapViewport({ ...mapViewport, zoom: 1.5 });
-      setMapStatus(`${group.sellerCount} Sellers separated at the same coarse positions`);
+      setMapStatus(
+        `${group.sellerCount} Sellers separate as the map zooms in`,
+      );
       return;
     }
     setChooserGroupId(group.groupId);
@@ -1341,14 +1403,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     window.requestAnimationFrame(() => listingDetailRef.current?.focus());
   }
 
-  function adjustMapViewport(next: { panX: number; zoom: number }) {
-    setMapViewport(next);
-    setMapStatus("Viewport adjusted; discovery results unchanged");
-  }
-
   function recenterMap() {
-    setExpandedGroupId(null);
-    setMapViewport({ panX: 0, zoom: 1 });
     setMapStatus("Buyer-centered view restored");
   }
 
@@ -2343,9 +2398,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setDiscoveryView("map");
     window.localStorage.setItem(discoveryViewStorageKey, "map");
     setPreviewSellerId(null);
-    setExpandedGroupId(null);
     setChooserGroupId(null);
-    setMapViewport({ panX: 0, zoom: 1 });
+    setMapZoom(14);
+    setMapInstanceKey((current) => current + 1);
     setMapStatus("Buyer-centered view ready");
     setDiscoveryAnnouncement("Demo reset with simulated snapshot 1");
     setResetConfirmationOpen(false);
@@ -2543,145 +2598,28 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           ) : null}
 
           {discoveryOutcome.kind === "results" && presentedDiscoveryView === "map" ? (
-            <section aria-label="Seller discovery map" className="discovery-map">
-              <div className="map-context">
-                <strong>Buyer-centered {mapFrameKm} km context</strong>
-                <span>No radius or Seller Convenience Zone is drawn</span>
-              </div>
-              <div
-                aria-label="Your location"
-                className="buyer-location-marker"
-                role="img"
-              >
-                <span aria-hidden="true" />
-              </div>
-              {sellerMapMarkers.flatMap((mapMarker) => {
-                const projection = mapMarker.projection;
-                const representedSellerIds = mapMarker.kind === "group"
-                  ? mapMarker.sellerIds
-                  : [mapMarker.marker.sellerId];
-                const representedHeldListings = visibleHeldListings.filter(({ listing }) =>
-                  representedSellerIds.includes(listing.sellerId),
-                );
-                const competingHoldCount = representedHeldListings.filter(
-                  ({ claimability }) => claimability.kind === "held-by-other",
-                ).length;
-                const ownHoldCount = representedHeldListings.filter(
-                  ({ claimability }) => claimability.kind === "held-by-viewer",
-                ).length;
-                const holdSummary = competingHoldCount > 0
-                  ? `${competingHoldCount} held ${competingHoldCount === 1 ? "Listing" : "Listings"} unavailable to claim`
-                  : ownHoldCount > 0
-                    ? `${ownHoldCount} ${ownHoldCount === 1 ? "Listing" : "Listings"} in your Checkout Hold`
-                    : null;
-                const markerPosition = {
-                  left: `${50 + (projection.offsetXKm / mapFrameKm) * 40 * mapViewport.zoom + mapViewport.panX}%`,
-                  top: `${50 - (projection.offsetYKm / mapFrameKm) * 40 * mapViewport.zoom}%`,
-                  transform: "translate(-50%, -50%)",
-                };
-                if (mapMarker.kind === "group") {
-                  return [
-                    <div
-                      className="seller-marker-position"
-                      key={projection.stableMarkerKey}
-                      style={markerPosition}
-                    >
-                      <button
-                        aria-label={`Seller marker group, ${mapMarker.sellerCount} Sellers, ${mapMarker.separation === "separable" ? "zoom to separate" : "choose Seller"}${holdSummary ? `, ${holdSummary}` : ""}`}
-                        className="seller-discovery-marker seller-marker-group"
-                        onClick={(event) =>
-                          selectSellerMarkerGroup(mapMarker, event.currentTarget)
-                        }
-                      >
-                        <span className="seller-marker-group-label" aria-hidden="true">
-                          Sellers
-                        </span>
-                        <span className="seller-marker-count" aria-hidden="true">
-                          {mapMarker.sellerCount}
-                        </span>
-                        {holdSummary ? (
-                          <span className="marker-checkout-status" aria-hidden="true">
-                            {holdSummary}
-                          </span>
-                        ) : null}
-                      </button>
-                    </div>,
-                  ];
+            <section
+              aria-label="Seller discovery map"
+              className="discovery-map"
+              role="region"
+            >
+              <DiscoveryMap
+                buyer={buyerPoint}
+                key={mapInstanceKey}
+                markers={discoveryMarkerViews}
+                mapFailure={mapRendering === "failed"}
+                onOpenSeller={openSellerPreview}
+                onRecenter={recenterMap}
+                onSelectGroup={selectSellerMarkerGroup}
+                onUseListView={() => selectDiscoveryView("list")}
+                onZoomChange={setMapZoom}
+                simulationNote={
+                  browsingDistanceOverrideKm !== undefined
+                    ? "Simulated evaluation scenario"
+                    : null
                 }
-
-                const seller = demoSellers.find(
-                  (candidate) => candidate.id === mapMarker.marker.sellerId,
-                );
-                if (!seller) return [];
-                const listingLabel = mapMarker.marker.listingCount === 1
-                  ? "Listing"
-                  : "Listings";
-                return [
-                  <div
-                    className="seller-marker-position"
-                    key={mapMarker.marker.stableMarkerKey}
-                    style={markerPosition}
-                  >
-                    <button
-                      aria-label={`Seller marker, ${getSellerMarkerInitials(seller.publicName)}, ${mapMarker.marker.listingCount} ${listingLabel}${holdSummary ? `, ${holdSummary}` : ""}`}
-                      className="seller-discovery-marker"
-                      onClick={(event) => openSellerPreview(seller.id, event.currentTarget)}
-                      ref={seller.id === expandedSellerId ? expandedSellerMarkerRef : undefined}
-                    >
-                      <span className="seller-marker-initials" aria-hidden="true">
-                        {getSellerMarkerInitials(seller.publicName)}
-                      </span>
-                      <span className="seller-marker-count" aria-hidden="true">
-                        {mapMarker.marker.listingCount}
-                      </span>
-                      {holdSummary ? (
-                        <span className="marker-checkout-status" aria-hidden="true">
-                          {holdSummary}
-                        </span>
-                      ) : null}
-                    </button>
-                  </div>,
-                ];
-              })}
-              <div aria-label="Map viewport controls" className="map-controls" role="group">
-                <button
-                  className="button button-compact button-outline"
-                  onClick={() =>
-                    adjustMapViewport({ ...mapViewport, panX: mapViewport.panX + 4 })
-                  }
-                >
-                  Pan map east
-                </button>
-                <button
-                  className="button button-compact button-outline"
-                  onClick={() =>
-                    adjustMapViewport({
-                      ...mapViewport,
-                      zoom: Math.min(1.5, mapViewport.zoom + 0.25),
-                    })
-                  }
-                >
-                  Zoom in
-                </button>
-                <button
-                  className="button button-compact button-outline"
-                  onClick={() =>
-                    adjustMapViewport({
-                      ...mapViewport,
-                      zoom: Math.max(0.75, mapViewport.zoom - 0.25),
-                    })
-                  }
-                >
-                  Zoom out
-                </button>
-                <button
-                  className="button button-compact button-outline"
-                  onClick={recenterMap}
-                >
-                  Recenter map
-                </button>
-              </div>
-              <p className="map-status" role="status">{mapStatus}</p>
+                status={mapStatus}
+              />
             </section>
           ) : discoveryOutcome.kind === "results" && presentedDiscoveryView === "list" ? (
             <div className="discovery-grid">
