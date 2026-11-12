@@ -11,6 +11,7 @@ import {
   type DemoListingSeed,
 } from "./demo-data";
 import DiscoveryMap, {
+  type DiscoveryMapHandle,
   type DiscoverySellerGroupMarker,
   type DiscoverySellerMarker,
 } from "./DiscoveryMap";
@@ -624,6 +625,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const panelReturnFocusRef = useRef<PanelTrigger | null>(null);
   const panelWasOpenRef = useRef(false);
   const resultPillRef = useRef<HTMLButtonElement | null>(null);
+  const discoveryMapRef = useRef<DiscoveryMapHandle | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
   const demoControlsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -679,6 +681,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     }
     if (!panelWasOpenRef.current) return;
     panelWasOpenRef.current = false;
+    discoveryMapRef.current?.restorePreviousCamera();
     if (activeWorkspace !== "buyer") return;
 
     const target = panelReturnFocusRef.current;
@@ -1154,6 +1157,22 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             ? "Item detail"
             : "Checkout panel"
     : "Nearby listings panel";
+
+  useEffect(() => {
+    if (!panelStage) return;
+    if (panelStage.kind === "seller") {
+      const seller = demoSellers.find(
+        (candidate) => candidate.id === panelStage.sellerId,
+      );
+      if (seller) discoveryMapRef.current?.focusSeller(seller.discoveryAnchor);
+    } else if (panelStage.kind === "chooser") {
+      const group = sellerMapMarkers.find(
+        (marker) =>
+          marker.kind === "group" && marker.groupId === panelStage.groupId,
+      );
+      if (group) discoveryMapRef.current?.focusSeller(group.anchor);
+    }
+  }, [panelStageKey]);
   const selectedListingDistanceKm =
     browsingDistanceOverrideKm ??
     (selectedSessionListing ? selectedListingSeller.distanceKm : undefined);
@@ -1461,6 +1480,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ? [{ kind: "list" }]
         : [],
     );
+    discoveryMapRef.current?.recenter();
 
     if (scenario.kind === "denied") {
       setDiscoveryAnnouncement("Location permission denied. Nearby discovery not run.");
@@ -1540,6 +1560,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   function recenterMap() {
     setMapStatus("Buyer-centered view restored");
     setDiscoveryAnnouncement("Buyer-centered view restored.");
+  }
+
+  function fitMaximumMap() {
+    setMapStatus("Maximum browsing boundary fitted");
+    setDiscoveryAnnouncement(
+      "Fit maximum area. The full 10 km Maximum Browsing Boundary is visible.",
+    );
   }
 
   function loadListingForEditing(listing: SessionListing) {
@@ -2953,15 +2980,21 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         >
           {discoveryOutcome.kind === "results" ? (
             <DiscoveryMap
+              boundaryCenter={
+                browsingLocationSnapshot.kind === "valid" ? buyerPoint : null
+              }
               buyer={buyerPoint}
               key={mapInstanceKey}
               markers={discoveryMarkerViews}
               mapFailure={mapRendering === "failed"}
+              onFitMaximum={fitMaximumMap}
               onOpenSeller={openSellerPreview}
               onRecenter={recenterMap}
               onSelectGroup={selectSellerMarkerGroup}
               onUseListView={() => openListPanel()}
               onZoomChange={setMapZoom}
+              panelOpen={panelOpen}
+              ref={discoveryMapRef}
               simulationNote={
                 browsingDistanceOverrideKm !== undefined
                   ? "Simulated evaluation scenario"

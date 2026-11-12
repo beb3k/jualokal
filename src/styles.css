@@ -5391,3 +5391,61 @@ textarea:focus-visible,
     top: 172px;
   }
 }
+
+/* Ticket #52: Maximum Browsing Boundary chrome */
+.map-legend {
+  position: absolute;
+  z-index: 5;
+  top: 176px;
+  left: 16px;
+  display: grid;
+  gap: 4px;
+  max-width: min(290px, calc(100% - 32px));
+  border: 1px solid rgba(23, 60, 43, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #173c2b;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 8px 22px rgba(46, 62, 52, 0.08);
+}
+
+.map-legend strong {
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.map-legend span {
+  color: #65736b;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.map-legend .button {
+  justify-self: start;
+  min-height: 32px;
+  margin-top: 4px;
+}
+
+@media (max-width: 1023px) {
+  .map-legend {
+    top: 238px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
+}
+
+@media (max-width: 680px) {
+  .map-legend {
+    top: 252px;
+  }
+}
+
+.demo-map-frame .maplibregl-ctrl-top-right {
+  top: 78px;
+}
+
+@media (max-width: 1023px) {
+  .demo-map-frame .maplibregl-ctrl-top-right {
+    top: 142px;
+  }
+}

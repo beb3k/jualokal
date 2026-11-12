@@ -61,3 +61,17 @@ export function offsetFromKm(
   const bearingDegrees = toDegrees(Math.atan2(eastKm, northKm));
   return offsetPoint(origin, bearingDegrees, distanceKm);
 }
+
+export function circleRing(
+  center: MapPoint,
+  radiusKm: number,
+  pointCount = 128,
+): MapPoint[] {
+  const count = Math.max(8, Math.floor(pointCount));
+  const ring: MapPoint[] = [];
+  for (let index = 0; index < count; index += 1) {
+    ring.push(offsetPoint(center, (index * 360) / count, radiusKm));
+  }
+  ring.push(ring[0]);
+  return ring;
+}

@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type {
+  GeoJSONSource,
   Map as MapLibreMap,
   MapOptions,
   Marker as MapLibreMarker,
 } from "maplibre-gl";
-import type { MapPoint } from "./map-points";
+import type { Feature, FeatureCollection, Polygon } from "geojson";
+import { circleRing, type MapPoint } from "./map-points";
 
 export const DEFAULT_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
@@ -15,7 +24,13 @@ const MAP_LOAD_TIMEOUT_MS = 15_000;
 const MIN_ZOOM = 10;
 const MAX_ZOOM = 17;
 const FIRST_FIT_MAX_ZOOM = 15;
+const FIT_MAXIMUM_MAX_ZOOM = 11;
 const SEPARABLE_GROUP_ZOOM = 16.5;
+const MAXIMUM_BOUNDARY_RADIUS_KM = 10;
+const MAXIMUM_BOUNDARY_POINTS = 128;
+const BOUNDARY_SOURCE_ID = "maximum-browsing-boundary";
+const BOUNDARY_FILL_LAYER_ID = "maximum-browsing-boundary-fill";
+const BOUNDARY_LINE_LAYER_ID = "maximum-browsing-boundary-line";
 
 const TINT = {
   background: "#f7f1e5",
@@ -55,7 +70,9 @@ export type DiscoverySellerGroupMarker = Extract<
 
 type DiscoveryMapProps = Readonly<{
   buyer: MapPoint;
+  boundaryCenter: MapPoint | null;
   markers: readonly DiscoverySellerMarker[];
+  panelOpen: boolean;
   status: string;
   mapFailure?: boolean;
   simulationNote?: string | null;
@@ -65,13 +82,52 @@ type DiscoveryMapProps = Readonly<{
     trigger: HTMLButtonElement,
   ) => void;
   onRecenter: () => void;
+  onFitMaximum?: () => void;
   onUseListView: () => void;
   onZoomChange?: (zoom: number) => void;
+}>;
+
+export type DiscoveryMapHandle = Readonly<{
+  recenter: () => void;
+  fitMaximumBoundary: () => void;
+  focusSeller: (anchor: MapPoint) => void;
+  restorePreviousCamera: () => void;
+}>;
+
+type SavedCamera = Readonly<{
+  lat: number;
+  lng: number;
+  zoom: number;
+  bearing: number;
+  pitch: number;
+  padding: Readonly<{ top: number; right: number; bottom: number; left: number }>;
 }>;
 
 type MapPhase = "loading" | "ready" | "error";
 type MapLibreModule = typeof import("maplibre-gl");
 type MapStyle = Exclude<NonNullable<MapOptions["style"]>, string>;
+
+const EMPTY_BOUNDARY: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [],
+};
+
+function createBoundaryFeature(center: MapPoint): Feature<Polygon> {
+  const ring = circleRing(
+    center,
+    MAXIMUM_BOUNDARY_RADIUS_KM,
+    MAXIMUM_BOUNDARY_POINTS,
+  ).map((point) => [point.lng, point.lat] as [number, number]);
+
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "Polygon",
+      coordinates: [ring],
+    },
+  };
+}
 
 function prefersReducedMotion() {
   return (
@@ -177,33 +233,46 @@ function markerHoldSuffix(holdSummary: string | null) {
   return holdSummary ? `, ${holdSummary}` : "";
 }
 
-export default function DiscoveryMap({
-  buyer,
-  markers,
-  status,
-  mapFailure = false,
-  simulationNote = null,
-  onOpenSeller,
-  onSelectGroup,
-  onRecenter,
-  onUseListView,
-  onZoomChange,
-}: DiscoveryMapProps) {
+const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
+  function DiscoveryMap(
+    {
+      buyer,
+      boundaryCenter,
+      markers,
+      panelOpen,
+      status,
+      mapFailure = false,
+      simulationNote = null,
+      onOpenSeller,
+      onSelectGroup,
+      onRecenter,
+      onFitMaximum,
+      onUseListView,
+      onZoomChange,
+    },
+    ref,
+  ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const moduleRef = useRef<MapLibreModule | null>(null);
   const buyerMarkerRef = useRef<MapLibreMarker | null>(null);
   const sellerMarkersRef = useRef<Array<{ key: string; marker: MapLibreMarker }>>([]);
   const loadedRef = useRef(false);
+  const savedCameraRef = useRef<SavedCamera | null>(null);
 
   const buyerRef = useRef(buyer);
   buyerRef.current = buyer;
+  const boundaryRef = useRef(boundaryCenter);
+  boundaryRef.current = boundaryCenter;
+  const panelOpenRef = useRef(panelOpen);
+  panelOpenRef.current = panelOpen;
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const callbacksRef = useRef({
     onOpenSeller,
     onSelectGroup,
     onRecenter,
+    onFitMaximum,
     onUseListView,
     onZoomChange,
   });
@@ -211,6 +280,7 @@ export default function DiscoveryMap({
     onOpenSeller,
     onSelectGroup,
     onRecenter,
+    onFitMaximum,
     onUseListView,
     onZoomChange,
   };
@@ -239,6 +309,190 @@ export default function DiscoveryMap({
       duration: prefersReducedMotion() ? 0 : 450,
     });
   }, []);
+
+  const syncBoundaryLayers = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const center = boundaryRef.current;
+    const data = center ? createBoundaryFeature(center) : EMPTY_BOUNDARY;
+    let source = map.getSource(BOUNDARY_SOURCE_ID) as GeoJSONSource | undefined;
+
+    if (!source) {
+      if (!center) return;
+      map.addSource(BOUNDARY_SOURCE_ID, {
+        type: "geojson",
+        data,
+      });
+      source = map.getSource(BOUNDARY_SOURCE_ID) as GeoJSONSource | undefined;
+    } else {
+      void source.setData(data);
+    }
+
+    if (!center) return;
+
+    const beforeId = map
+      .getStyle()
+      .layers?.find((layer) => layer.type === "symbol")?.id;
+
+    if (!map.getLayer(BOUNDARY_FILL_LAYER_ID)) {
+      map.addLayer(
+        {
+          id: BOUNDARY_FILL_LAYER_ID,
+          type: "fill",
+          source: BOUNDARY_SOURCE_ID,
+          paint: {
+            "fill-color": TINT.label,
+            "fill-opacity": 0.05,
+          },
+        },
+        beforeId,
+      );
+    }
+
+    if (!map.getLayer(BOUNDARY_LINE_LAYER_ID)) {
+      map.addLayer(
+        {
+          id: BOUNDARY_LINE_LAYER_ID,
+          type: "line",
+          source: BOUNDARY_SOURCE_ID,
+          paint: {
+            "line-color": TINT.label,
+            "line-width": 1.5,
+            "line-opacity": 0.55,
+            "line-join": "round",
+          },
+        },
+        beforeId,
+      );
+    }
+  }, []);
+
+  const recenter = useCallback(() => {
+    savedCameraRef.current = null;
+    fitView();
+  }, [fitView]);
+
+  const fitMaximumBoundary = useCallback(() => {
+    const map = mapRef.current;
+    const maplibre = moduleRef.current;
+    const center = boundaryRef.current;
+    if (!map || !maplibre || !center) return;
+
+    const bounds = new maplibre.LngLatBounds();
+    for (const point of circleRing(
+      center,
+      MAXIMUM_BOUNDARY_RADIUS_KM,
+      MAXIMUM_BOUNDARY_POINTS,
+    )) {
+      bounds.extend([point.lng, point.lat]);
+    }
+
+    savedCameraRef.current = null;
+    const canvas = map.getCanvas();
+    const wide = canvas.clientWidth >= 1024;
+    map.fitBounds(bounds, {
+      padding: wide
+        ? {
+            top: 120,
+            bottom: 40,
+            left: 40,
+            right: panelOpenRef.current ? 480 : 40,
+          }
+        : {
+            top: 160,
+            bottom: panelOpenRef.current
+              ? Math.min(canvas.clientHeight * 0.7, 540)
+              : 40,
+            left: 24,
+            right: 24,
+          },
+      maxZoom: FIT_MAXIMUM_MAX_ZOOM,
+      duration: prefersReducedMotion() ? 0 : 450,
+    });
+  }, []);
+
+  const focusSeller = useCallback((anchor: MapPoint) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const canvas = map.getCanvas();
+    const point = map.project([anchor.lng, anchor.lat]);
+    const wide = canvas.clientWidth >= 1024;
+    const padding = wide
+      ? {
+          top: 120,
+          bottom: 80,
+          left: 48,
+          right: panelOpenRef.current ? 480 : 80,
+        }
+      : {
+          top: 160,
+          bottom: panelOpenRef.current
+            ? Math.min(canvas.clientHeight * 0.7, 540)
+            : 120,
+          left: 24,
+          right: 24,
+        };
+    const offScreen =
+      point.x < padding.left ||
+      point.y < padding.top ||
+      point.x > canvas.clientWidth - padding.right ||
+      point.y > canvas.clientHeight - padding.bottom;
+    if (!offScreen) return;
+
+    if (!savedCameraRef.current) {
+      const center = map.getCenter();
+      const padding = map.getPadding();
+      savedCameraRef.current = {
+        lat: center.lat,
+        lng: center.lng,
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+        padding: {
+          top: padding.top ?? 0,
+          right: padding.right ?? 0,
+          bottom: padding.bottom ?? 0,
+          left: padding.left ?? 0,
+        },
+      };
+    }
+
+    map.flyTo({
+      center: [anchor.lng, anchor.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      padding,
+      duration: prefersReducedMotion() ? 0 : 600,
+    });
+  }, []);
+
+  const restorePreviousCamera = useCallback(() => {
+    const map = mapRef.current;
+    const saved = savedCameraRef.current;
+    if (!map || !saved) return;
+
+    savedCameraRef.current = null;
+    map.easeTo({
+      center: [saved.lng, saved.lat],
+      zoom: saved.zoom,
+      bearing: saved.bearing,
+      pitch: saved.pitch,
+      padding: saved.padding,
+      duration: prefersReducedMotion() ? 0 : 450,
+    });
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      recenter,
+      fitMaximumBoundary,
+      focusSeller,
+      restorePreviousCamera,
+    }),
+    [fitMaximumBoundary, focusSeller, recenter, restorePreviousCamera],
+  );
 
   const syncMarkers = useCallback(() => {
     const map = mapRef.current;
@@ -360,6 +614,7 @@ export default function DiscoveryMap({
     const abortController = new AbortController();
 
     loadedRef.current = false;
+    savedCameraRef.current = null;
     setPhase("loading");
     setErrorDetail("");
     setTileNotice(false);
@@ -471,6 +726,8 @@ export default function DiscoveryMap({
         resizeObserver = new ResizeObserver(() => map?.resize());
         resizeObserver.observe(container);
 
+        map.on("style.load", syncBoundaryLayers);
+
         map.on("zoomend", () => {
           if (!cancelled) {
             callbacksRef.current.onZoomChange?.(map?.getZoom() ?? 14);
@@ -485,6 +742,7 @@ export default function DiscoveryMap({
           if (cancelled) return;
           loadedRef.current = true;
           window.clearTimeout(loadTimeout);
+          syncBoundaryLayers();
           setPhase("ready");
           callbacksRef.current.onZoomChange?.(createdMap.getZoom());
         });
@@ -525,6 +783,7 @@ export default function DiscoveryMap({
       buyerMarkerRef.current = null;
       sellerMarkersRef.current = [];
       loadedRef.current = false;
+      savedCameraRef.current = null;
     };
   }, [attempt, mapFailure]);
 
@@ -546,6 +805,11 @@ export default function DiscoveryMap({
     buyerMarkerRef.current?.setLngLat([buyer.lng, buyer.lat]);
     fitView();
   }, [buyer.lat, buyer.lng, phase, fitView]);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    syncBoundaryLayers();
+  }, [boundaryCenter?.lat, boundaryCenter?.lng, phase, syncBoundaryLayers]);
 
   return (
     <div className="discovery-map-surface">
@@ -605,14 +869,34 @@ export default function DiscoveryMap({
             <button
               className="button button-compact button-outline"
               onClick={() => {
-                fitView();
-                callbacksRef.current.onRecenter();
+                recenter();
+                callbacksRef.current.onRecenter?.();
               }}
               type="button"
             >
               Recenter map
             </button>
           </div>
+          {boundaryCenter ? (
+            <div
+              aria-label="Maximum browsing boundary legend"
+              className="map-legend"
+              role="group"
+            >
+              <strong>Maximum boundary 10 km</strong>
+              <span>Active search 2 km</span>
+              <button
+                className="button button-compact button-outline"
+                onClick={() => {
+                  fitMaximumBoundary();
+                  callbacksRef.current.onFitMaximum?.();
+                }}
+                type="button"
+              >
+                Fit maximum area
+              </button>
+            </div>
+          ) : null}
           <p className="map-status" role="status">
             {status}
           </p>
@@ -625,7 +909,9 @@ export default function DiscoveryMap({
       ) : null}
     </div>
   );
-}
+});
+
+export default DiscoveryMap;
 
 function createHoldStatus(summary: string) {
   const status = document.createElement("span");
