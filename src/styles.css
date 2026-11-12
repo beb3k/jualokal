@@ -2339,6 +2339,8 @@ footer nav a:hover {
 }
 
 .discovery-map-canvas {
+  position: absolute;
+  inset: 0;
   background: #f7f1e5;
 }
 

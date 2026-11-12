@@ -356,11 +356,13 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
           id: BOUNDARY_LINE_LAYER_ID,
           type: "line",
           source: BOUNDARY_SOURCE_ID,
+          layout: {
+            "line-join": "round",
+          },
           paint: {
             "line-color": TINT.label,
             "line-width": 1.5,
             "line-opacity": 0.55,
-            "line-join": "round",
           },
         },
         beforeId,
