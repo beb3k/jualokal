@@ -40,6 +40,9 @@ export function classifyDiscoveryOutcome({
   category,
   resultCount,
 }: ClassifyDiscoveryOutcomeInput): DiscoveryOutcome {
+  // Location integrity wins over the discovery result. A failed discovery is
+  // never treated as an empty result, and a filtered empty result is distinct
+  // from an empty nearby result.
   if (location === "denied") return { kind: "location-denied" };
   if (location === "unavailable") return { kind: "location-unavailable" };
   if (location === "stale") return { kind: "stale-location" };

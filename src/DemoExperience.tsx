@@ -14,6 +14,7 @@ import DiscoveryMap, {
   type DiscoveryMapHandle,
   type DiscoverySellerGroupMarker,
   type DiscoverySellerMarker,
+  type MapPhase,
 } from "./DiscoveryMap";
 import DiscoveryPanel, {
   type DiscoveryPanelHandle,
@@ -613,7 +614,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [discoveryCategory, setDiscoveryCategory] =
     useState<DiscoveryCategory>(initialDiscoveryCategory);
   const [discoveryView, setDiscoveryView] = useState<DiscoveryView>(initialDiscoveryView);
-  const [mapRendering, setMapRendering] = useState<"ready" | "failed">("ready");
+  const [mapPhase, setMapPhase] = useState<MapPhase>("loading");
+  const [mapFailureSimulated, setMapFailureSimulated] = useState(false);
   const [discoveryAnnouncement, setDiscoveryAnnouncement] = useState(
     "Nearby discovery ready with simulated snapshot 1",
   );
@@ -626,6 +628,8 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
   const panelReturnFocusRef = useRef<PanelTrigger | null>(null);
   const panelWasOpenRef = useRef(false);
+  const suppressViewPreferenceRef = useRef(false);
+  const mapPhaseRef = useRef<MapPhase>("loading");
   const resultPillRef = useRef<HTMLButtonElement | null>(null);
   const discoveryMapRef = useRef<DiscoveryMapHandle | null>(null);
   const discoveryPanelRef = useRef<DiscoveryPanelHandle | null>(null);
@@ -674,7 +678,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ? "list"
       : "map";
     setDiscoveryView(nextView);
-    window.localStorage.setItem(discoveryViewStorageKey, nextView);
+    // Map Fallback is a session-only List view. It must not overwrite the
+    // member's explicitly saved Map/List preference.
+    if (!suppressViewPreferenceRef.current) {
+      window.localStorage.setItem(discoveryViewStorageKey, nextView);
+    }
   }, [panelStages]);
 
   useEffect(() => {
@@ -1096,10 +1104,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       }];
     },
   );
+  // Location and discovery states take precedence over the map lifecycle. The
+  // map can only be in fallback when there are valid results to keep showing.
   const mapFallbackActive =
-    browsingLocationIsAvailable &&
-    discoverySucceeded &&
-    mapRendering === "failed";
+    discoveryOutcome.kind === "results" &&
+    (mapFailureSimulated || mapPhase === "error");
   const mapScreenActive = activeWorkspace === "buyer";
   const panelStage = panelStages.at(-1);
   const panelOpen = panelStages.length > 0;
@@ -1211,7 +1220,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     selectedListingDistanceKm !== undefined &&
     selectedListingDistanceKm > prototypeDiscoveryRadiusKm
       ? {
-          title: "No nearby listings",
+          title: "Outside the discovery radius",
           body: "This item is outside the 2 km Discovery Radius.",
         }
       : discoveryOutcome.kind === "results" &&
@@ -1416,17 +1425,30 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         : null;
   }
 
-  function openListPanel(trigger?: HTMLElement | null) {
+  function openListPanel(
+    trigger?: HTMLElement | null,
+    fromMapFallback = false,
+  ) {
     rememberPanelTrigger(trigger ?? null);
+    // Fallback List is a session-only presentation, not a view preference.
+    suppressViewPreferenceRef.current = fromMapFallback;
     setPanelStages([{ kind: "list" }]);
-    setDiscoveryAnnouncement("Nearby listings opened in the List panel.");
+    setDiscoveryAnnouncement(
+      fromMapFallback
+        ? "Map unavailable. Showing the same nearby results in List view."
+        : "Nearby listings opened in the List panel.",
+    );
   }
 
   function backPanelStage() {
+    if (panelStages.length === 1 && mapFallbackActive) {
+      suppressViewPreferenceRef.current = true;
+    }
     setPanelStages((current) => current.slice(0, -1));
   }
 
   function closePanel() {
+    suppressViewPreferenceRef.current = mapFallbackActive;
     setPanelStages([]);
     setCompletedCheckoutCommitmentId(null);
     setDiscoveryAnnouncement(
@@ -1465,25 +1487,50 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     );
   }
 
+  function handleMapPhaseChange(nextPhase: MapPhase) {
+    const previousPhase = mapPhaseRef.current;
+    mapPhaseRef.current = nextPhase;
+    setMapPhase(nextPhase);
+
+    if (nextPhase === "error") {
+      setDiscoveryAnnouncement(
+        "The street map did not load. Retry the map or use List view.",
+      );
+    } else if (nextPhase === "ready" && previousPhase === "error") {
+      setDiscoveryAnnouncement("Map rendering recovered. Map View restored.");
+    }
+  }
+
   function refreshNearbyListings() {
     const scenario = browsingLocations.find(
       (candidate) => candidate.value === browsingLocation,
     );
     if (!scenario) return;
 
+    const simulatedFailure =
+      scenario.kind === "valid" && "mapFailure" in scenario;
+    const wasMapFailed = mapFailureSimulated || mapPhaseRef.current === "error";
     const nextRevision = browsingLocationSnapshot.revision + 1;
+
     setBrowsingLocationSnapshot(createBrowsingLocationSnapshot(scenario, nextRevision));
-    setMapRendering(
-      scenario.kind === "valid" && "mapFailure" in scenario ? "failed" : "ready",
-    );
-    setMapStatus("Buyer-centered view restored after refresh");
+    setMapFailureSimulated(simulatedFailure);
+    // A refresh that forces the map failure is a fallback, not a view choice.
+    suppressViewPreferenceRef.current = simulatedFailure;
     setCompletedCheckoutCommitmentId(null);
-    setPanelStages(
-      scenario.kind === "valid" && "mapFailure" in scenario
-        ? [{ kind: "list" }]
-        : [],
-    );
-    discoveryMapRef.current?.recenter();
+    setPanelStages([]);
+
+    if (simulatedFailure) {
+      setMapStatus("Map unavailable after refresh");
+    } else {
+      setMapStatus("Buyer-centered view restored after refresh");
+      if (wasMapFailed) {
+        // A snapshot refresh after a map failure starts a clean map attempt.
+        mapPhaseRef.current = "loading";
+        setMapPhase("loading");
+        setMapInstanceKey((current) => current + 1);
+      }
+      discoveryMapRef.current?.recenter();
+    }
 
     if (scenario.kind === "denied") {
       setDiscoveryAnnouncement("Location permission denied. Nearby discovery not run.");
@@ -1491,9 +1538,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       setDiscoveryAnnouncement("Location unavailable. Nearby discovery not run.");
     } else if (scenario.discovery === "failure") {
       setDiscoveryAnnouncement("Discovery service failed. Existing emptiness was not inferred.");
-    } else if ("mapFailure" in scenario) {
+    } else if (simulatedFailure) {
       setDiscoveryAnnouncement(
-        "Browsing Location replaced and results recalculated. Map failed, so the same results are shown in List View.",
+        "Browsing Location replaced and results recalculated. The map failed, so retry it or use List view.",
       );
     } else {
       setDiscoveryAnnouncement(
@@ -1502,10 +1549,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     }
   }
 
-  function retryMap() {
-    setMapRendering("ready");
-    setMapStatus("Buyer-centered view restored");
-    setDiscoveryAnnouncement("Map rendering recovered. Map View restored.");
+  function retryMap(closeFallbackList = false) {
+    setMapFailureSimulated(false);
+    mapPhaseRef.current = "loading";
+    setMapPhase("loading");
+    setMapInstanceKey((current) => current + 1);
+    setMapStatus("Buyer-centered view ready");
+    suppressViewPreferenceRef.current = closeFallbackList;
+    if (closeFallbackList) setPanelStages([]);
+    setDiscoveryAnnouncement("Retrying the street map.");
   }
 
   function openSellerPreview(
@@ -2569,8 +2621,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setBrowsingLocation("current");
     setBrowsingLocationSnapshot(initialBrowsingLocationSnapshot);
     setDiscoveryCategory("All");
-    setMapRendering("ready");
+    setMapFailureSimulated(false);
+    mapPhaseRef.current = "loading";
+    setMapPhase("loading");
     setDiscoveryView("map");
+    suppressViewPreferenceRef.current = false;
     window.localStorage.setItem(discoveryViewStorageKey, "map");
     setPanelStages([]);
     setCompletedCheckoutCommitmentId(null);
@@ -2707,7 +2762,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               The same results, Browsing Location, Category Filter, and Distance Bands remain
               unchanged for this session.
             </p>
-            <button className="button button-primary" onClick={retryMap}>
+            <button className="button button-primary" onClick={() => retryMap(true)}>
               Retry map
             </button>
           </section>
@@ -2997,12 +3052,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               buyer={buyerPoint}
               key={mapInstanceKey}
               markers={discoveryMarkerViews}
-              mapFailure={mapRendering === "failed"}
+              mapFailure={mapFailureSimulated}
               onFitMaximum={fitMaximumMap}
+              onMapPhaseChange={handleMapPhaseChange}
               onOpenSeller={openSellerPreview}
               onRecenter={recenterMap}
+              onRetry={() => retryMap(false)}
               onSelectGroup={selectSellerMarkerGroup}
-              onUseListView={() => openListPanel()}
+              onUseListView={() => openListPanel(undefined, true)}
               onZoomChange={setMapZoom}
               panelOpen={panelOpen}
               ref={discoveryMapRef}
@@ -3044,7 +3101,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <button
               aria-label={`Open List panel: ${discoveryMarkerViews.length} seller areas, ${visibleDemoListings.length} listings`}
               className="discovery-result-pill"
-              onClick={() => openListPanel(resultPillRef.current)}
+              onClick={() => openListPanel(resultPillRef.current, mapFallbackActive)}
               ref={resultPillRef}
               type="button"
             >

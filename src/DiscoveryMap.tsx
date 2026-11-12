@@ -68,6 +68,8 @@ export type DiscoverySellerGroupMarker = Extract<
   { kind: "group" }
 >;
 
+export type MapPhase = "loading" | "ready" | "error";
+
 type DiscoveryMapProps = Readonly<{
   buyer: MapPoint;
   boundaryCenter: MapPoint | null;
@@ -76,6 +78,8 @@ type DiscoveryMapProps = Readonly<{
   status: string;
   mapFailure?: boolean;
   simulationNote?: string | null;
+  onMapPhaseChange: (phase: MapPhase) => void;
+  onRetry: () => void;
   onOpenSeller: (sellerId: string, trigger: HTMLButtonElement) => void;
   onSelectGroup: (
     group: DiscoverySellerGroupMarker,
@@ -129,7 +133,6 @@ function readPanelCoverage(map: MapLibreMap, container: HTMLElement | null) {
       };
 }
 
-type MapPhase = "loading" | "ready" | "error";
 type MapLibreModule = typeof import("maplibre-gl");
 type MapStyle = Exclude<NonNullable<MapOptions["style"]>, string>;
 
@@ -276,6 +279,8 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       status,
       mapFailure = false,
       simulationNote = null,
+      onMapPhaseChange,
+      onRetry,
       onOpenSeller,
       onSelectGroup,
       onRecenter,
@@ -302,6 +307,8 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const callbacksRef = useRef({
+    onMapPhaseChange,
+    onRetry,
     onOpenSeller,
     onSelectGroup,
     onRecenter,
@@ -310,6 +317,8 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     onZoomChange,
   });
   callbacksRef.current = {
+    onMapPhaseChange,
+    onRetry,
     onOpenSeller,
     onSelectGroup,
     onRecenter,
@@ -320,7 +329,6 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
 
   const [phase, setPhase] = useState<MapPhase>("loading");
   const [errorDetail, setErrorDetail] = useState("");
-  const [attempt, setAttempt] = useState(0);
   const [tileNotice, setTileNotice] = useState(false);
 
   const fitView = useCallback(() => {
@@ -653,6 +661,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     if (mapFailure) {
       setErrorDetail("Map rendering is unavailable in this simulated scenario.");
       setPhase("error");
+      callbacksRef.current.onMapPhaseChange("error");
       return;
     }
 
@@ -672,12 +681,14 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     setPhase("loading");
     setErrorDetail("");
     setTileNotice(false);
+    callbacksRef.current.onMapPhaseChange("loading");
 
     const fail = (detail: string) => {
       if (cancelled || failing) return;
       failing = true;
       setErrorDetail(detail);
       setPhase("error");
+      callbacksRef.current.onMapPhaseChange("error");
       resizeObserver?.disconnect();
       resizeObserver = null;
       window.clearTimeout(loadTimeout);
@@ -798,6 +809,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
           window.clearTimeout(loadTimeout);
           syncBoundaryLayers();
           setPhase("ready");
+          callbacksRef.current.onMapPhaseChange("ready");
           callbacksRef.current.onZoomChange?.(createdMap.getZoom());
         });
 
@@ -810,12 +822,16 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
         }, MAP_LOAD_TIMEOUT_MS);
       } catch (error) {
         if (cancelled) return;
+        const offline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
         const message =
           error instanceof DOMException && error.name === "AbortError"
             ? "The street map style took too long to load. Check your connection and retry."
-            : error instanceof Error
-              ? error.message
-              : "The browser could not start the street map.";
+            : offline
+              ? "This demo is offline, so the street map cannot load. Reconnect and retry."
+              : error instanceof Error
+                ? error.message
+                : "The browser could not start the street map.";
         fail(message);
       } finally {
         window.clearTimeout(styleTimeout);
@@ -839,7 +855,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       loadedRef.current = false;
       savedCameraRef.current = null;
     };
-  }, [attempt, mapFailure]);
+  }, [mapFailure]);
 
   const markersSignature = markers
     .map((marker) =>
@@ -892,7 +908,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
             <div className="map-error-actions">
               <button
                 className="button button-primary"
-                onClick={() => setAttempt((current) => current + 1)}
+                onClick={() => callbacksRef.current.onRetry()}
                 type="button"
               >
                 Retry map
