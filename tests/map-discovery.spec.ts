@@ -1,8 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function openDemo(page: import("@playwright/test").Page) {
+async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+}
+
+async function openDemoControls(page: Page) {
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  return page.getByRole("dialog", { name: "Demo controls" });
 }
 
 test("Map View opens one privacy-preserving Seller Preview and the full listing", async ({
@@ -12,59 +17,66 @@ test("Map View opens one privacy-preserving Seller Preview and the full listing"
 
   const map = page.getByRole("region", { name: "Seller discovery map" });
   const marker = map.getByRole("button", {
-    name: "Seller marker, DP, 4 Listings",
+    name: "Seller marker, DP, 5 Listings",
   });
   await expect(map).toBeVisible();
   await expect(map.getByRole("img", { name: "Your location" })).toBeVisible();
   await expect(marker).toBeVisible();
-  await expect(map).toContainText("Buyer-centered 2 km context");
+  await expect(map).toContainText("Buyer-centered view");
+  await expect(map).toContainText("Moving the map does not change nearby results");
+  await expect(map).toContainText("Maximum boundary 10 km");
+  await expect(map).toContainText("Active search 2 km");
   await expect(map).not.toContainText(/Dimas|Rp|Under 1 km|Trust Summary|exact distance/i);
 
-  await map.getByRole("button", { name: "Pan map east" }).click();
+  const mapCanvas = map.getByLabel(/Interactive street map/i);
+  await mapCanvas.focus();
+  await page.keyboard.press("ArrowRight");
   await map.getByRole("button", { name: "Zoom in" }).click();
-  await expect(map.getByRole("status")).toContainText(
-    "Viewport adjusted; discovery results unchanged",
-  );
-  await expect(marker).toHaveAccessibleName("Seller marker, DP, 4 Listings");
+  await expect(marker).toHaveAccessibleName("Seller marker, DP, 5 Listings");
+  await map.getByRole("button", { name: "Fit maximum area" }).click();
+  await expect(map.getByRole("status")).toContainText("Maximum browsing boundary fitted");
   await map.getByRole("button", { name: "Recenter map" }).click();
   await expect(map.getByRole("status")).toContainText("Buyer-centered view restored");
 
   await marker.click();
-  const preview = page.getByRole("dialog", { name: "Seller Preview: Dimas P." });
+  const panel = page.getByRole("complementary", { name: "Seller Preview panel" });
+  const preview = panel.getByRole("region", { name: "Seller Preview: Dimas P." });
+  await expect(panel).toBeVisible();
   await expect(preview).toBeVisible();
-  await expect(preview.getByRole("button", { name: "Close Seller Preview" })).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(preview.getByRole("button", { name: "View item" }).last()).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(preview.getByRole("button", { name: "Close Seller Preview" })).toBeFocused();
+  await expect(panel).not.toHaveAttribute("aria-modal", "true");
+  await expect(panel.getByRole("button", { name: "Close panel" })).toBeFocused();
   await expect(preview).toContainText("Dimas P.");
   await expect(preview).toContainText("Simulated as verified");
   await expect(preview).toContainText("Under 1 km");
-  await expect(preview.getByRole("article")).toHaveCount(4);
+  await expect(preview.getByRole("article")).toHaveCount(5);
 
   const viewport = page.viewportSize();
-  const previewBox = await preview.boundingBox();
+  const panelBox = await panel.boundingBox();
   expect(viewport).not.toBeNull();
-  expect(previewBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
   if (testInfo.project.name === "phone") {
-    expect(previewBox!.y + previewBox!.height).toBeGreaterThan(viewport!.height - 2);
+    expect(panelBox!.y + panelBox!.height).toBeGreaterThan(viewport!.height - 2);
+    await expect(panel.getByRole("button", { name: "Resize panel" })).toBeVisible();
   } else {
-    expect(previewBox!.x + previewBox!.width).toBeGreaterThan(viewport!.width - 2);
-    expect(previewBox!.width).toBeLessThan(viewport!.width * 0.6);
+    expect(panelBox!.x + panelBox!.width).toBeGreaterThan(viewport!.width - 24);
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewport!.width + 1);
+    expect(panelBox!.width).toBeLessThan(viewport!.width * 0.6);
   }
 
-  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+  await panel.getByRole("button", { name: "Close panel" }).click();
   await expect(marker).toBeFocused();
   await marker.click();
   await preview
     .getByRole("article", { name: "Seller Preview Listing: Handwoven rattan market basket" })
     .getByRole("button", { name: "View item" })
     .click();
-  const listing = page.getByRole("region", { name: "Demo Listing" });
+  const itemPanel = page.getByRole("complementary", { name: "Item detail" });
+  const listing = itemPanel.getByRole("region", { name: "Demo Listing" });
   await expect(
     listing.getByRole("heading", { name: "Handwoven rattan market basket" }),
   ).toBeVisible();
-  await expect(listing).toBeFocused();
+  await expect(itemPanel.getByRole("button", { name: "Close panel" })).toBeFocused();
+  await expect(itemPanel.getByRole("button", { name: "Back", exact: true })).toBeVisible();
 });
 
 test("List View prioritizes marketplace controls and opens a complete Listing inspection", async ({
@@ -72,10 +84,15 @@ test("List View prioritizes marketplace controls and opens a complete Listing in
 }) => {
   await openDemo(page);
 
-  const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
-  await viewControl.getByRole("button", { name: "List" }).click();
+  await expect(page.getByRole("region", { name: "Purchase Commitments" })).toHaveCount(0);
+  const resultPill = page.getByRole("button", {
+    name: "Open List panel: 3 seller areas, 25 listings",
+  });
+  await expect(resultPill).toBeVisible();
+  await resultPill.click();
 
+  const discovery = page.getByRole("region", { name: "Demo marketplace listings" });
+  await expect(discovery).toBeVisible();
   await expect(page.getByRole("searchbox")).toHaveCount(0);
   await expect(page.getByLabel("Category Filter")).toHaveValue("All");
 
@@ -98,19 +115,12 @@ test("List View prioritizes marketplace controls and opens a complete Listing in
   await expect(credibility).toContainText("Simulated as verified");
   await expect(credibility).toContainText(/successful handovers/i);
 
-  const discoveryBox = await discovery.boundingBox();
-  const commitmentsBox = await page
-    .getByRole("region", { name: "Purchase Commitments" })
-    .boundingBox();
-  expect(discoveryBox).not.toBeNull();
-  expect(commitmentsBox).not.toBeNull();
-  expect(discoveryBox!.y).toBeLessThan(commitmentsBox!.y);
-
   const queryBefore = new URL(page.url()).search;
   await card.getByRole("button", { name: "View item" }).click();
 
-  const listing = page.getByRole("region", { name: "Demo Listing" });
-  await expect(listing).toBeFocused();
+  const itemPanel = page.getByRole("complementary", { name: "Item detail" });
+  const listing = itemPanel.getByRole("region", { name: "Demo Listing" });
+  await expect(itemPanel.getByRole("button", { name: "Close panel" })).toBeFocused();
   await expect(
     listing.getByRole("heading", { name: "Handwoven rattan market basket" }),
   ).toBeVisible();
@@ -126,38 +136,42 @@ test("Map and List use one filtered result while only explicit view preference p
 }) => {
   await openDemo(page);
 
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
-  await expect(viewControl.getByRole("button", { name: "Map" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await viewControl.getByRole("button", { name: "List" }).click();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Demo marketplace listings" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }).click();
 
   const list = page.getByRole("region", { name: "Demo marketplace listings" });
   await expect(list).toBeVisible();
-  await expect(list.getByRole("article")).toHaveCount(20);
+  await expect(list.getByRole("article")).toHaveCount(25);
   await list.getByRole("button", { name: "Dimas P." }).first().click();
+  const previewPanel = page.getByRole("complementary", { name: "Seller Preview panel" });
   await expect(
-    page.getByRole("dialog", { name: "Seller Preview: Dimas P." }),
+    previewPanel.getByRole("region", { name: "Seller Preview: Dimas P." }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Close Seller Preview" }).click();
+  await previewPanel.getByRole("button", { name: "Close panel" }).click();
 
   await page.getByLabel("Category Filter").selectOption("Books");
-  await expect(list.getByRole("article")).toHaveCount(2);
-  await viewControl.getByRole("button", { name: "Map" }).click();
+  await expect(page.getByRole("region", { name: "Demo marketplace listings" })).toHaveCount(0);
   const filteredMap = page.getByRole("region", { name: "Seller discovery map" });
   await expect(
     filteredMap.getByRole("button", { name: "Seller marker, DP, 0 Listings" }),
   ).toHaveCount(0);
-  await expect(filteredMap.locator(".seller-discovery-marker")).toHaveCount(2);
-  await page.getByLabel("Simulated Browsing Location").selectOption("at-edge");
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+  await expect(filteredMap.locator(".seller-discovery-marker")).toHaveCount(3);
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
+  await expect(list.getByRole("article")).toHaveCount(3);
+  await page.getByRole("button", { name: "Close panel" }).click();
+
+  let drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("at-edge");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("region", { name: "Seller discovery map" })).toContainText(
-    "Buyer-centered 3 km context",
+    "Moving the map does not change nearby results",
   );
-  await viewControl.getByRole("button", { name: "List" }).click();
-  await page.getByLabel("Simulated Browsing Location").selectOption("inside-edge");
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("inside-edge");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
 
   const stored = await page.evaluate(() => ({
     view: localStorage.getItem("jualokal.discovery-view"),
@@ -165,36 +179,34 @@ test("Map and List use one filtered result while only explicit view preference p
   }));
   expect(stored).toEqual({ view: "list", keys: ["jualokal.discovery-view"] });
 
-  await page.getByRole("button", { name: /Exit demo/ }).click();
+  drawer = await openDemoControls(page);
+  await drawer.getByRole("button", { name: /Exit demo/ }).click();
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
-  await expect(viewControl.getByRole("button", { name: "List" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("current");
+  await expect(page.getByRole("region", { name: "Demo marketplace listings" })).toBeVisible();
   await expect(page.getByLabel("Category Filter")).toHaveValue("All");
+  drawer = await openDemoControls(page);
+  await expect(drawer.getByLabel("Simulated Browsing Location")).toHaveValue("current");
 });
 
 test("Map and List hide location-dependent content without a valid snapshot", async ({ page }) => {
   await openDemo(page);
-  const location = page.getByLabel("Simulated Browsing Location");
+  const map = page.getByRole("region", { name: "Seller discovery map" });
 
-  await location.selectOption("denied");
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
-  await expect(page.getByRole("img", { name: "Your location" })).toHaveCount(0);
+  let drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("denied");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
+  await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
+  await expect(map.getByRole("img", { name: "Your location" })).toHaveCount(0);
+  await expect(map.locator(".seller-discovery-marker")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open List panel:/ })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Demo marketplace listings" })).toHaveCount(0);
 
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Demo marketplace listings" }).getByRole("article"),
-  ).toHaveCount(0);
-
-  await location.selectOption("unavailable");
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
-  await expect(page.getByRole("img", { name: "Your location" })).toHaveCount(0);
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("unavailable");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
+  await expect(page.getByRole("heading", { name: "Location unavailable" })).toBeVisible();
+  await expect(map.getByRole("img", { name: "Your location" })).toHaveCount(0);
+  await expect(map.locator(".seller-discovery-marker")).toHaveCount(0);
 });
 
 test("grouped Sellers zoom only when separable and otherwise use one chooser", async ({
@@ -204,7 +216,7 @@ test("grouped Sellers zoom only when separable and otherwise use one chooser", a
   const map = page.getByRole("region", { name: "Seller discovery map" });
 
   await expect(
-    map.getByRole("button", { name: "Seller marker, DP, 4 Listings" }),
+    map.getByRole("button", { name: "Seller marker, DP, 5 Listings" }),
   ).toBeVisible();
   const separableGroup = map.getByRole("button", {
     name: "Seller marker group, 2 Sellers, zoom to separate",
@@ -217,13 +229,13 @@ test("grouped Sellers zoom only when separable and otherwise use one chooser", a
 
   await separableGroup.click();
   await expect(
-    map.getByRole("button", { name: "Seller marker, SN, 4 Listings" }),
-  ).toBeFocused();
+    map.getByRole("button", { name: "Seller marker, SN, 5 Listings" }),
+  ).toBeVisible();
   await expect(
-    map.getByRole("button", { name: "Seller marker, BA, 4 Listings" }),
+    map.getByRole("button", { name: "Seller marker, BA, 5 Listings" }),
   ).toBeVisible();
   await expect(map.getByRole("status")).toContainText(
-    "2 Sellers separated at the same coarse positions",
+    "2 Sellers separate as the map zooms in",
   );
   await expect(separableGroup).toHaveCount(0);
 
@@ -232,17 +244,19 @@ test("grouped Sellers zoom only when separable and otherwise use one chooser", a
   await sharedAreaGroup.focus();
   await page.keyboard.press("Enter");
 
-  const chooser = page.getByRole("dialog", { name: "Seller chooser" });
-  await expect(chooser.getByRole("button", { name: "Close Seller chooser" })).toBeFocused();
+  const chooserPanel = page.getByRole("complementary", { name: "Seller chooser panel" });
+  const chooser = chooserPanel.getByRole("region", { name: "Seller chooser" });
+  await expect(chooserPanel.getByRole("button", { name: "Close panel" })).toBeFocused();
   await expect(chooser).toContainText("cannot be separated without inventing locations");
   await chooser
     .getByRole("button", { name: "Rani K. · Fictional Demo Seller" })
     .click();
 
-  const preview = page.getByRole("dialog", { name: "Seller Preview: Rani K." });
+  const previewPanel = page.getByRole("complementary", { name: "Seller Preview panel" });
+  const preview = previewPanel.getByRole("region", { name: "Seller Preview: Rani K." });
   await expect(preview).toBeVisible();
-  await expect(preview.getByRole("article")).toHaveCount(4);
-  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+  await expect(preview.getByRole("article")).toHaveCount(5);
+  await previewPanel.getByRole("button", { name: "Close panel" }).click();
   await expect(sharedAreaGroup).toBeFocused();
 });
 
@@ -251,10 +265,12 @@ test("filters and account switching update groups, Preview, and List from one re
 }) => {
   await openDemo(page);
   const map = page.getByRole("region", { name: "Seller discovery map" });
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
 
   await page.getByLabel("Category Filter").selectOption("Books");
   await expect(map.getByRole("button", { name: /Seller marker group/ })).toHaveCount(0);
+  await expect(
+    map.getByRole("button", { name: "Seller marker, DP, 1 Listing" }),
+  ).toBeVisible();
   await expect(
     map.getByRole("button", { name: "Seller marker, SN, 1 Listing" }),
   ).toBeVisible();
@@ -263,78 +279,85 @@ test("filters and account switching update groups, Preview, and List from one re
   ).toBeVisible();
 
   await map.getByRole("button", { name: "Seller marker, SN, 1 Listing" }).click();
-  const preview = page.getByRole("dialog", { name: "Seller Preview: Sari N." });
+  const previewPanel = page.getByRole("complementary", { name: "Seller Preview panel" });
+  const preview = previewPanel.getByRole("region", { name: "Seller Preview: Sari N." });
   await expect(preview.getByRole("article")).toHaveCount(1);
   await expect(preview).toContainText("Indonesian recipe notebook");
-  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
+  await previewPanel.getByRole("button", { name: "Close panel" }).click();
 
-  await viewControl.getByRole("button", { name: "List" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
   const list = page.getByRole("region", { name: "Demo marketplace listings" });
-  await expect(list.getByRole("article")).toHaveCount(2);
+  await expect(list.getByRole("article")).toHaveCount(3);
 
-  const account = page.getByRole("combobox", { name: "Selected fictional account" });
-  await account.selectOption("seller-sari");
-  await page.getByRole("button", { name: "View discovery as selected Seller" }).click();
-  await expect(account).toHaveValue("seller-sari");
+  let drawer = await openDemoControls(page);
+  await drawer.getByRole("combobox", { name: "Selected fictional account" }).selectOption("seller-sari");
+  drawer = await openDemoControls(page);
+  await expect(drawer.getByRole("combobox", { name: "Selected fictional account" })).toHaveValue(
+    "seller-sari",
+  );
+  await drawer.getByRole("button", { name: "View discovery as selected Seller" }).click();
+  await page.getByRole("button", { name: "Open List panel: 2 seller areas, 2 listings" }).click();
   await expect(list.getByText("Indonesian recipe notebook")).toHaveCount(0);
-  await expect(list.getByRole("article")).toHaveCount(1);
-
-  await account.selectOption("buyer-naufal");
-  await expect(list.getByText("Indonesian recipe notebook")).toBeVisible();
   await expect(list.getByRole("article")).toHaveCount(2);
+
+  drawer = await openDemoControls(page);
+  await drawer.getByRole("combobox", { name: "Selected fictional account" }).selectOption("buyer-naufal");
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
+  await expect(list.getByText("Indonesian recipe notebook")).toBeVisible();
+  await expect(list.getByRole("article")).toHaveCount(3);
 });
 
 test("Reset Demo restores Map, location, inventory, and grouped marker state", async ({ page }) => {
   await openDemo(page);
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
-  await viewControl.getByRole("button", { name: "List" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }).click();
   await page.getByLabel("Category Filter").selectOption("Books");
-  await page.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
 
-  await page.getByRole("button", { name: "Reset Demo" }).click();
+  let drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
+  await drawer.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
-  await expect(viewControl.getByRole("button", { name: "Map" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(page.getByRole("region", { name: "Demo marketplace listings" })).toHaveCount(0);
   await expect(page.getByLabel("Category Filter")).toHaveValue("All");
-  await expect(page.getByLabel("Simulated Browsing Location")).toHaveValue("current");
-  await expect(page.getByRole("region", { name: "Demo marketplace summary" })).toContainText(
-    "25 active Demo Listings",
-  );
+  await expect(
+    page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Seller marker group, 2 Sellers, choose Seller" }),
   ).toBeVisible();
+
+  drawer = await openDemoControls(page);
+  await expect(drawer.getByLabel("Simulated Browsing Location")).toHaveValue("current");
+  await expect(drawer.getByRole("group", { name: "Demo session totals" })).toContainText(
+    "25 active Demo Listings",
+  );
 });
 
 test("refresh replaces only the snapshot while preserving view and category", async ({ page }) => {
   await openDemo(page);
 
-  const location = page.getByLabel("Simulated Browsing Location");
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
-  await viewControl.getByRole("button", { name: "List" }).click();
   await page.getByLabel("Category Filter").selectOption("Books");
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
   const listings = page.getByRole("region", { name: "Demo marketplace listings" });
-  await expect(listings.getByRole("article")).toHaveCount(2);
+  await expect(listings.getByRole("article")).toHaveCount(3);
 
+  let drawer = await openDemoControls(page);
+  const location = drawer.getByLabel("Simulated Browsing Location");
   await location.selectOption("at-edge");
-  await expect(listings.getByRole("article")).toHaveCount(2);
-  await expect(page.getByText(/Active simulated snapshot 1/)).toBeVisible();
+  await expect(drawer).toContainText(/Active simulated snapshot 1/);
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
 
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+  drawer = await openDemoControls(page);
+  await expect(drawer).toContainText(/Active simulated snapshot 2/);
+  await drawer.getByRole("button", { name: "Close Demo controls" }).click();
+  await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
+  await expect(page.getByRole("status").filter({ hasText: /recalculated/ })).toBeVisible();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 3 listings" }).click();
   await expect(listings.getByRole("article")).toHaveCount(3);
   await expect(listings.getByText("1-2 km", { exact: true }).first()).toBeVisible();
-  await expect(viewControl.getByRole("button", { name: "List" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
-  await expect(page.getByText(/Active simulated snapshot 2/)).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: /recalculated/ })).toBeVisible();
 });
 
 test("returning from the background marks the Browsing Location stale without requesting location", async ({
@@ -355,7 +378,8 @@ test("returning from the background marks the Browsing Location stale without re
     });
   });
   await openDemo(page);
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  await expect(map).toBeVisible();
 
   await page.evaluate(() => {
     let simulatedVisibility: DocumentVisibilityState = "hidden";
@@ -371,7 +395,9 @@ test("returning from the background marks the Browsing Location stale without re
   await expect(
     page.getByRole("heading", { name: "Browsing Location needs refresh" }),
   ).toBeVisible();
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
+  await expect(map.getByRole("img", { name: "Your location" })).toHaveCount(0);
+  await expect(map.locator(".seller-discovery-marker")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open List panel:/ })).toHaveCount(0);
   await expect(
     page.evaluate(
       () => (window as typeof window & { __locationRequests: number }).__locationRequests,
@@ -383,41 +409,50 @@ test("stale resume, location errors, service failure, and empty states stay dist
   page,
 }) => {
   await openDemo(page);
-  const location = page.getByLabel("Simulated Browsing Location");
-  const refresh = page.getByRole("button", { name: "Refresh nearby listings" }).first();
+  const map = page.getByRole("region", { name: "Seller discovery map" });
 
-  await page.getByRole("button", { name: "Simulate stale resumed session" }).click();
+  let drawer = await openDemoControls(page);
+  await drawer.getByRole("button", { name: "Simulate stale resumed session" }).click();
   await expect(
     page.getByRole("heading", { name: "Browsing Location needs refresh" }),
   ).toBeVisible();
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toHaveCount(0);
+  await expect(map.locator(".seller-discovery-marker")).toHaveCount(0);
 
-  await refresh.click();
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await page
+    .getByRole("region", { name: "Nearby discovery status" })
+    .getByRole("button", { name: "Refresh nearby listings" })
+    .click();
+  await expect(map.getByRole("img", { name: "Your location" })).toBeVisible();
 
-  await location.selectOption("denied");
-  await refresh.click();
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("denied");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
 
-  await location.selectOption("unavailable");
-  await refresh.click();
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("unavailable");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("heading", { name: "Location unavailable" })).toBeVisible();
 
-  await location.selectOption("discovery-failure");
-  await refresh.click();
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("discovery-failure");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
   await expect(page.getByRole("heading", { name: "Nearby discovery unavailable" })).toBeVisible();
   await expect(page.getByText("This is not an empty result.")).toBeVisible();
 
-  await location.selectOption("books-empty");
-  await refresh.click();
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("books-empty");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
   await page.getByLabel("Category Filter").selectOption("Books");
   await expect(page.getByRole("heading", { name: "No Books listings nearby" })).toBeVisible();
   await page.getByRole("button", { name: "Show All categories" }).click();
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await expect(map.getByRole("img", { name: "Your location" })).toBeVisible();
 
-  await location.selectOption("outside-edge");
-  await refresh.click();
-  const nearbyEmpty = page.getByRole("heading", { name: "No nearby listings yet" }).locator("..");
+  drawer = await openDemoControls(page);
+  await drawer.getByLabel("Simulated Browsing Location").selectOption("outside-edge");
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
+  const nearbyEmpty = page.getByRole("region", { name: "Nearby discovery status" });
+  await expect(nearbyEmpty.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
   await expect(nearbyEmpty).toContainText("radius was not widened");
   const sellNearby = nearbyEmpty.getByRole("button", { name: "Sell an item nearby" });
   await expect(nearbyEmpty.getByRole("button", { name: "Refresh nearby listings" })).toBeVisible();
@@ -425,32 +460,38 @@ test("stale resume, location errors, service failure, and empty states stay dist
 
   await sellNearby.click();
   await expect(page.getByRole("heading", { name: "Manage demo listing" })).toBeVisible();
+  drawer = await openDemoControls(page);
   await expect(
-    page.getByRole("combobox", { name: "Selected fictional account" }),
+    drawer.getByRole("combobox", { name: "Selected fictional account" }),
   ).toHaveValue("seller-dimas");
 });
 
 test("Map Fallback preserves results and saved preference until retry recovers", async ({ page }) => {
   await openDemo(page);
-  const viewControl = page.getByRole("group", { name: "Discovery View" });
-  await viewControl.getByRole("button", { name: "List" }).click();
-  await viewControl.getByRole("button", { name: "Map" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }).click();
+  await page.getByRole("button", { name: "Close panel" }).click();
   await page.getByLabel("Category Filter").selectOption("Books");
-  await page.getByLabel("Simulated Browsing Location").selectOption("map-failure");
-  await page.getByRole("button", { name: "Refresh nearby listings" }).click();
+
+  const drawer = await openDemoControls(page);
+  await drawer.getByRole("button", { name: "Simulate map failure" }).click();
+  await drawer.getByRole("button", { name: "Refresh nearby listings" }).click();
+
+  const mapError = page.getByRole("region", { name: "Seller discovery map" }).getByRole("alert");
+  await expect(mapError.getByRole("heading", { name: "The street map did not load." })).toBeVisible();
+  await mapError.getByRole("button", { name: "Use List view" }).click();
 
   const fallback = page.getByRole("status", { name: "Map Fallback" });
   await expect(fallback).toBeVisible();
   await expect(fallback).toContainText("same results");
   await expect(
     page.getByRole("region", { name: "Demo marketplace listings" }).getByRole("article"),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
   await expect(page.getByLabel("Category Filter")).toHaveValue("Books");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("jualokal.discovery-view")))
     .toBe("map");
 
   await fallback.getByRole("button", { name: "Retry map" }).click();
   await expect(fallback).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Your location" })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Map rendering recovered" })).toBeVisible();
 });

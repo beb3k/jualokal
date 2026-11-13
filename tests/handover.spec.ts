@@ -3,10 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+}
+
+async function openListPanel(page: Page) {
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
 }
 
 async function purchaseBasket(page: Page) {
@@ -19,6 +20,7 @@ async function purchaseBasket(page: Page) {
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 }
 
 async function purchaseNearbyListing(page: Page, title: string) {
@@ -31,12 +33,17 @@ async function purchaseNearbyListing(page: Page, title: string) {
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 }
 
-async function switchAccount(page: Page, accountId: string) {
+async function switchAccount(page: Page, accountId: string, openOrders = true) {
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page
     .getByRole("combobox", { name: "Selected fictional account" })
     .selectOption(accountId);
+  if (openOrders) {
+    await page.getByRole("button", { name: "Orders" }).click();
+  }
 }
 
 async function arrangeHandover(page: Page) {
@@ -234,19 +241,19 @@ test("Reset Demo removes the completed transaction and permits a fresh journey",
   await purchaseBasket(page);
   await arrangeHandover(page);
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await expect(
     page.getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" }),
   ).toBeVisible();
@@ -482,6 +489,7 @@ test("incomplete handovers stay isolated between independent browser contexts", 
   const sessionBPage = await sessionBContext.newPage();
   try {
     await openDemo(sessionBPage);
+    await sessionBPage.getByRole("button", { name: "Orders" }).click();
     await expect(sessionBPage.getByRole("region", { name: "Purchase Commitments" })).toContainText(
       "No active Purchase Commitments",
     );
@@ -506,12 +514,14 @@ test("Reset Demo clears an incomplete handover and its preserved evidence", asyn
   await basketHandover(page)
     .getByRole("button", { name: "Buyer confirms inspected and accepted" })
     .click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -519,10 +529,8 @@ test("Reset Demo clears an incomplete handover and its preserved evidence", asyn
   await expect(page.getByRole("region", { name: "Preserved confirmation evidence" })).toHaveCount(
     0,
   );
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await expect(
     page.getByRole("article", {
       name: "Nearby simulated listing: Handwoven rattan market basket",
@@ -664,6 +672,7 @@ test("Material Mismatch details stay isolated between demo sessions", async ({
   const sessionBPage = await sessionBContext.newPage();
   try {
     await openDemo(sessionBPage);
+    await sessionBPage.getByRole("button", { name: "Orders" }).click();
     await expect(sessionBPage.getByRole("region", { name: "Purchase Commitments" })).toContainText(
       "No active Purchase Commitments",
     );
@@ -685,16 +694,14 @@ test("Reset Demo clears a mismatch and permits a fresh successful handover", asy
   await basketHandover(page)
     .getByRole("button", { name: "Acknowledge Material Mismatch" })
     .click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await openListPanel(page);
   await purchaseBasket(page);
   await arrangeHandover(page);
   await recordBothPartiesPresent(page);
@@ -865,12 +872,14 @@ test("seller sees private refund outcomes before a second overlapping strike res
   await panel.getByRole("button", { name: "Report seller unavailability" }).click();
   await expect(panel).toContainText("Your private seller reason: damage");
 
-  await switchAccount(page, "buyer-ayu");
+  await switchAccount(page, "buyer-ayu", false);
+  await openListPanel(page);
   await purchaseNearbyListing(page, "Batik cotton overshirt");
   await switchAccount(page, "seller-dimas");
   await page
-    .getByRole("combobox", { name: "Selected seller listing" })
-    .selectOption("listing-02");
+    .getByRole("article", { name: "Purchase Commitment: Batik cotton overshirt" })
+    .getByRole("button", { name: "Open transaction for Batik cotton overshirt" })
+    .click();
   panel = page.getByRole("region", { name: "Handover for Batik cotton overshirt" });
   await panel.getByRole("combobox", { name: "Seller unavailability reason" }).selectOption("loss");
   await panel.getByRole("button", { name: "Report seller unavailability" }).click();

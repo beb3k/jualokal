@@ -65,20 +65,35 @@ test("Demo Mode persists in the URL and stays clearly fictional after refresh", 
 
   await expect(page).toHaveURL(/[?&]demo=1(?:&|$)/);
   const notice = page.getByRole("status", { name: "Demo Mode simulation" });
-  await expect(notice).toContainText(
-    "Accounts, listing, location, identity status, and activity are fictional",
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("Demo - simulation");
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  const drawer = page.getByRole("dialog", { name: "Demo controls" });
+  await expect(drawer).toContainText(
+    "Accounts, listings, location, identity status, and activity are fictional.",
   );
-  await expect(page.getByRole("region", { name: "Demo Buyer" })).toHaveCount(1);
-  await expect(page.getByRole("region", { name: "Demo Seller" })).toHaveCount(1);
+  await expect(drawer.getByRole("combobox", { name: "Selected fictional account" })).toBeVisible();
+  await expect(drawer.getByRole("group", { name: "Demo session totals" })).toBeVisible();
+  await drawer.getByRole("button", { name: "Close Demo controls" }).click();
 
   await page.reload();
   await expect(page).toHaveURL(/[?&]demo=1(?:&|$)/);
   await expect(page.getByRole("status", { name: "Demo Mode simulation" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page.getByRole("button", { name: "View item" }).first().click();
   await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(1);
 });
 
 test("public, auth, and Demo layouts avoid horizontal clipping", async ({ page }) => {
-  for (const path of ["/", "/register", "/login", "/?demo=1"]) {
+  for (const path of ["/", "/register", "/login"]) {
     await page.goto(path);
     await expect(page.getByRole("main")).toBeVisible();
     const overflow = await page.evaluate(
@@ -86,4 +101,13 @@ test("public, auth, and Demo layouts avoid horizontal clipping", async ({ page }
     );
     expect(overflow).toBeLessThanOrEqual(1);
   }
+
+  await page.goto("/?demo=1");
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toBeVisible();
+  const demoOverflow = await page.evaluate(() => ({
+    horizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    vertical: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+  }));
+  expect(demoOverflow.horizontal).toBeLessThanOrEqual(1);
+  expect(demoOverflow.vertical).toBeLessThanOrEqual(1);
 });

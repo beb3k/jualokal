@@ -3,6 +3,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 async function openTrustDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  await page.getByRole("button", { name: "Trust overview" }).click();
 
   return page.getByRole("region", { name: "Tier Progress" });
 }

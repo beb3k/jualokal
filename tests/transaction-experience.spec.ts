@@ -3,10 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+}
+
+async function openListPanel(page: Page) {
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
 }
 
 async function purchaseNearbyListing(page: Page, title: string) {
@@ -19,20 +20,28 @@ async function purchaseNearbyListing(page: Page, title: string) {
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 }
 
-async function switchAccount(page: Page, accountId: string) {
+async function switchAccount(page: Page, accountId: string, openOrders = true) {
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page
     .getByRole("combobox", { name: "Selected fictional account" })
     .selectOption(accountId);
+  if (openOrders) {
+    await page.getByRole("button", { name: "Orders" }).click();
+  }
 }
 
 test("a multi-Order buyer can select each contained transaction with the keyboard", async ({
   page,
 }) => {
   await openDemo(page);
-  await switchAccount(page, "buyer-naufal");
+  await switchAccount(page, "buyer-naufal", false);
+  await openListPanel(page);
   await purchaseNearbyListing(page, "Handwoven rattan market basket");
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await purchaseNearbyListing(page, "Batik cotton overshirt");
 
   const orders = page.getByRole("region", { name: "Purchase Commitments" });
