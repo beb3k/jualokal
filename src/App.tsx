@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { House, MapPin, Package, ShieldCheck, UserRoundCheck } from "lucide-react";
 import { LandingCoverflow } from "./components/landing-coverflow";
+import { MarketplacePaths } from "./components/marketplace-paths";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
@@ -82,42 +83,7 @@ function App() {
           <LandingCoverflow />
         </section>
 
-        <section aria-label="Marketplace paths" className="marketplace-paths">
-          <div className="marketplace-paths-heading">
-            <p className="eyebrow">Choose your path</p>
-            <h2 id="marketplace-paths-title">One local marketplace. Two clear ways in.</h2>
-            <p>
-              Every participant begins with accountable membership. Selling becomes available
-              through a separate Seller Activation step.
-            </p>
-          </div>
-          <div className="marketplace-path-grid">
-            <article className="marketplace-path marketplace-path-buyer">
-              <span className="path-label">Buyer · included with membership</span>
-              <h3>Buy nearby</h3>
-              <p>
-                Discover portable secondhand goods, inspect the full listing, and complete a
-                protected in-person handover.
-              </p>
-              <a className="button button-primary" href="/register">
-                Join Jualokal to buy
-                <span aria-hidden="true">→</span>
-              </a>
-            </article>
-            <article className="marketplace-path marketplace-path-seller">
-              <span className="path-label">Seller · activated separately</span>
-              <h3>Sell nearby</h3>
-              <p>
-                Join as a member first, then activate selling while keeping your exact Home
-                Anchor private.
-              </p>
-              <a className="button button-outline" href="/register">
-                Join Jualokal to sell
-                <span aria-hidden="true">→</span>
-              </a>
-            </article>
-          </div>
-        </section>
+        <MarketplacePaths />
 
         <section className="principles" aria-labelledby="principles-title">
           <div className="section-heading">

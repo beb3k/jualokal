@@ -3287,23 +3287,22 @@ footer nav a:hover {
 }
 
 .marketplace-paths {
-  display: grid;
   width: min(var(--jl-container), calc(100% - 32px));
-  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
-  align-items: start;
-  gap: clamp(48px, 8vw, 112px);
   margin-inline: auto;
   border-top: 1px solid var(--jl-color-line);
   padding: var(--jl-space-8) 0;
 }
 
-.marketplace-paths-heading {
-  position: sticky;
-  top: 28px;
+.paths-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: end;
+  gap: 24px clamp(32px, 6vw, 96px);
+  margin-bottom: var(--jl-space-6);
 }
 
-.marketplace-paths-heading h2 {
-  margin-bottom: 24px;
+.paths-heading h2 {
+  margin-bottom: 0;
   font-family: var(--jl-font-display);
   font-size: clamp(2.5rem, 5vw, 4.8rem);
   font-weight: 500;
@@ -3311,34 +3310,95 @@ footer nav a:hover {
   letter-spacing: -0.052em;
 }
 
-.marketplace-paths-heading > p:last-child {
+.paths-heading-aside {
+  display: grid;
+  justify-items: start;
+  gap: 18px;
+}
+
+.paths-heading-aside p {
   max-width: 460px;
+  margin-bottom: 0;
   color: var(--jl-color-muted);
   line-height: 1.7;
 }
 
-.marketplace-path-grid {
+.paths-controls {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--jl-color-line);
+  border-radius: var(--jl-radius-pill);
+  padding: 4px;
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.paths-control {
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--jl-radius-pill);
+  padding: 0 18px;
+  color: var(--jl-color-brand);
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 750;
+  transition:
+    background-color 300ms ease,
+    color 300ms ease;
+}
+
+.paths-control:hover {
+  background: rgba(23, 60, 43, 0.08);
+}
+
+.paths-control[aria-current="step"] {
+  color: var(--jl-color-surface);
+  background: var(--jl-color-brand);
+}
+
+.paths-control-step {
+  color: var(--jl-color-accent-ink);
+  font-family: var(--jl-font-display);
+  font-size: 0.8rem;
+}
+
+.paths-control[aria-current="step"] .paths-control-step {
+  color: #f2c48f;
+}
+
+.paths-stages {
   display: grid;
   gap: 18px;
 }
 
-.marketplace-path {
-  position: relative;
-  min-height: 310px;
+.path-stage {
+  display: grid;
+  overflow: hidden;
+  border-radius: 12px 40px 40px 40px;
+  background: var(--jl-color-surface);
+  box-shadow: var(--jl-shadow-soft);
+}
+
+.path-stage-sell {
+  border-radius: 40px 12px 40px 40px;
+}
+
+.path-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: safe center;
   border-top: 3px solid var(--jl-color-brand);
-  padding: 30px;
-  background: rgba(255, 253, 248, 0.68);
+  padding: clamp(28px, 4.5vw, 64px);
+  background: var(--jl-color-surface);
 }
 
-.marketplace-path-buyer {
-  margin-right: clamp(0px, 5vw, 64px);
-  border-radius: 0 28px 28px 28px;
-}
-
-.marketplace-path-seller {
-  margin-left: clamp(0px, 5vw, 64px);
+.path-stage-sell .path-copy {
   border-color: var(--jl-color-accent);
-  border-radius: 28px 0 28px 28px;
   background: var(--jl-color-sage);
 }
 
@@ -3350,19 +3410,159 @@ footer nav a:hover {
   text-transform: uppercase;
 }
 
-.marketplace-path h3 {
-  margin: 34px 0 12px;
+.path-copy h3 {
+  margin: 28px 0 12px;
   font-family: var(--jl-font-display);
-  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-size: clamp(2rem, 3.6vw, 3.25rem);
   font-weight: 500;
+  line-height: 1.02;
   letter-spacing: -0.045em;
 }
 
-.marketplace-path p {
-  max-width: 560px;
+.path-copy p {
+  max-width: 460px;
   margin-bottom: 28px;
   color: var(--jl-color-muted);
   line-height: 1.65;
+}
+
+.path-media {
+  position: relative;
+  order: -1;
+  aspect-ratio: 4 / 5;
+  max-height: min(36rem, 75vh);
+  background: var(--jl-color-sage);
+}
+
+.path-media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 700px) {
+  .marketplace-paths[data-mode="flow"] .path-stage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .marketplace-paths[data-mode="flow"] .path-media {
+    min-height: 24rem;
+    aspect-ratio: auto;
+    max-height: none;
+  }
+
+  .marketplace-paths[data-mode="flow"] .path-stage[data-media-side="right"] .path-media {
+    order: 0;
+  }
+}
+
+/* Split-panel stage sequence, driven by native document scroll through a bounded track. */
+.marketplace-paths[data-mode="pinned"] {
+  width: min(1320px, calc(100% - 48px));
+  padding: var(--jl-space-6) 0 0;
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-track {
+  height: calc(100vh * var(--path-count));
+  height: calc(100svh * var(--path-count));
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-sticky {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  height: 100svh;
+  flex-direction: column;
+  gap: clamp(16px, 2.5vh, 28px);
+  padding-block: clamp(16px, 3vh, 36px);
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-heading {
+  flex: none;
+  margin-bottom: 0;
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-heading h2 {
+  font-size: clamp(2rem, 3.4vw, 3.4rem);
+  line-height: 1;
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-heading-aside p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.marketplace-paths[data-mode="pinned"] .paths-stages {
+  position: relative;
+  display: block;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 12px 40px 40px 40px;
+  background: var(--jl-color-sage);
+  box-shadow: var(--jl-shadow-soft);
+}
+
+.marketplace-paths[data-mode="pinned"] .path-stage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.marketplace-paths[data-mode="pinned"] .path-stage:not([data-state="active"]) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.marketplace-paths[data-mode="pinned"] .path-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  aspect-ratio: auto;
+  max-height: none;
+}
+
+.marketplace-paths[data-mode="pinned"] .path-panel[data-column="left"] {
+  left: 0;
+}
+
+.marketplace-paths[data-mode="pinned"] .path-panel[data-column="right"] {
+  left: 50%;
+}
+
+.marketplace-paths[data-mode="pinned"] .path-stage[data-state="after"] [data-column="left"],
+.marketplace-paths[data-mode="pinned"] .path-stage[data-state="before"] [data-column="right"] {
+  transform: translateY(100%);
+}
+
+.marketplace-paths[data-mode="pinned"] .path-stage[data-state="after"] [data-column="right"],
+.marketplace-paths[data-mode="pinned"] .path-stage[data-state="before"] [data-column="left"] {
+  transform: translateY(-100%);
+}
+
+.marketplace-paths[data-mode="pinned"] .path-copy h3 {
+  font-size: clamp(2rem, 3.2vw, 3.25rem);
+}
+
+/* Outgoing stages stay visible until their panels have finished sliding out. */
+.marketplace-paths[data-mode="pinned"][data-ready="true"] .path-stage {
+  transition: visibility 0s linear 1000ms;
+}
+
+.marketplace-paths[data-mode="pinned"][data-ready="true"] .path-stage[data-state="active"] {
+  transition-delay: 0s;
+}
+
+.marketplace-paths[data-mode="pinned"][data-ready="true"] .path-panel {
+  transition: transform 1000ms cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 .public-shell .principles {
@@ -3525,13 +3725,9 @@ footer nav a:hover {
 
 @media (max-width: 900px) {
   .public-shell .hero,
-  .marketplace-paths,
+  .paths-heading,
   .member-next-steps {
     grid-template-columns: 1fr;
-  }
-
-  .marketplace-paths-heading {
-    position: static;
   }
 
   .member-next-steps-grid {
@@ -3542,8 +3738,11 @@ footer nav a:hover {
 @media (max-width: 680px) {
   .marketplace-paths {
     width: min(100% - 24px, var(--jl-container));
-    gap: 34px;
     padding: 78px 0;
+  }
+
+  .paths-heading {
+    margin-bottom: 34px;
   }
 
   .public-shell .hero {
@@ -3554,14 +3753,11 @@ footer nav a:hover {
     font-size: clamp(3.4rem, 16vw, 5rem);
   }
 
-  .marketplace-path-buyer,
-  .marketplace-path-seller {
-    min-height: 0;
-    margin-inline: 0;
+  .path-copy {
     padding: 26px 22px;
   }
 
-  .marketplace-path .button {
+  .path-copy .button {
     width: 100%;
   }
 
