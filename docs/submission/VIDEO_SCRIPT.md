@@ -1,128 +1,178 @@
 # Jualokal demo video script
 
-Status: pre-production template. Do not present the application as working until the recorded build has been tested.
+Status: ready to rehearse. Final recording, model confirmation, upload, and signed-out playback check remain pending.
 
 ## Video record
 
-- **Final title:** TBD
-- **Public YouTube URL:** TBD
-- **Final duration:** TBD - must be under 03:00
-- **Target duration:** 02:52
-- **Narrator:** TBD
-- **Recording date:** TBD
-- **Demonstrated version or commit:** TBD
-- **Working project URL:** TBD
-- **Primary Core Build task:** TBD
-- **`/feedback` Session ID:** TBD
-- **Music:** None, or record the title and licence
+- **Final title:** Jualokal - Private nearby secondhand handovers
+- **Public YouTube URL:** Pending upload
+- **Final duration:** Pending export - must be under 03:00
+- **Target duration:** 02:55
+- **Narrator:** Satrio Faiz
+- **Recording date:** 2026-07-21/22 Bangkok time
+- **Demonstrated commit:** `41773d604ff7a9ebd19148e18983ea0d5f2c312c`
+- **Working project URL:** Not included; record the local Demo Mode described in `README.md`
+- **Primary Core Build task:** Implement issue #7 - Schedule and complete a successful handover
+- **`/feedback` Session ID:** Captured for the private Devpost field; never show it in the video
+- **GPT-5.6 confirmation:** Before recording, confirm the original task visibly identifies GPT-5.6
+- **Music:** None
 
 ## Recording rules
 
-- Record only tested behavior from the final submitted project.
-- Use English narration and English interface content.
-- Clearly label all sample accounts, listings, locations, payments, refunds, and histories as simulated Demo Mode data.
-- Never imply that Jualokal has real customers, transactions, identity checks, payments, Escrow, or market adoption.
-- Replace every TBD and bracketed placeholder before recording.
-- Keep the final cut safely below three minutes. Do not exceed the 02:52 target without shortening another segment.
+- Record only behavior verified in the submitted commit.
+- Use English narration and keep the interface readable.
+- Say clearly that all Demo Mode identities, listings, locations, payments, refunds, reviews, and histories are fictional.
+- Never imply that Jualokal has real customers, real transactions, real identity checks, real payments, or market adoption.
+- Do not show private Codex conversations, credentials, coordinates, account details, or the `/feedback` value.
+- Keep the final export under three minutes. Remove pauses and decorative footage before shortening the two product stories.
 
-## Storyboard
+## Live recording method
 
-| Time | On-screen actions | Narration |
-|---|---|---|
-| `00:00-00:12` | Show the Jualokal name and concise product promise. Briefly show that listings are locked behind registration. | "Buying secondhand goods nearby should not require delivery, long-distance coordination, or exposing someone's home. Jualokal is a private, hyperlocal marketplace designed for accountable handovers near home." |
-| `00:12-00:27` | Enter the clearly labelled Demo Mode. Show simulated Identity Verification and select a Demo Buyer. | "Listings are available only to verified members. For this prototype, verification and all personal data are simulated, so judges never need to provide a real identity, payment method, or location." |
-| `00:27-00:45` | Browse nearby Demo Listings. Show the 2 km discovery boundary, rounded distance, fixed price, condition, defects, and item photographs. Open the successful-story item. | "The buyer sees fixed-price portable goods within a small local radius. Each listing describes its condition, known defects, measurements, and the exact item shown in its photographs." |
-| `00:45-01:02` | Start checkout. Show the temporary hold, simulated payment, unchangeable Purchase Snapshot, and simulated Escrow state. | "Checkout briefly reserves the item and creates an unchangeable snapshot of what was promised. Payment and escrow are simulated in this prototype; no real money is collected or held by Jualokal." |
-| `01:02-01:21` | Switch to the Demo Seller. Propose a nearby Handover Point and time. Return to the buyer and accept them. Advance simulated time if needed. | "The seller proposes a handover point close to home without revealing their Home Anchor. Both parties agree on the place and time through controlled choices instead of exchanging private contact details." |
-| `01:21-01:34` | Use Demo Mode location controls for both parties. Show the eligibility result and accuracy, with handover actions becoming available. | "At the scheduled time, both devices must be within one hundred metres of the agreed point. Location is supporting evidence only; it does not prove that the people are face-to-face." |
-| `01:34-01:47` | Buyer inspects and confirms acceptance. Seller transfers the item and confirms. Show the item sold and simulated payout released. | "The buyer confirms that the inspected item matches the purchase snapshot. The seller then hands it over and confirms. Matching confirmations finish the sale and release the simulated payout." |
-| `01:47-02:14` | Reset or change to the prepared contested Material Mismatch story. Show the buyer describing the mismatch, the seller contesting it and retaining the item, followed by guided review and simulated refund. | "The second story handles a material mismatch. The buyer identifies how the item differs from the snapshot, while the seller disputes the claim and keeps the item. Both leave without completing the handover, and this guided prototype review ends with a simulated refund to the buyer." |
-| `02:14-02:43` | Show selected evidence: the product brief, decision records, build log, representative Codex work, tests, and completed application. Do not expose private prompts, coordinates, credentials, or Session IDs. | "We built Jualokal with Codex and GPT-5.6. Codex first grilled the idea and helped us turn uncertain marketplace rules into a frozen product brief and eighteen recorded decisions. It then helped us [retain only verified activities: specify, build, test, or refine] the core journeys. Our team directed the product decisions, reviewed the results, and verified the final experience across [tested devices and browsers]." |
-| `02:43-02:52` | Return to a clean final view of the completed transaction or nearby marketplace. Display the closing statement. | "Jualokal shows how trusted local exchange can stay convenient without becoming another delivery marketplace. Everything shown here runs in an isolated, clearly labelled demonstration." |
+1. Run `npm run dev` and open `http://localhost:5173/?demo=1` in a clean browser window.
+2. Turn off notifications and close email, chat, password managers, developer tools, and unrelated tabs.
+3. Keep this script on a second screen, phone, or printed page so it never appears in the recording.
+4. Rehearse the complete pointer and click path twice before recording. Prepare the successful Order and Material Mismatch Order in separate browser sessions.
+5. Open Windows Snipping Tool, choose **Record**, and select only the browser area. Pause speaking before each click, click once, wait for the screen to settle, and then continue.
+6. Speak conversationally. The words below are a guide, so restart the current section rather than the whole video if a sentence feels unnatural.
+7. In Clipchamp, join the clean sections with simple hard cuts, remove long pauses, and add corrected captions. Do not add background music.
+8. Export at 1080p and keep the finished video below three minutes. YouTube may be **Public** or **Unlisted**, but it must play while signed out.
+
+## Live presenter script
+
+Only read the quoted paragraphs aloud. The bracketed directions are silent screen and cursor cues.
+
+### `00:00-00:18` - Why Jualokal
+
+[Start on the public page. Point briefly to the portable-goods, nearby-handover, and protected-location promises.]
+
+> "Jualokal is a seller-centered, privacy-first marketplace for accountable nearby handovers. In dense Indonesian neighborhoods, Sellers advertise portable secondhand items once, avoiding door-to-door selling, shipping, and cross-city traffic. This demo is entirely fictional."
+
+[Click **Explore Demo Mode** and pause until the dashboard settles.]
+
+### `00:18-00:48` - Nearby discovery
+
+[Point to the fictional Buyer in Bandung. Select the available simulated Browsing Location and click **Refresh nearby listings**.]
+
+> "I am a fictional Buyer in Bandung. The prototype shows listings within two kilometers of a simulated Browsing Location; ten kilometers is only a future maximum. Map markers are coarse Seller areas, not homes. Shared areas let me choose a Seller. List View shows the same broad Distance Bands."
+
+[Open one Seller marker, demonstrate the shared-area Seller choice, then switch to **List**.]
+
+### `00:48-01:13` - Listing, payment, and simulated Escrow
+
+[Open **Handwoven rattan market basket**. Point to its condition, defects, measurements, fictional photos, and fixed price. Start the Checkout Hold and select the successful-payment simulation.]
+
+> "This listing shows condition, defects, measurements, photographs, and price. Checkout starts a five-minute hold; if it expires, the item returns to sale. Successful simulated payment creates the Order and frozen Snapshot, holds the amount in simulated Escrow, and leaves the payout pending."
+
+[Pause briefly on the Order and **Simulated Escrow: Held** state.]
+
+### `01:13-01:42` - Seller-controlled scheduling
+
+[Open **Orders**, switch to Dimas, select the basket Order, choose the **Seller-selected Handover Point**, and click **Propose two handover windows**.]
+
+> "The Seller chooses the outdoor Handover Point and proposes two windows without exposing a Home Anchor. The Buyer accepts the first or requests an adjustment. The schedule must begin within forty-eight hours after payment."
+
+[Switch to Ayu and click **Accept first proposed window**.]
+
+### `01:42-02:12` - Presence and successful completion
+
+[Click **Advance to accepted handover window**. Record the eligible Buyer and Seller Presence Checks.]
+
+> "Both devices record a simulated Presence Check within one hundred meters. Jualokal keeps eligibility, time, and accuracy, not movement or proof. The Buyer confirms after inspection; Escrow stays held until the Seller confirms. Matching confirmations complete the sale, release Escrow, and mark the payout paid."
+
+[Confirm first as Ayu, pause on held Escrow, then switch to Dimas and confirm the handover.]
+
+### `02:12-02:32` - When something goes wrong
+
+[Switch to the prepared Material Mismatch session. Raise the mismatch, switch to the Seller, contest it, then show the guided-review refund.]
+
+> "For a Material Mismatch, the Buyer raises a claim against the frozen Snapshot. If contested, the item stays with the Seller and Escrow remains held for guided review, here ending in a refund. A no-show may create a private Strike only after the grace period and evidence."
+
+### `02:32-02:47` - Build evidence
+
+[Show only sanitized stills of the product brief, nineteen ADR files, build log, repository history, and final verification. Never show a private Codex task or Session ID.]
+
+> "We built Jualokal with Codex and GPT-5.6. Codex turned the rules into a product brief, nineteen decision records, connected implementation, and boundary tests. Our team made the final decisions."
+
+### `02:47-02:55` - Close
+
+[Return to the completed Order or clean Map View and stop clicking.]
+
+> "Jualokal keeps discovery local, protects the Seller's home, and makes neighborhood exchange accountable, without real identities, money, or transactions."
+
+## Timing fallback
+
+If a full rehearsal runs longer than 02:55, omit the future ten-kilometer clause and the final no-show sentence. Keep the successful handover, Material Mismatch, and Codex evidence; shorten pauses instead of speaking unnaturally fast.
+
+
+## Preparing the two product stories
+
+Record the successful and mismatch stories in separate browser sessions so a mistake in one does not force a complete restart.
+
+### Successful handover session
+
+- Start as Ayu in Demo Mode.
+- Switch discovery to List and open **Handwoven rattan market basket**.
+- Start the Checkout Hold and simulate successful payment.
+- In Orders, switch to Dimas, choose **Community pavilion entrance - public and well lit**, and propose the two windows.
+- Switch to Ayu, accept the first window, and advance to it.
+- For the Buyer, select **Exactly 100 m from the point - reported accuracy 12 m**; for the Seller, select **Inside the 100 m area - reported accuracy 10 m**.
+- Record both eligible simulated Presence Checks. The 12 m and 10 m values are reported accuracy, not distance from the Handover Point.
+- Confirm as Ayu first, then as Dimas.
+- Stop on the sold state and released simulated payout.
+
+### Contested Material Mismatch session
+
+- Prepare a fresh basket purchase through accepted scheduling and eligible Presence Checks.
+- As Ayu, raise a qualifying Material Mismatch before accepting the item.
+- Use a short fictional description that contains no personal information.
+- Switch to Dimas and select **Contest Material Mismatch**.
+- Show that the item stays with the Seller and simulated Escrow stays held.
+- Select **Simulate guided-review refund** and stop on the completed refund state.
 
 ## Codex and GPT-5.6 evidence
 
-Complete this section from `CODEX_BUILD_LOG.md` before finalizing the narration:
+- **Primary Core Build task:** Implement issue #7 - Schedule and complete a successful handover
+- **Session value:** Captured privately for Devpost
+- **Starting commit:** `65033becc8c930935a8443cfd956061d20767b5a`
+- **Ending implementation commit:** `39c28de26b220cdc2d797f0d1f1f1c000e4452d5`
+- **Core functionality:** Connected discovery, checkout, Purchase Snapshot, and simulated Escrow to seller-led scheduling, Presence Checks, ordered confirmations, final sale, simulated payout, and Reset Demo.
+- **Team decisions:** Exact deadline boundaries count as valid; poor accuracy is an explicit simulator state; evening handovers require a public, well-lit point; private Seller-zone eligibility never exposes a Home Anchor or geometry.
+- **Where Codex accelerated work:** Dependency mapping, exact boundary and privacy tests, connected state implementation, regression diagnosis, and independent standards/specification review.
+- **Recorded primary-session checks:** 102 automated checks across phone and desktop projects, focused handover and adjustment checks, type checking, and production build.
+- **Problems corrected during review:** Overnight-window handling, post-acceptance schedule adjustment, stale confirmations after rescheduling, and test formatting.
 
-- **Primary Core Build task:** TBD
-- **`/feedback` Session ID:** TBD
-- **Starting commit:** TBD
-- **Ending commit:** TBD
-- **Core functionality produced in that task:** TBD
-- **Important decisions made by the team:** TBD
-- **Where Codex accelerated the work:** TBD
-- **Tests and visual checks performed:** TBD
-- **Problems found and corrected during verification:** TBD
-
-Mention only contributions supported by the build log, commits, tests, or recorded Codex task. Never describe planning work as completed implementation.
+Do not show the session value or a private Codex conversation. A sanitized title card saying **Primary build task: issue #7 successful handover** is enough.
 
 ## Pre-recording checklist
 
-### Project readiness
+- [ ] Confirm the original issue #7 task visibly identifies GPT-5.6.
+- [ ] Run the final type check, browser suite, and production build against the demonstrated commit.
+- [ ] Rehearse the successful story from a fresh Demo Mode session.
+- [ ] Rehearse the contested Material Mismatch story in a separate fresh session.
+- [ ] Confirm Reset Demo restores the fictional marketplace.
+- [ ] Confirm the repository, README, narration, and demonstrated commit describe the same version.
+- [ ] Use only simulated accounts, locations, payments, refunds, and histories.
+- [ ] Prepare sanitized evidence stills with no prompts, credentials, paths, coordinates, or session values.
+- [ ] Time one full narration rehearsal below 02:55.
 
-- [ ] Both accepted demo stories pass from a fresh, isolated Demo Mode session.
-- [ ] Reset Demo restores the original state.
-- [ ] The demonstrated deployment matches the submitted repository and description.
-- [ ] The project works from a fresh browser without paid access.
-- [ ] The successful story ends with matching confirmations and simulated payout.
-- [ ] The contested mismatch story ends with the seller retaining the item and the buyer receiving a simulated refund.
-- [ ] Every simulated identity, location, payment, Escrow, refund, account, and transaction is visibly labelled.
-- [ ] No unfinished screen, accidental error, or unsupported feature appears.
+## Privacy and rights check
 
-### Recording preparation
+- [ ] No real Home Anchor, address, coordinate, identity document, legal name, telephone number, email address, payment information, or protected account is visible.
+- [ ] No API key, environment value, credential, private browser tab, notification, or repository secret appears.
+- [ ] No face, home detail, address, identifying reflection, or embedded location metadata appears in an image.
+- [ ] Every image, icon, font, and sound is original, licensed, or used with permission.
+- [ ] No third-party logo or copyrighted background material appears accidentally.
+- [ ] No real adoption, payment, verification, moderator review, or production-readiness claim is made.
 
-- [ ] Use a clean browser profile or distraction-free window.
-- [ ] Close notifications, private tabs, email, messaging, password managers, and unrelated applications.
-- [ ] Hide bookmarks, account names, browser history, local paths, and developer tools.
-- [ ] Prepare both stories and rehearse all account switches.
-- [ ] Record at a legible resolution with a clearly visible pointer.
-- [ ] Confirm that interface text remains readable after YouTube processing.
-- [ ] Record clear English audio in a quiet environment.
-- [ ] Time the complete rehearsal at or below 02:52.
+## Final export and upload check
 
-## Privacy and security safeguards
-
-- [ ] No real Home Anchor, household coordinate, address, or private Handover Point is visible.
-- [ ] No real identity document, legal name, telephone number, email address, payment information, or personal account is visible.
-- [ ] No API key, environment variable, credential, private repository content, or secret appears.
-- [ ] Photographs contain no faces, home details, addresses, identifying reflections, or embedded location metadata.
-- [ ] Protected builder accounts are not shown unless every visible field is safe and intentionally approved.
-- [ ] Private Codex conversations are not displayed in the video.
-- [ ] The recording reveals no location or movement history.
-
-## Intellectual-property safeguards
-
-- [ ] Every image, icon, font, sound, and other asset is original, properly licensed, or used with permission.
-- [ ] Demo item photographs are owned by a builder or used with the owner's permission.
-- [ ] No third-party logo or trademark appears unless the team has permission and records that permission.
-- [ ] No copyrighted background video, television, artwork, or music is captured accidentally.
-- [ ] Use no background music unless its licence and attribution requirements have been recorded.
-- [ ] Any required attribution is included in the repository and YouTube description.
-- [ ] The video does not suggest endorsement by Gojek, Grab, another marketplace, or an identity or payment provider.
-
-## Final video review
-
-Watch the exported video from beginning to end before upload:
-
-- [ ] Duration is under 03:00, preferably no longer than 02:52.
-- [ ] Narration is clear and synchronized with the correct actions.
-- [ ] Both accepted demo stories are understandable without additional explanation.
-- [ ] Codex and GPT-5.6 contributions are specific, accurate, and evidence-based.
-- [ ] No statement contradicts the submitted project or documentation.
-- [ ] No real adoption, real payment, real verification, or production-readiness claim is implied.
-- [ ] All private information, credentials, coordinates, and unapproved third-party material are absent.
-- [ ] Demo Mode and simulated-money labels remain readable.
-- [ ] Captions have been reviewed and corrected.
-- [ ] No placeholder remains in the narration, titles, or description.
-
-## Publication checklist
-
-- [ ] Upload the final video to YouTube.
-- [ ] Set visibility to **Public**.
-- [ ] Confirm that audio and high-resolution processing have completed.
-- [ ] Open the video in a signed-out or private browser window.
-- [ ] Confirm that it plays without login, payment, or permission.
-- [ ] Check the title, description, captions, thumbnail, and any required attribution.
-- [ ] Record the final URL and duration at the top of this document.
-- [ ] Add the public URL to the hackathon submission.
-- [ ] Rewatch the public YouTube version once after publication.
+- [ ] Export is under 03:00 and preferably between 02:45 and 02:55.
+- [ ] Narration is clear, natural, and synchronized with the correct actions.
+- [ ] Both product stories remain understandable without extra explanation.
+- [ ] Codex and GPT-5.6 contributions are specific and supported by recorded evidence.
+- [ ] Demo Mode and simulated-money labels remain readable at 1080p.
+- [ ] Captions are reviewed and corrected.
+- [ ] No placeholder or private value appears.
+- [ ] Upload to YouTube as Public or Unlisted.
+- [ ] Wait for high-resolution processing, then play the video in a signed-out browser.
+- [ ] Record the final URL and duration at the top of this document and add the URL to Devpost.

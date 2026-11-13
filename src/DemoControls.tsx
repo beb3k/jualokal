@@ -33,12 +33,13 @@ type DemoControlsProps = Readonly<{
   buyerCount: number;
   sellerCount: number;
   activeListingCount: number;
-  activeWorkspace: "buyer" | "seller" | "inventory";
+  activeWorkspace: "buyer" | "seller" | "inventory" | "orders" | "trust";
   onBuyerDiscovery: () => void;
   onSellerDiscovery: () => void;
   onSellerWorkspace: () => void;
   onInventory: () => void;
   onOrders: () => void;
+  onTrust: () => void;
   browsingLocation: string;
   browsingLocationOptions: readonly Readonly<{ value: string; label: string }>[];
   onBrowsingLocationChange: (value: string) => void;
@@ -70,6 +71,7 @@ export default function DemoControls({
   onSellerWorkspace,
   onInventory,
   onOrders,
+  onTrust,
   browsingLocation,
   browsingLocationOptions,
   onBrowsingLocationChange,
@@ -142,6 +144,7 @@ export default function DemoControls({
             className="button button-compact button-outline"
             onClick={onClose}
             ref={closeButtonRef}
+            type="button"
           >
             Close
           </button>
@@ -199,10 +202,10 @@ export default function DemoControls({
             </div>
           ) : null}
           <div className="demo-controls-actions">
-            <button className="button button-outline" onClick={onReset}>
+            <button className="button button-outline" onClick={onReset} type="button">
               Reset Demo
             </button>
-            <button className="button button-outline" onClick={onExit}>
+            <button className="button button-outline" onClick={onExit} type="button">
               Exit demo
               <span aria-hidden="true">×</span>
             </button>
@@ -226,10 +229,10 @@ export default function DemoControls({
             </select>
           </label>
           <div className="demo-controls-actions">
-            <button className="button button-primary" onClick={onRefreshNearby}>
+            <button className="button button-primary" onClick={onRefreshNearby} type="button">
               Refresh nearby listings
             </button>
-            <button className="button button-outline" onClick={onMarkStale}>
+            <button className="button button-outline" onClick={onMarkStale} type="button">
               Simulate stale resumed session
             </button>
           </div>
@@ -245,7 +248,7 @@ export default function DemoControls({
             Failure scenarios stay simulated snapshots. Selecting one does not change discovery
             until Refresh nearby listings.
           </p>
-          <button className="button button-outline" onClick={onSimulateMapFailure}>
+          <button className="button button-outline" onClick={onSimulateMapFailure} type="button">
             Simulate map failure
           </button>
           <p className="demo-controls-hint">
@@ -263,6 +266,7 @@ export default function DemoControls({
               }
               className="button button-outline"
               onClick={onBuyerDiscovery}
+              type="button"
             >
               Buyer discovery
             </button>
@@ -271,6 +275,7 @@ export default function DemoControls({
                 aria-current={activeWorkspace === "buyer" ? "page" : undefined}
                 className="button button-outline"
                 onClick={onSellerDiscovery}
+                type="button"
               >
                 View discovery as selected Seller
               </button>
@@ -279,6 +284,7 @@ export default function DemoControls({
               aria-current={activeWorkspace === "seller" ? "page" : undefined}
               className="button button-outline"
               onClick={onSellerWorkspace}
+              type="button"
             >
               Seller workspace
             </button>
@@ -286,12 +292,28 @@ export default function DemoControls({
               aria-current={activeWorkspace === "inventory" ? "page" : undefined}
               className="button button-outline"
               onClick={onInventory}
+              type="button"
             >
               Demo inventory
             </button>
-            <button className="button button-outline" onClick={onOrders}>
+            <button
+              aria-current={activeWorkspace === "orders" ? "page" : undefined}
+              className="button button-outline"
+              onClick={onOrders}
+              type="button"
+            >
               Orders
             </button>
+            {selectedBuyer ? (
+              <button
+                aria-current={activeWorkspace === "trust" ? "page" : undefined}
+                className="button button-outline"
+                onClick={onTrust}
+                type="button"
+              >
+                Trust overview
+              </button>
+            ) : null}
           </nav>
         </section>
 

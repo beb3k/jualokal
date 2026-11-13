@@ -3,10 +3,18 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+}
+
+async function openListPanel(page: Page) {
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+}
+
+async function switchAccount(page: Page, accountId: string) {
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+    .getByRole("combobox", { name: "Selected fictional account" })
+    .selectOption(accountId);
 }
 
 async function purchaseNearbyListing(page: Page, title: string) {
@@ -19,6 +27,7 @@ async function purchaseNearbyListing(page: Page, title: string) {
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 }
 
 test("buyer starts checkout and receives one visible five-minute Checkout Hold", async ({
@@ -48,6 +57,9 @@ test("every buyer can hold only one item at a time", async ({ page }) => {
     .getByRole("button", { name: "View item" })
     .click();
   await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
 
   await page
     .getByRole("article", { name: "Nearby simulated listing: Batik cotton overshirt" })
@@ -79,16 +91,28 @@ test("the item is released at the exact five-minute expiry with no commitment", 
     .getByRole("button", { name: "Advance to one second before hold expiry" })
     .click();
   await expect(hold.getByRole("timer")).toHaveText("00:01 remaining");
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
 
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" })
+    .getByRole("button", { name: "View item" })
+    .click();
+  await page.getByRole("button", { name: "Open Checkout Hold" }).click();
+
   await hold.getByRole("button", { name: "Advance to exact hold expiry" }).click();
 
-  await expect(page.getByRole("region", { name: "Checkout" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Checkout" })).toContainText(
+    "No active Checkout Hold.",
+  );
   await expect(page.getByText(
     "Checkout Hold expired. The item returned to sale",
   )).toBeVisible();
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -116,6 +140,7 @@ test("payment clicked after real expiry cannot announce or create success", asyn
 
   await expect(page.getByText("Simulated payment succeeded")).toHaveCount(0);
   await expect(page.getByText("Simulated payment did not complete")).toBeVisible();
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -135,8 +160,14 @@ test("abandoning checkout returns the item to sale without a commitment", async 
     .click();
 
   await expect(page.getByText("Checkout abandoned. The item returned to sale")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Checkout" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Checkout" })).toContainText(
+    "No active Checkout Hold.",
+  );
+  await page.getByRole("button", { name: "Back to item" }).click();
+  await expect(page.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toBeEnabled();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(listing).toBeVisible();
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -156,8 +187,14 @@ test("failed simulated payment returns the item to sale without a commitment", a
     .click();
 
   await expect(page.getByText("Simulated payment failed. The item returned to sale")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Checkout" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Checkout" })).toContainText(
+    "No active Checkout Hold.",
+  );
+  await page.getByRole("button", { name: "Back to item" }).click();
+  await expect(page.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toBeEnabled();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(listing).toBeVisible();
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -174,9 +211,12 @@ test("competing buyers cannot both hold the same item and the holder stays priva
     .click();
   await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
 
+  await switchAccount(page, "buyer-naufal");
+  await openListPanel(page);
   await page
-    .getByRole("combobox", { name: "Selected fictional account" })
-    .selectOption("buyer-naufal");
+    .getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" })
+    .getByRole("button", { name: "View item" })
+    .click();
 
   const checkout = page.getByRole("region", { name: "Checkout" });
   await expect(checkout).toContainText(
@@ -186,6 +226,7 @@ test("competing buyers cannot both hold the same item and the holder stays priva
     checkout.getByRole("button", { name: "Start 5-minute Checkout Hold" }),
   ).toBeDisabled();
   await expect(checkout).not.toContainText("Ayu R.");
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
@@ -203,10 +244,29 @@ test("a competing buyer sees one held Listing as unclaimable across Map, Preview
   await basket.getByRole("button", { name: "View item" }).click();
   await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
 
-  const account = page.getByRole("combobox", { name: "Selected fictional account" });
-  await account.selectOption("buyer-naufal");
+  await switchAccount(page, "buyer-naufal");
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  const marker = map.getByRole("button", {
+    name: "Seller marker, DP, 5 Listings, 1 held Listing unavailable to claim",
+  });
+  await expect(marker).toBeVisible();
+  await expect(map).not.toContainText("Ayu R.");
+  await marker.click();
+
+  const previewPanel = page.getByRole("complementary", { name: "Seller Preview panel" });
+  const preview = previewPanel.getByRole("region", { name: "Seller Preview: Dimas P." });
+  const previewBasket = preview.getByRole("article", {
+    name: "Seller Preview Listing: Handwoven rattan market basket",
+  });
+  await expect(preview).toContainText("Under 1 km");
+  await expect(previewBasket).toContainText("Checkout Hold · unavailable to claim");
+  await expect(preview).not.toContainText("Ayu R.");
+  await previewPanel.getByRole("button", { name: "Close panel" }).click();
+
+  await openListPanel(page);
   await expect(basket).toContainText("Checkout Hold · unavailable to claim");
   await expect(await list.locator("article h3").allTextContents()).toEqual(titlesBeforeHold);
+  await basket.getByRole("button", { name: "View item" }).click();
 
   const detail = page.getByRole("region", { name: "Demo Listing" });
   await expect(detail).toContainText("Checkout Hold · unavailable to claim");
@@ -214,41 +274,21 @@ test("a competing buyer sees one held Listing as unclaimable across Map, Preview
   await expect(checkout).toContainText("Checkout is already in progress for another buyer");
   await expect(checkout).not.toContainText("Ayu R.");
 
+  await switchAccount(page, "buyer-ayu");
+  await openListPanel(page);
+  await basket.getByRole("button", { name: "View item" }).click();
+  await detail.getByRole("button", { name: "Open Checkout Hold" }).click();
   await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "Map" })
-    .click();
-  const map = page.getByRole("region", { name: "Seller discovery map" });
-  const marker = map.getByRole("button", {
-    name: "Seller marker, DP, 4 Listings, 1 held Listing unavailable to claim",
-  });
-  await expect(marker).toBeVisible();
-  await expect(map).not.toContainText("Ayu R.");
-  await marker.click();
-
-  const preview = page.getByRole("dialog", { name: "Seller Preview: Dimas P." });
-  const previewBasket = preview.getByRole("article", {
-    name: "Seller Preview Listing: Handwoven rattan market basket",
-  });
-  await expect(preview).toContainText("Under 1 km");
-  await expect(previewBasket).toContainText("Checkout Hold · unavailable to claim");
-  await expect(preview).not.toContainText("Ayu R.");
-  await preview.getByRole("button", { name: "Close Seller Preview" }).click();
-
-  await account.selectOption("buyer-ayu");
-  await detail
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Advance to exact hold expiry" })
     .click();
-  await account.selectOption("buyer-naufal");
+
+  await switchAccount(page, "buyer-naufal");
   await expect(map.getByRole("button", {
-    name: "Seller marker, DP, 4 Listings",
+    name: "Seller marker, DP, 5 Listings",
     exact: true,
   })).toBeVisible();
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await openListPanel(page);
   await expect(basket.getByText("Checkout Hold · unavailable to claim")).toHaveCount(0);
   await expect(await list.locator("article h3").allTextContents()).toEqual(titlesBeforeHold);
 });
@@ -258,18 +298,12 @@ test("successful purchase updates List, marker counts, and group membership toge
 }) => {
   await openDemo(page);
   await page.getByLabel("Category Filter").selectOption("Accessories");
+  await openListPanel(page);
   const list = page.getByRole("region", { name: "Demo marketplace listings" });
   await expect(list.getByRole("article")).toHaveCount(4);
 
   await purchaseNearbyListing(page, "Woven pandan tote");
-  await expect(list.getByText("Woven pandan tote")).toHaveCount(0);
-  await expect(list.getByRole("article")).toHaveCount(3);
-  await expect(page.getByRole("heading", { name: "3 nearby simulated listings" })).toBeVisible();
-
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "Map" })
-    .click();
+  await page.getByRole("button", { name: "Back to map" }).click();
   const map = page.getByRole("region", { name: "Seller discovery map" });
   await expect(
     map.getByRole("button", { name: "Seller marker group, 2 Sellers, zoom to separate" }),
@@ -281,21 +315,28 @@ test("successful purchase updates List, marker counts, and group membership toge
     map.getByRole("button", { name: "Seller marker group, 2 Sellers, choose Seller" }),
   ).toBeVisible();
 
+  await openListPanel(page);
+  await expect(list.getByText("Woven pandan tote")).toHaveCount(0);
+  await expect(list.getByRole("article")).toHaveCount(3);
+  await expect(page.getByRole("heading", { name: "3 nearby simulated listings" })).toBeVisible();
+  await page.getByRole("button", { name: "Close panel" }).click();
+
   await bimaMarker.click();
-  const preview = page.getByRole("dialog", { name: "Seller Preview: Bima A." });
+  const preview = page.getByRole("region", { name: "Seller Preview: Bima A." });
   await expect(preview.getByRole("article")).toHaveCount(1);
   await expect(preview).toContainText("Canvas futsal shoe bag");
 });
 
 test("a Seller cannot reach checkout for an owned Listing through discovery", async ({ page }) => {
   await openDemo(page);
-  const account = page.getByRole("combobox", { name: "Selected fictional account" });
-  await account.selectOption("seller-dimas");
+  await switchAccount(page, "seller-dimas");
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "View discovery as selected Seller" }).click();
 
+  await openListPanel(page);
   const list = page.getByRole("region", { name: "Demo marketplace listings" });
   await expect(list.getByText("Handwoven rattan market basket")).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Demo Listing" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toHaveCount(0);
 });
 
@@ -308,9 +349,7 @@ test("a Checkout Hold locks the seller's listing details and sale actions", asyn
     .click();
   await page.getByRole("button", { name: "Start 5-minute Checkout Hold" }).click();
 
-  await page
-    .getByRole("combobox", { name: "Selected fictional account" })
-    .selectOption("seller-dimas");
+  await switchAccount(page, "seller-dimas");
 
   const workspace = page.getByRole("region", { name: "Manage demo listing" });
   await expect(workspace).toContainText(
@@ -345,6 +384,7 @@ test("successful simulated payment freezes the terms, holds Escrow, and removes 
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 
   const commitments = page.getByRole("region", { name: "Purchase Commitments" });
   const commitment = commitments.getByRole("article", {
@@ -365,12 +405,12 @@ test("successful simulated payment freezes the terms, holds Escrow, and removes 
   await expect(commitment).toContainText("Seller payout: Rp 185.000");
   await expect(commitment).toContainText("Simulated Escrow: Held");
 
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await expect(listing).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Demo Listing" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
 
-  await page
-    .getByRole("combobox", { name: "Selected fictional account" })
-    .selectOption("seller-dimas");
+  await switchAccount(page, "seller-dimas");
   await expect(page.getByText("Purchase Commitment active. This listing is locked")).toBeVisible();
   await expect(page.getByLabel("Title")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Deactivate listing" })).toBeDisabled();
@@ -381,9 +421,10 @@ test("Verified, Reliable, and Trusted Buyers are limited to 1, 3, and 5 commitme
 }) => {
   test.slow();
   await openDemo(page);
-  const account = page.getByRole("combobox", { name: "Selected fictional account" });
 
   await purchaseNearbyListing(page, "Handwoven rattan market basket");
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await page
     .getByRole("article", { name: "Nearby simulated listing: Batik cotton overshirt" })
     .getByRole("button", { name: "View item" })
@@ -392,14 +433,17 @@ test("Verified, Reliable, and Trusted Buyers are limited to 1, 3, and 5 commitme
   await expect(checkout).toContainText("Verified Buyer limit of 1 active Purchase Commitment reached");
   await expect(checkout.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toBeDisabled();
 
-  await account.selectOption("buyer-naufal");
+  await switchAccount(page, "buyer-naufal");
   for (const title of [
     "Batik cotton overshirt",
     "Mini angklung set",
     "Ceramic sambal bowls",
   ]) {
+    await openListPanel(page);
     await purchaseNearbyListing(page, title);
+    await page.getByRole("button", { name: "Back to map" }).click();
   }
+  await openListPanel(page);
   await page
     .getByRole("article", { name: "Nearby simulated listing: Woven pandan tote" })
     .getByRole("button", { name: "View item" })
@@ -408,7 +452,7 @@ test("Verified, Reliable, and Trusted Buyers are limited to 1, 3, and 5 commitme
   await expect(checkout).toContainText("Reliable Buyer limit of 3 active Purchase Commitments reached");
   await expect(checkout.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toBeDisabled();
 
-  await account.selectOption("buyer-lestari");
+  await switchAccount(page, "buyer-lestari");
   for (const title of [
     "Woven pandan tote",
     "Children's wayang puzzle",
@@ -416,8 +460,11 @@ test("Verified, Reliable, and Trusted Buyers are limited to 1, 3, and 5 commitme
     "Indonesian recipe notebook",
     "Canvas futsal shoe bag",
   ]) {
+    await openListPanel(page);
     await purchaseNearbyListing(page, title);
+    await page.getByRole("button", { name: "Back to map" }).click();
   }
+  await openListPanel(page);
   await page
     .getByRole("article", { name: "Nearby simulated listing: Foldable badminton net" })
     .getByRole("button", { name: "View item" })
@@ -426,6 +473,7 @@ test("Verified, Reliable, and Trusted Buyers are limited to 1, 3, and 5 commitme
   await expect(checkout).toContainText("Trusted Buyer limit of 5 active Purchase Commitments reached");
   await expect(checkout.getByRole("button", { name: "Start 5-minute Checkout Hold" })).toBeDisabled();
 
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "5 of 5 active Purchase Commitments",
   );
@@ -438,19 +486,19 @@ test("Reset Demo clears checkout state and restores purchased items", async ({ p
     "1 of 1 active Purchase Commitments",
   );
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
     .getByRole("button", { name: "Reset this simulated session" })
     .click();
 
+  await page.getByRole("button", { name: "Orders" }).click();
   await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
     "No active Purchase Commitments",
   );
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await openListPanel(page);
   await expect(
     page.getByRole("article", {
       name: "Nearby simulated listing: Handwoven rattan market basket",
@@ -468,15 +516,19 @@ test("checkout commitments stay isolated between browser sessions", async ({ bro
   const otherPage = await otherContext.newPage();
   try {
     await openDemo(otherPage);
+    await otherPage.getByRole("button", { name: "Orders" }).click();
     await expect(otherPage.getByRole("region", { name: "Purchase Commitments" })).toContainText(
       "No active Purchase Commitments",
     );
+    await otherPage.getByRole("button", { name: "Back to map" }).click();
+    await openListPanel(otherPage);
     await expect(
       otherPage.getByRole("article", {
         name: "Nearby simulated listing: Handwoven rattan market basket",
       }),
     ).toBeVisible();
 
+    await otherPage.getByRole("button", { name: "Demo controls" }).click();
     await otherPage.getByRole("button", { name: "Reset Demo" }).click();
     await otherPage
       .getByRole("dialog", { name: "Reset Demo" })
@@ -486,6 +538,8 @@ test("checkout commitments stay isolated between browser sessions", async ({ bro
     await expect(page.getByRole("region", { name: "Purchase Commitments" })).toContainText(
       "1 of 1 active Purchase Commitments",
     );
+    await page.getByRole("button", { name: "Back to map" }).click();
+    await openListPanel(page);
     await expect(
       page.getByRole("article", {
         name: "Nearby simulated listing: Handwoven rattan market basket",

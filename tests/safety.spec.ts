@@ -3,16 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 async function openDemo(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
 }
 
-async function switchAccount(page: Page, accountId: string) {
+async function switchAccount(page: Page, accountId: string, openOrders = true) {
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page
     .getByRole("combobox", { name: "Selected fictional account" })
     .selectOption(accountId);
+  if (openOrders) {
+    await page.getByRole("button", { name: "Orders" }).click();
+  }
 }
 
 async function purchaseBasket(page: Page) {
@@ -25,6 +26,7 @@ async function purchaseBasket(page: Page) {
     .getByRole("region", { name: "Checkout Hold" })
     .getByRole("button", { name: "Simulate successful payment" })
     .click();
+  await page.getByRole("button", { name: "View order" }).click();
 }
 
 function basketHandover(page: Page) {
@@ -170,14 +172,19 @@ test("a confirmed finding has one inclusive seven-day appeal handled by a differ
     .getByRole("button", { name: "Simulate confirmed finding" })
     .click();
 
-  await switchAccount(page, "buyer-naufal");
+  await switchAccount(page, "buyer-naufal", false);
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
   await expect(
     page.getByRole("article", {
       name: "Nearby simulated listing: Batik cotton overshirt",
     }),
   ).toHaveCount(0);
 
-  await switchAccount(page, "seller-dimas");
+  await switchAccount(page, "seller-dimas", false);
+  await expect(
+    page.getByRole("region", { name: "Restricted simulated account" }),
+  ).toContainText("Account unavailable");
+  await page.getByRole("button", { name: "Orders" }).click();
   const reportedSafety = basketHandover(page).getByRole("region", {
     name: "Safety incident help",
   });
@@ -185,9 +192,6 @@ test("a confirmed finding has one inclusive seven-day appeal handled by a differ
   await expect(reportedSafety).toContainText("Written outcome");
   await expect(reportedSafety).toContainText("Simulated Escrow: Refunded in full");
   await expect(reportedSafety).not.toContainText("Ayu S.");
-  await expect(
-    page.getByRole("region", { name: "Restricted simulated account" }),
-  ).toContainText("Account unavailable");
 
   await reportedSafety
     .getByRole("combobox", { name: "Appeal time boundary" })
@@ -253,6 +257,7 @@ test("Reset Demo clears private safety state before a fresh transaction", async 
   await submitImmediateDangerReport(page);
   await expect(basketHandover(page)).toContainText("Safety Hold");
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Reset Demo" }).click();
   await page
     .getByRole("dialog", { name: "Reset Demo" })
@@ -260,10 +265,7 @@ test("Reset Demo clears private safety state before a fresh transaction", async 
     .click();
   await expect(basketHandover(page)).toHaveCount(0);
 
-  await page
-    .getByRole("group", { name: "Discovery View" })
-    .getByRole("button", { name: "List" })
-    .click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
   await purchaseBasket(page);
   const safety = basketHandover(page).getByRole("region", {
     name: "Safety incident help",

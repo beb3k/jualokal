@@ -5,6 +5,7 @@ test("seller sees browser-visible publication failures before a listing can be p
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
 
   await page.getByLabel("Title").fill("");
@@ -20,6 +21,7 @@ test("seller sees browser-visible publication failures before a listing can be p
 test("seller cannot publish an unsafe or incompletely disclosed item", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
 
   await page.getByLabel("Category").selectOption("Food");
@@ -51,6 +53,7 @@ test("publication requires complete content and blocks every excluded item type"
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
 
   await page.getByLabel("Fixed rupiah price").fill("0");
@@ -80,6 +83,7 @@ test("publication requires complete content and blocks every excluded item type"
 test("seller publishes one complete portable-item listing for buyer discovery", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
 
   await page.getByLabel("Title").fill("Compact desk fan");
@@ -101,7 +105,12 @@ test("seller publishes one complete portable-item listing for buyer discovery", 
   await page.getByRole("button", { name: "Publish listing" }).click();
 
   await expect(page.getByText("Listing published")).toBeVisible();
-  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Compact desk fan" })
+    .getByRole("button", { name: "View item" })
+    .click();
 
   const listing = page.getByRole("region", { name: "Demo Listing" });
   await expect(listing.getByRole("heading", { name: "Compact desk fan" })).toBeVisible();
@@ -122,6 +131,7 @@ test("seller publishes one complete portable-item listing for buyer discovery", 
 test("seller edits, deactivates, and marks a cross-listed item unavailable", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
 
   await page.getByLabel("Title").fill("Edited rattan basket");
@@ -129,22 +139,53 @@ test("seller edits, deactivates, and marks a cross-listed item unavailable", asy
   await page.getByRole("button", { name: "Deactivate listing" }).click();
   await expect(page.getByText("Listing deactivated")).toBeVisible();
 
-  await page.getByRole("button", { name: "Buyer discovery" }).click();
-  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
-  await expect(page.getByText(/seller deactivated this listing/i)).toBeVisible();
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  await page.getByRole("button", { name: "Demo inventory" }).click();
+  await expect(
+    page
+      .getByRole("article")
+      .filter({ hasText: "Edited rattan basket" })
+      .getByText("Deactivated · simulated"),
+  ).toBeVisible();
 
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 24 listings" }).click();
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
+  await expect(
+    page.getByRole("article", { name: "Nearby simulated listing: Edited rattan basket" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
   await page.getByRole("button", { name: "Publish listing" }).click();
   await page.getByRole("button", { name: "Mark cross-listed item unavailable" }).click();
   await expect(page.getByText("Cross-listed item marked unavailable")).toBeVisible();
 
-  await page.getByRole("button", { name: "Buyer discovery" }).click();
-  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
-  await expect(page.getByText(/cross-listed item is unavailable/i)).toBeVisible();
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  await page.getByRole("button", { name: "Demo inventory" }).click();
+  await expect(
+    page
+      .getByRole("article")
+      .filter({ hasText: "Edited rattan basket" })
+      .getByText("Cross-listed unavailable · simulated"),
+  ).toBeVisible();
 
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 24 listings" }).click();
+  await expect(page.getByRole("region", { name: "Demo Listing" })).toHaveCount(0);
+  await expect(
+    page.getByRole("article", { name: "Nearby simulated listing: Edited rattan basket" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
   await page.getByRole("button", { name: "Publish listing" }).click();
-  await page.getByRole("button", { name: "Buyer discovery" }).click();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }).click();
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Edited rattan basket" })
+    .getByRole("button", { name: "View item" })
+    .click();
   await expect(
     page.getByRole("region", { name: "Demo Listing" }).getByRole("heading", {
       name: "Edited rattan basket",
@@ -155,6 +196,11 @@ test("seller edits, deactivates, and marks a cross-listed item unavailable", asy
 test("structured questions are answered only through a shared listing update", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" })
+    .getByRole("button", { name: "View item" })
+    .click();
 
   const question = page.getByLabel("Structured question");
   await expect(question.locator("option")).toHaveText([
@@ -170,6 +216,7 @@ test("structured questions are answered only through a shared listing update", a
   await expect(page.getByText(/free-form chat/i)).toBeVisible();
   await expect(page.getByPlaceholder(/message|contact|offer|price/i)).toHaveCount(0);
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await page.getByRole("button", { name: "Seller workspace" }).click();
   const request = page.getByRole("region", { name: "Structured Question Request" });
   await expect(request).toContainText("Measurements");
@@ -182,10 +229,18 @@ test("structured questions are answered only through a shared listing update", a
     .getByLabel("Measurements or specifications")
     .fill("42 cm wide × 31 cm high; approximately 650 g.");
   await page.getByRole("button", { name: "Update shared listing" }).click();
+  await expect(page.getByText("Listing published")).toBeVisible();
+  await expect(request).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Buyer discovery" }).click();
-  await expect(page.getByText(/Shared listing updated for Measurements/i)).toBeVisible();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page
+    .getByRole("article", { name: "Nearby simulated listing: Handwoven rattan market basket" })
+    .getByRole("button", { name: "View item" })
+    .click();
   await expect(page.getByText(/42 cm wide × 31 cm high/)).toBeVisible();
+  await expect(page.getByText(/Request sent: Measurements/i)).toHaveCount(0);
+  await expect(page.getByText(/free-form chat/i)).toBeVisible();
 });
 
 test("discovery enforces location availability, privacy, and distance boundaries", async ({
@@ -194,8 +249,10 @@ test("discovery enforces location availability, privacy, and distance boundaries
   await page.goto("/?discoveryRadiusKm=20");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
 
-  const location = page.getByLabel("Simulated Browsing Location");
-  const refresh = page.getByRole("button", { name: "Refresh nearby listings" }).first();
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  const drawer = page.getByRole("dialog", { name: "Demo controls" });
+  const location = drawer.getByLabel("Simulated Browsing Location");
+  const refresh = drawer.getByRole("button", { name: "Refresh nearby listings" });
   const listing = page.getByRole("region", { name: "Demo Listing" });
   const locationLabels = await location.locator("option").allTextContents();
   expect(locationLabels.join(" ")).not.toMatch(/1\.99|2\.00|2\.01|10\.00|10\.01/);
@@ -206,40 +263,62 @@ test("discovery enforces location availability, privacy, and distance boundaries
 
   await location.selectOption("inside-edge");
   await refresh.click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page.getByRole("button", { name: "View item" }).first().click();
   await expect(listing).toBeVisible();
   await expect(listing.getByText("1-2 km", { exact: true })).toBeVisible();
   await expect(listing).not.toContainText(/\b\d+(?:\.\d+)?\s*(?:m|km) away\b/i);
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("at-edge");
   await refresh.click();
+  await page.getByRole("button", { name: /Open List panel:/ }).click();
+  await page.getByRole("button", { name: "View item" }).first().click();
   await expect(listing).toBeVisible();
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("outside-edge");
   await refresh.click();
   await expect(listing).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("denied");
   await refresh.click();
   await expect(listing).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Location permission denied" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("unavailable");
   await refresh.click();
   await expect(listing).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Location unavailable" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("at-maximum");
   await refresh.click();
   await expect(listing).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await location.selectOption("outside-maximum");
   await refresh.click();
   await expect(listing).toHaveCount(0);
-  await expect(page.getByText(/permanent maximum is 10 km/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No nearby listings yet" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  await location.selectOption("current");
+  await refresh.click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
+  await expect(drawer).toContainText(
+    "Home Anchors, and raw location coordinates stay absent",
+  );
+  await drawer.getByRole("button", { name: "Close Demo controls" }).click();
+  await expect(page.getByRole("region", { name: "Seller discovery map" })).toContainText(
+    "Maximum boundary 10 km",
+  );
 
   const body = page.locator("body");
-  await expect(body).toContainText("Current-use only; no buyer location history is retained");
-  await expect(body).toContainText("Seller Home Anchors and convenience zones stay private");
   await expect(body).not.toContainText(/-?\d{1,3}\.\d{4,}\s*,\s*-?\d{1,3}\.\d{4,}/);
   await expect(body).not.toContainText(/street address|home address|buyer location history:/i);
 });
@@ -247,6 +326,7 @@ test("discovery enforces location availability, privacy, and distance boundaries
 test("buyer and seller listing controls remain usable in the current viewport", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Demo Mode" }).click();
+  await page.getByRole("button", { name: "Demo controls" }).click();
   await expect(page.getByLabel("Simulated Browsing Location")).toBeVisible();
 
   await page.getByRole("button", { name: "Seller workspace" }).click();
