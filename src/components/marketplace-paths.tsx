@@ -23,7 +23,7 @@ const pathStages: PathStage[] = [
     description:
       "Discover portable secondhand goods, inspect the full listing, and complete a protected in-person handover.",
     cta: { label: "Join Jualokal to buy", href: "/register", variant: "button-primary" },
-    image: "/landing/path-1-buy-nearby.png",
+    image: "/landing/path-1-buy-nearby.webp",
     alt: "Illustration of a woman in a forest-green overshirt smiling as she leafs through a secondhand book at a Bandung café table, more books stacked beside her coffee.",
     imagePosition: "40% 52%",
     mediaSide: "left",
@@ -36,7 +36,7 @@ const pathStages: PathStage[] = [
     description:
       "Join as a member first, then activate selling while keeping your exact Home Anchor private.",
     cta: { label: "Join Jualokal to sell", href: "/register", variant: "button-outline" },
-    image: "/landing/path-2-sell-nearby.png",
+    image: "/landing/path-2-sell-nearby.webp",
     alt: "Illustration of the same woman showing a secondhand camera to a man across a café table, with Bandung's hills behind them.",
     imagePosition: "62% 45%",
     mediaSide: "right",
