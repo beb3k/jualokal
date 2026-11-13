@@ -72,6 +72,10 @@ _Avoid_: Launch city, service region
 The maximum straight-line distance from a buyer's current Browsing Location within which listings may be visible. It is fixed at 2 km during the prototype; Jualokal may configure a different fixed radius for a future market, but a buyer cannot adjust it and it must never exceed 10 km.
 _Avoid_: Delivery radius, Seller Convenience Zone, buyer-adjustable radius, 20 km radius
 
+**Maximum Browsing Boundary**:
+The 10 km map circle, centered on the current Browsing Location, that shows the permanent maximum area Jualokal may search rather than the active Discovery Radius. Demo Mode draws it as a thin, non-interactive outline with a low-opacity fill, labels it separately from the active 2 km search, and never widens discovery; it moves only with an explicit Browsing Location refresh and is neither the Pilot Area boundary nor a Seller Convenience Zone.
+_Avoid_: Discovery Radius boundary, search area, service area, Pilot Area boundary
+
 **Distance Band**:
 The broad buyer-visible range derived privately from the straight-line distance between the buyer's Browsing Location and the Seller's protected Home Anchor. The prototype uses only **Under 1 km** and **1-2 km**; exact distance and distance from the Seller Discovery Marker are not shown.
 _Avoid_: Exact distance, rounded distance, marker distance, travel distance

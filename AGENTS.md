@@ -60,6 +60,7 @@ Verify completed work with the lowest-cost checks that genuinely prove the reque
 - Use the `karpathy-guidelines` skill when writing, reviewing, or refactoring code.
 - Create commits only when the user or active workflow authorizes them. Keep each commit narrow and specifically named.
 - Do not create a commit for an issue implementation until the project owner completes manual acceptance testing and explicitly authorizes the commit. This overrides any skill or workflow instruction that says to commit automatically.
+- For rollback safety during ticket work, use local Git checkpoint commits and separate ticket commits instead of creating full sibling baseline directories. Keep any necessary checkpoint local unless publication is approved. Do not commit secrets or unrelated work (remember that Git-ignored files are not protected by commits). Use `git revert` for undoing published ticket commits rather than destructive history rewriting.
 - Remove task-created screenshots, design dumps, scratch scripts, logs, build caches, and temporary verification folders before reporting completion.
 - Preserve product documentation, ADRs, issue-tracker guidance, and meaningful workflow state unless the task explicitly changes them.
 - When creating a project note, write for a future reader: capture the context, outcome, important decisions and rationale, verified results, evidence links, and any follow-ups. Omit repetitive command output and conversation transcripts; scale detail to the task's risk and complexity.
