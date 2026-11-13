@@ -14,24 +14,24 @@ Record facts and evidence while the work is happening. Do not reconstruct the st
 |---|---|---|
 | Primary Core Build Session | Active candidate | Issue #7 successful-handover implementation |
 | Required model | Pending owner-visible verification | GPT-5.6 required; capture visible task metadata before closing this session |
-| `/feedback` Session ID | Pending owner action | Run `/feedback` before leaving this task and record the Session ID |
+| `/feedback` Session ID | Captured for submission | Supplied by the project owner; intentionally withheld from this public repository |
 | Starting commit | Recorded | `65033becc8c930935a8443cfd956061d20767b5a` |
 | Ending implementation commit | Recorded | `39c28de26b220cdc2d797f0d1f1f1c000e4452d5` |
 | Core implementation range | Recorded | `65033becc8c930935a8443cfd956061d20767b5a..39c28de26b220cdc2d797f0d1f1f1c000e4452d5` |
-| README collaboration summary | Pending | Write from this log |
-| Video explanation of Codex use | Pending | Write from this log |
+| README collaboration summary | Drafted | See `README.md`; final review remains pending |
+| Video explanation of Codex use | Drafted | See `docs/submission/VIDEO_SCRIPT.md`; recording remains pending |
 
 ## Primary Core Build Session
 
 This section must identify the single Codex task in which the majority of Jualokal's core functionality was actually built. Use a fresh, sanitized implementation task running GPT-5.6. Do not designate a planning-only task or a task that merely intended to build the majority.
 
-- **Status:** Active candidate - implementation and independent review complete; owner visual acceptance, model evidence, and `/feedback` capture remain
+- **Status:** Active candidate - implementation and independent review complete; owner visual acceptance and model evidence remain
 - **Task title:** Implement issue #7 - Schedule and complete a successful handover
 - **Date:** 2026-07-17
 - **Team participants:** Project owner and Codex
 - **Codex model:** GPT-5.6 required; owner-visible verification pending
 - **Model verification:** Pending - capture visible sanitized task metadata before leaving this task
-- **`/feedback` Session ID:** Pending - project owner must run `/feedback` before leaving this task
+- **`/feedback` Session ID:** Captured from the original task for the private Devpost field; intentionally not published here
 - **Starting commit:** `65033becc8c930935a8443cfd956061d20767b5a`
 - **Ending implementation commit:** `39c28de26b220cdc2d797f0d1f1f1c000e4452d5`
 - **Core implementation range:** `65033becc8c930935a8443cfd956061d20767b5a..39c28de26b220cdc2d797f0d1f1f1c000e4452d5`
@@ -95,7 +95,7 @@ Record what was actually completed after the session. Never mark unfinished or s
 ### Session outcome
 
 - **Completed:** Issue #7 implementation, independent standards/spec review with findings resolved, implementation commits, type checking, all 102 automated checks, focused post-review checks, and the production build are complete locally.
-- **Incomplete or deferred:** Owner visual acceptance, owner-visible model proof, and the `/feedback` Session ID remain pending.
+- **Incomplete or deferred:** Owner visual acceptance and owner-visible model proof remain pending. The `/feedback` Session ID has been captured privately for Devpost.
 - **Follow-up sessions required:** Issue #8 owns incomplete confirmation; #9 mismatch; #10 expiry/cancellation/no-show; #12 tier recalculation.
 
 ## Build history
@@ -625,9 +625,106 @@ separately.
 - Typecheck, production build, desktop preview, and iPhone preview passed.
 - GitNexus staged impact was LOW with no affected execution flows.
 - Project-owner acceptance and commit authorization completed; commit pushed.
-- PR #34 is draft, mergeable, and awaiting final review/merge.
-- Issue #36/#37 coordination risk was recorded on GitHub: their old admission assumptions must be
-  reconciled with PR #34 before presentation-overhaul implementation begins.
+- PR #34 was closed without merging after its implementation state conflicted with accepted issues #37-#39.
+- PR [#44](https://github.com/beb3k/jualokal/pull/44) superseded PR #34 and reconciled real registration, login, callback, protected dashboard, persisted member profiles, and sign-out with the accepted public, Demo shell, and discovery presentation.
+- PR #44 merged reconciliation commit `0a8cde6` as `8dc27a9848fe6c0a849e5a0878436a2dc0da19eb` on 2026-07-21.
+- Final PR #44 verification recorded: type checking and production build passed; auth coverage passed 18/18; focused integration coverage passed 72/72; production-route smoke passed; and project-owner phone and desktop acceptance completed. Two broad-suite worker timeouts each passed focused single-worker verification.
+
+### 2026-07-20 - Public and member presentation foundation
+
+- **Session role:** Supporting presentation implementation, testing, review, and acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and teammate
+- **Model and session evidence:** Not recorded for this supporting task
+- **Feature commit:** `fb267b2eb3ab53d423bd87bb3cd626640d82293a`
+- **Merge commit:** `33b9747d54e2b7f88fb67d1f90f89c6552559b3d`
+- **Related issue:** [#37](https://github.com/beb3k/jualokal/issues/37)
+- **Objective:** Make the public promise, Buyer and Seller entry paths, privacy boundary, and Verified Member next steps immediately understandable without changing admission behavior.
+
+#### Work completed
+
+- Clarified the portable-goods, nearby-handover, and protected-location promise.
+- Separated Buyer and Seller entry explanations while preserving registration and verification.
+- Added clearer Verified Member next steps for discovery, purchasing, and Seller Activation.
+- Preserved routes, accessible names, form order, privacy copy, and marketplace behavior.
+
+#### Verification and outcome
+
+- Focused Playwright coverage passed 16/16 across phone and desktop.
+- Type checking and `git diff --check` passed; GitNexus reported LOW risk with no affected processes.
+- Independent review approved the change, and the project owner completed visual acceptance before publication.
+
+### 2026-07-20 - Task-focused Demo Mode shell
+
+- **Session role:** Supporting presentation implementation, testing, review, and acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and teammate
+- **Model and session evidence:** Not recorded for this supporting task
+- **Feature commit:** `591d563ea282b1ee89d20888936016d17b2c87b7`
+- **Merge commit:** `83d4398a79b0dc18584200c4c97ae3da992d326b`
+- **Related issue:** [#38](https://github.com/beb3k/jualokal/issues/38)
+- **Objective:** Put the active Buyer or Seller task ahead of account, session, and reviewer context without changing Demo Mode state or privacy boundaries.
+
+#### Work completed
+
+- Added clear workspace navigation for Buyer discovery, Seller workspace, and Demo inventory.
+- Kept the selected fictional account, simulation notice, Reset Demo, trust context, and reviewer controls available as supporting information.
+- Preserved query parameters, refresh behavior, account switching, session isolation, and Reset Demo.
+
+#### Verification and outcome
+
+- Targeted browser coverage passed 50/50 and an independent complete-suite audit passed 318/318 across phone and desktop.
+- Type checking and `git diff --check` passed; GitNexus reported LOW risk with no affected processes.
+- Independent review found no remaining issue, and the project owner accepted the phone and desktop presentation before publication.
+
+### 2026-07-20 - Buyer discovery and listing inspection presentation
+
+- **Session role:** Supporting presentation implementation, testing, review, and acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and teammate
+- **Model and session evidence:** Not recorded for this supporting task
+- **Feature commit:** `090b4a1720f58b92401242a6f9445762523439de`
+- **Merge commit:** `ef52882cd4293190180568b70c5fb86416fb5634`
+- **Related issue:** [#39](https://github.com/beb3k/jualokal/issues/39)
+- **Objective:** Prioritize privacy-safe discovery and item inspection without changing discovery, checkout, or Structured Question behavior.
+
+#### Work completed
+
+- Kept Map View as the default and made List View cards easier to scan.
+- Presented fictional item media, category, condition, broad Distance Band, fixed price, and permitted Seller credibility without adding text search or exact distance.
+- Made **View item** the clear path into the complete listing, checkout, and Structured Questions.
+- Preserved selected view, filters, query state, marker privacy, and existing empty/failure states.
+
+#### Verification and outcome
+
+- Final Map/discovery coverage passed 22/22 across phone and desktop.
+- Type checking and diff checks passed; GitNexus reported LOW risk, one changed symbol, and no affected processes.
+- Independent review approved the presentation, and the project owner completed phone and desktop visual acceptance before publication.
+
+### 2026-07-21 - Orders transaction workspace
+
+- **Session role:** Supporting transaction-presentation implementation, testing, review, and acceptance
+- **Primary Core Build Session:** No
+- **Team participants:** Jualokal maintainer and teammate
+- **Model and session evidence:** Not recorded for this supporting task
+- **Feature commit:** `0b0731b0022f57103e9efbd09e9813bd48f304bb`
+- **Merge commit:** `41773d604ff7a9ebd19148e18983ea0d5f2c312c`
+- **Pull request:** [#45](https://github.com/beb3k/jualokal/pull/45)
+- **Related issue:** [#40](https://github.com/beb3k/jualokal/issues/40)
+- **Objective:** Present existing Purchase Commitments as coherent, task-oriented Orders without changing any transaction, privacy, timer, safety, trust, or simulated-payment rule.
+
+#### Work completed
+
+- Grouped each Order's item, permitted counterpart identity, lifecycle status, simulated settlement, deadline, next action, immutable Purchase Snapshot, and handover controls.
+- Added accessible keyboard selection when a Buyer or Seller has more than one permitted Order.
+- Kept disabled actions truthful and preserved existing handover, mismatch, safety, refund, and payout outcomes.
+
+#### Verification and outcome
+
+- Issue-specific Orders coverage passed 4/4 across phone and desktop.
+- Auth, checkout, handover, safety, trust, and map-discovery regression coverage passed across both configured layouts.
+- Type checking and production build passed. Semantic review approved the change with no blocking defect. GitNexus reported LOW risk, one changed symbol, and no affected processes.
+- The project owner completed phone and desktop visual acceptance before PR #45 merged.
 
 ## Supporting session template
 
