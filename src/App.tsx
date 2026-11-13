@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { House, MapPin, Package, ShieldCheck, UserRoundCheck } from "lucide-react";
+import { LandingCoverflow } from "./components/landing-coverflow";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
@@ -71,47 +72,14 @@ function App() {
                 <span aria-hidden="true">→</span>
               </a>
             </div>
+            <ul className="hero-terms">
+              <li>Portable goods</li>
+              <li>Nearby handover</li>
+              <li>Protected location</li>
+            </ul>
           </div>
 
-          <div aria-label="Jualokal privacy promise" className="marketplace-window" role="img">
-            <div className="marketplace-window-heading">
-              <span>Private marketplace</span>
-              <strong>Bandung · nearby</strong>
-            </div>
-            <div className="marketplace-window-path">
-              <span>01</span>
-              <div>
-                <strong>Verified access</strong>
-                <small>Accountable members enter first</small>
-              </div>
-            </div>
-            <div className="marketplace-window-path marketplace-window-path-featured">
-              <span>02</span>
-              <div>
-                <strong>Nearby discovery</strong>
-                <small>Portable goods within a fixed local area</small>
-              </div>
-            </div>
-            <div className="marketplace-window-path">
-              <span>03</span>
-              <div>
-                <strong>Protected handover</strong>
-                <small>Meet nearby without publishing a home</small>
-              </div>
-            </div>
-            <div className="marketplace-window-footer">
-              <span aria-hidden="true">⌂</span>
-              <div>
-                <strong>Close to home.</strong>
-                <small>Private from the start.</small>
-                <span className="marketplace-window-terms">
-                  <span>Portable goods</span>
-                  <span>Nearby handover</span>
-                  <span>Protected location</span>
-                </span>
-              </div>
-            </div>
-          </div>
+          <LandingCoverflow />
         </section>
 
         <section aria-label="Marketplace paths" className="marketplace-paths">
