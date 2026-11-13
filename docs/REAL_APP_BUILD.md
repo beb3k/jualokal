@@ -8,18 +8,26 @@ GitHub Issues remain the canonical ticket tracker.
 
 ## Scope
 
-Build the real member marketplace on hosted Supabase. Accounts, member data, listings,
+Build the real member marketplace on Firebase (Auth and Firestore), developed locally on the
+Firebase Emulator Suite (ADR 0021). Accounts, member data, listings,
 photos, and transaction state are persisted. Identity Verification, payment, Escrow,
 payout, refund, safety review, and appeals remain clearly simulated unless the product
 contract changes.
 
 ## Settled decisions
 
-- Hosted Supabase provides authentication, Postgres, and private photo storage.
+- Firebase provides authentication (Firebase Auth) and member data (Firestore). Local
+  development runs on the Firebase Emulator Suite with the `demo-jualokal` project and no
+  secrets. Private photo storage is still to be chosen (Cloud Storage for Firebase is the
+  expected fit). This replaced hosted Supabase on 2026-11-13; see ADR 0021.
+- The browser proves identity with the Firebase client SDK; the server exchanges the ID token
+  for an httpOnly `__session` cookie and performs every privileged read and write with the
+  Admin SDK. `firestore.rules` deny everything else to clients.
 - Real listing photographs will be supplied by the project owner.
 - Photographs must have permission, stripped metadata, and no identifying private detail.
 - Exact Home Anchors are application-encrypted protected data.
-- Home Anchors are never returned to ordinary clients or exposed through direct PostgREST.
+- Home Anchors are never returned to ordinary clients or exposed through direct Firestore
+  client access.
 - Precise Browsing Locations are transient inputs and are not retained as history.
 - Buyers receive only discovery eligibility, Distance Bands, and coarse Seller markers.
 - `DemoExperience.tsx` supplies behavior and acceptance references, not production state.
@@ -31,6 +39,7 @@ contract changes.
 |---|---|---|
 | Authentication foundation | Complete | Commit `78ba652`; typecheck, 18 focused phone/desktop checks, production build passed |
 | Member profile persistence | Complete | Commit `3834b31`; hosted migration, remote lint and anonymous boundary; local RLS, typecheck, 18 focused checks, build passed |
+| Move account foundation to Firebase | Implemented, acceptance pending | Issue [#58](https://github.com/beb3k/jualokal/issues/58); see verification log |
 | Seller Activation and encrypted Home Anchor | Active next task | Unblocked by member profile persistence |
 | Listing publication and private photos | Pending | Blocked by Seller Activation |
 | Privacy-safe discovery | Pending | Blocked by listings and protected location service |
@@ -51,7 +60,8 @@ the project owner on phone and desktop.
 
 ### Deliverables
 
-- Add versioned Supabase migration structure.
+- Add versioned Supabase migration structure. (Superseded on 2026-11-13: `member_profiles`
+  is now a Firestore collection guarded by `firestore.rules`; see ADR 0021.)
 - Add `member_profiles` with private member data and permitted Public Identity fields.
 - Create a profile for authenticated members without trusting client-supplied ownership.
 - Persist simulated Identity Verification outside mutable public UI state.

@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Ported from the former Supabase row-level security on `member_profiles`.
+// - Anonymous visitors get nothing.
+// - A signed-in member may read only their own profile.
+// - No client writes at all: verification state, trust counters, buyer tier, and
+//   restriction are privileged. The server (Firebase Admin SDK, which bypasses
+//   these rules) creates profiles and applies validated changes, the same way
+//   the former `security definer` functions did.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /member_profiles/{memberId} {
+      allow get: if request.auth != null && request.auth.uid == memberId;
+      allow list: if request.auth != null && resource.data.member_id == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
