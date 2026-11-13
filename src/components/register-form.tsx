@@ -12,18 +12,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { registerAccount } from "@/utils/auth";
-
-type RegistrationState =
-  | { status: "editing" }
-  | { status: "confirmation-required"; email: string };
+import { registerWithEmail } from "@/utils/firebase-browser";
 
 export function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [registration, setRegistration] = useState<RegistrationState>({
-    status: "editing",
-  });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => setHydrated(true), []);
@@ -54,14 +47,9 @@ export function RegisterForm() {
     setSubmitting(true);
 
     try {
-      const result = await registerAccount({ data: { email, password } });
+      const result = await registerWithEmail(email, password);
       if (result.status === "error") {
         setError(result.message);
-        return;
-      }
-
-      if (result.status === "confirmation-required") {
-        setRegistration({ status: "confirmation-required", email });
         return;
       }
 
@@ -71,28 +59,6 @@ export function RegisterForm() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (registration.status === "confirmation-required") {
-    return (
-      <Card className="w-full border-primary/10 shadow-xl shadow-primary/5">
-        <CardHeader>
-          <CardTitle className="font-serif text-2xl tracking-tight">Check your email</CardTitle>
-          <CardDescription>
-            We sent a confirmation link to {registration.email}. Open it to finish creating
-            your account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-5">
-          <p className="text-sm leading-6 text-muted-foreground">
-            Do not send identity documents, selfies, biometrics, or payment information.
-          </p>
-          <Button asChild className="w-full">
-            <Link to="/login">Already confirmed? Sign in</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
   }
 
   return (

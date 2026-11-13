@@ -9,3 +9,9 @@ dist/
 .output/
 test-results/
 .env
+
+# Firebase Emulator Suite logs and exports
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/

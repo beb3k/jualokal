@@ -1,52 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestUrl } from "@tanstack/react-start/server";
+import { deleteCookie, getCookie, getRequestUrl, setCookie } from "@tanstack/react-start/server";
+import { FieldValue } from "firebase-admin/firestore";
 
-import { createSupabaseServerClient } from "./supabase.server";
+import {
+  getAdminAuth,
+  getAdminFirestore,
+  loadOrCreateMemberProfile,
+  memberProfileRef,
+} from "./firebase.server";
+import type { BuyerTier, MemberProfile } from "./firebase.server";
 
-function getApplicationOrigin() {
-  const configuredOrigin = process.env.APP_ORIGIN?.trim();
-  if (configuredOrigin) {
-    const parsedOrigin = new URL(configuredOrigin);
-    const isLocalOrigin = ["localhost", "127.0.0.1", "[::1]"].includes(
-      parsedOrigin.hostname,
-    );
-    if (parsedOrigin.protocol !== "https:" && !(parsedOrigin.protocol === "http:" && isLocalOrigin)) {
-      throw new Error("APP_ORIGIN must use HTTPS outside local development.");
-    }
-    return parsedOrigin.origin;
-  }
+const SESSION_COOKIE = "__session";
+const SESSION_LIFETIME_MS = 5 * 24 * 60 * 60 * 1000;
+const RECENT_SIGN_IN_SECONDS = 5 * 60;
 
-  const requestUrl = new URL(getRequestUrl());
-  if (requestUrl.hostname === "localhost" || requestUrl.hostname === "127.0.0.1") {
-    return requestUrl.origin;
-  }
-
-  throw new Error("APP_ORIGIN is required outside local development.");
-}
-
-type AuthCredentials = {
-  email: string;
-  password: string;
-};
-
-type RegisterResult =
-  | { status: "authenticated" }
-  | { status: "confirmation-required" }
-  | { status: "error"; message: string };
-
-type SignInResult =
-  | { status: "authenticated"; identityVerified: boolean }
-  | { status: "error"; message: string };
-
-type OAuthStartResult =
-  | { status: "redirect"; url: string }
-  | { status: "error"; message: string };
-
-type OAuthCallbackResult =
-  | { status: "authenticated"; identityVerified: boolean }
-  | { status: "error" };
-
-type CallbackInput = { code: string };
+type SessionInput = { idToken: string };
 
 type VerificationInput = {
   publicFirstName: string;
@@ -70,7 +38,7 @@ type PublicMemberProfile = {
   identityVerified: boolean;
   successfulHandoverCount: number;
   transactionPartnerCount: number;
-  buyerTier: "verified_buyer" | "reliable_buyer" | "trusted_buyer";
+  buyerTier: BuyerTier;
   available: boolean;
 };
 
@@ -80,7 +48,7 @@ type CurrentMemberBase = {
   profilePicturePath: string | null;
   successfulHandoverCount: number;
   transactionPartnerCount: number;
-  buyerTier: "verified_buyer" | "reliable_buyer" | "trusted_buyer";
+  buyerTier: BuyerTier;
   restricted: boolean;
 };
 
@@ -96,38 +64,19 @@ type CurrentMember =
       publicLastInitial: string | null;
     });
 
-function parseCredentials(input: unknown): AuthCredentials {
+function parseSessionInput(input: unknown): SessionInput {
   if (
     typeof input !== "object" ||
     input === null ||
-    !("email" in input) ||
-    !("password" in input) ||
-    typeof input.email !== "string" ||
-    typeof input.password !== "string"
+    !("idToken" in input) ||
+    typeof input.idToken !== "string" ||
+    input.idToken.trim() === "" ||
+    input.idToken.length > 8192
   ) {
-    throw new Error("Email and password are required.");
+    throw new Error("A Firebase ID token is required.");
   }
 
-  const email = input.email.trim().toLowerCase();
-  if (!email.includes("@") || input.password.length < 8) {
-    throw new Error("Enter a valid email and a password of at least 8 characters.");
-  }
-
-  return { email, password: input.password };
-}
-
-function parseCallbackInput(input: unknown): CallbackInput {
-  if (
-    typeof input !== "object" ||
-    input === null ||
-    !("code" in input) ||
-    typeof input.code !== "string" ||
-    input.code.trim() === ""
-  ) {
-    throw new Error("Confirmation code is required.");
-  }
-
-  return { code: input.code };
+  return { idToken: input.idToken };
 }
 
 function parseVerificationInput(input: unknown): VerificationInput {
@@ -162,9 +111,7 @@ function parsePublicProfileInput(input: unknown): PublicProfileInput {
     input === null ||
     !("memberId" in input) ||
     typeof input.memberId !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      input.memberId,
-    )
+    !/^[A-Za-z0-9]{1,128}$/.test(input.memberId)
   ) {
     throw new Error("Valid member ID is required.");
   }
@@ -185,94 +132,64 @@ function parseProfilePictureInput(input: unknown): ProfilePictureInput {
   return { path: input.path.trim() };
 }
 
-async function loadCurrentProfile(supabase: ReturnType<typeof createSupabaseServerClient>) {
-  const { data, error } = await supabase.rpc("get_current_member_profile").maybeSingle();
-
-  if (error || data === null) {
-    throw new Error("Authenticated member profile is unavailable.");
-  }
-
-  return data;
+function isSecureRequest() {
+  return new URL(getRequestUrl()).protocol === "https:";
 }
 
-export const registerAccount = createServerFn({ method: "POST" })
-  .validator(parseCredentials)
-  .handler(async ({ data }): Promise<RegisterResult> => {
-    const supabase = createSupabaseServerClient();
-    const callbackUrl = new URL("/auth/callback", getApplicationOrigin()).toString();
-    const { data: signup, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: { emailRedirectTo: callbackUrl },
-    });
+// Returns the signed-in member's Firebase user, or null when the session cookie
+// is missing, expired, or revoked by sign-out.
+async function getSessionUser() {
+  const sessionCookie = getCookie(SESSION_COOKIE);
+  if (!sessionCookie) return null;
 
-    if (error) {
-      return {
-        status: "error",
-        message: "Account creation failed. Check your details or try signing in.",
-      };
+  try {
+    const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
+    return { id: decoded.uid, email: decoded.email ?? "" };
+  } catch {
+    deleteCookie(SESSION_COOKIE, { path: "/" });
+    return null;
+  }
+}
+
+export const createSession = createServerFn({ method: "POST" })
+  .validator(parseSessionInput)
+  .handler(async ({ data }) => {
+    const auth = getAdminAuth();
+
+    try {
+      const decoded = await auth.verifyIdToken(data.idToken, true);
+      if (Date.now() / 1000 - decoded.auth_time > RECENT_SIGN_IN_SECONDS) {
+        return { ok: false };
+      }
+
+      const sessionCookie = await auth.createSessionCookie(data.idToken, {
+        expiresIn: SESSION_LIFETIME_MS,
+      });
+      await loadOrCreateMemberProfile(decoded.uid);
+
+      setCookie(SESSION_COOKIE, sessionCookie, {
+        httpOnly: true,
+        maxAge: SESSION_LIFETIME_MS / 1000,
+        path: "/",
+        sameSite: "lax",
+        secure: isSecureRequest(),
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false };
     }
-
-    if (signup.session === null) {
-      return { status: "confirmation-required" };
-    }
-
-    return { status: "authenticated" };
   });
-
-export const signIn = createServerFn({ method: "POST" })
-  .validator(parseCredentials)
-  .handler(async ({ data }): Promise<SignInResult> => {
-    const supabase = createSupabaseServerClient();
-    const { error } = await supabase.auth.signInWithPassword(data);
-
-    if (error) {
-      return { status: "error", message: "Email or password is incorrect." };
-    }
-
-    const profile = await loadCurrentProfile(supabase);
-
-    return {
-      status: "authenticated",
-      identityVerified: profile.identity_verification_status === "simulated_verified",
-    };
-  });
-
-export const startGoogleSignIn = createServerFn({ method: "POST" }).handler(
-  async (): Promise<OAuthStartResult> => {
-    const supabase = createSupabaseServerClient();
-    const callbackUrl = new URL("/auth/callback", getApplicationOrigin()).toString();
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: callbackUrl,
-        skipBrowserRedirect: true,
-      },
-    });
-
-    if (error || data.url === null) {
-      return {
-        status: "error",
-        message: "Google sign-in is unavailable. Use email and password instead.",
-      };
-    }
-
-    return { status: "redirect", url: data.url };
-  },
-);
 
 export const getCurrentMember = createServerFn({ method: "GET" }).handler(
   async (): Promise<CurrentMember | null> => {
-    const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
+    const user = await getSessionUser();
+    if (user === null) return null;
 
-    if (error || data.user === null) return null;
-
-    const profile = await loadCurrentProfile(supabase);
+    const profile = await loadOrCreateMemberProfile(user.id);
 
     const currentMember = {
-      id: data.user.id,
-      email: data.user.email ?? "",
+      id: user.id,
+      email: user.email,
       profilePicturePath: profile.profile_picture_path,
       successfulHandoverCount: profile.successful_handover_count,
       transactionPartnerCount: profile.transaction_partner_count,
@@ -302,58 +219,72 @@ export const getCurrentMember = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const confirmEmail = createServerFn({ method: "POST" })
-  .validator(parseCallbackInput)
-  .handler(async ({ data }): Promise<OAuthCallbackResult> => {
-    const supabase = createSupabaseServerClient();
-    const { data: callback, error } = await supabase.auth.exchangeCodeForSession(data.code);
-
-    if (error || callback.user === null) return { status: "error" };
-
-    const profile = await loadCurrentProfile(supabase);
-
-    return {
-      status: "authenticated",
-      identityVerified: profile.identity_verification_status === "simulated_verified",
-    };
-  });
-
+// Ends every session for this member, matching the previous global sign-out.
 export const signOut = createServerFn({ method: "POST" }).handler(async () => {
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.auth.signOut();
-  return { ok: error === null };
+  const user = await getSessionUser();
+  deleteCookie(SESSION_COOKIE, { path: "/" });
+  if (user === null) return { ok: true };
+
+  try {
+    await getAdminAuth().revokeRefreshTokens(user.id);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 });
 
 export const completeSimulatedIdentityVerification = createServerFn({ method: "POST" })
   .validator(parseVerificationInput)
   .handler(async ({ data }): Promise<VerificationResult> => {
-    const supabase = createSupabaseServerClient();
-    const { data: current, error: currentError } = await supabase.auth.getUser();
+    const user = await getSessionUser();
+    if (user === null) return { status: "authentication-required" };
 
-    if (currentError || current.user === null) {
-      return { status: "authentication-required" };
+    const ref = memberProfileRef(user.id);
+    try {
+      await getAdminFirestore().runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        const profile = snapshot.data() as MemberProfile | undefined;
+        if (profile?.identity_verification_status !== "unverified") {
+          throw new Error("Unverified member profile not found.");
+        }
+
+        transaction.update(ref, {
+          public_first_name: data.publicFirstName,
+          public_last_initial:
+            data.publicLastName === null ? null : data.publicLastName.charAt(0).toUpperCase(),
+          identity_verification_status: "simulated_verified",
+          identity_verified_at: FieldValue.serverTimestamp(),
+          verification_provider_reference: `simulation/${user.id}`,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      });
+      return { status: "verified" };
+    } catch {
+      return { status: "error" };
     }
-
-    const { error } = await supabase.rpc("complete_simulated_identity_verification", {
-      public_first_name: data.publicFirstName,
-      public_last_name: data.publicLastName,
-    });
-
-    return error === null
-      ? { status: "verified" }
-      : { status: "error" };
   });
 
 export const getPublicMemberProfile = createServerFn({ method: "GET" })
   .validator(parsePublicProfileInput)
   .handler(async ({ data }): Promise<PublicMemberProfile | null> => {
-    const supabase = createSupabaseServerClient();
-    const { data: profile, error } = await supabase
-      .rpc("get_public_member_profile", { target_member_id: data.memberId })
-      .maybeSingle();
+    const user = await getSessionUser();
+    if (user === null) return null;
 
-    if (error) throw new Error("Public member profile is unavailable.");
-    if (profile === null) return null;
+    const [requesterSnapshot, targetSnapshot] = await Promise.all([
+      memberProfileRef(user.id).get(),
+      memberProfileRef(data.memberId).get(),
+    ]);
+    const requester = requesterSnapshot.data() as MemberProfile | undefined;
+    const profile = targetSnapshot.data() as MemberProfile | undefined;
+
+    if (
+      requester?.identity_verification_status !== "simulated_verified" ||
+      requester.is_restricted ||
+      profile?.identity_verification_status !== "simulated_verified"
+    ) {
+      return null;
+    }
+
     if (profile.public_first_name === null) {
       throw new Error("Public Identity is incomplete.");
     }
@@ -363,21 +294,28 @@ export const getPublicMemberProfile = createServerFn({ method: "GET" })
       publicFirstName: profile.public_first_name,
       publicLastInitial: profile.public_last_initial,
       profilePicturePath: profile.profile_picture_path,
-      identityVerified: profile.identity_verified,
+      identityVerified: true,
       successfulHandoverCount: profile.successful_handover_count,
       transactionPartnerCount: profile.transaction_partner_count,
       buyerTier: profile.buyer_tier,
-      available: profile.available,
+      available: !profile.is_restricted,
     };
   });
 
 export const updateCurrentProfilePicture = createServerFn({ method: "POST" })
   .validator(parseProfilePictureInput)
   .handler(async ({ data }) => {
-    const supabase = createSupabaseServerClient();
-    const { error } = await supabase.rpc("update_current_member_profile", {
-      profile_picture_path: data.path,
-    });
+    const user = await getSessionUser();
+    if (user === null) return { ok: false };
+    if (data.path !== null && !data.path.startsWith(`${user.id}/`)) return { ok: false };
 
-    return { ok: error === null };
+    try {
+      await memberProfileRef(user.id).update({
+        profile_picture_path: data.path,
+        updated_at: FieldValue.serverTimestamp(),
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   });

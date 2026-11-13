@@ -30,7 +30,7 @@ npm ci
 npm run dev
 ```
 
-Open [http://localhost:5173/?demo=1](http://localhost:5173/?demo=1). Demo Mode does not require an account, Supabase project, payment method, or device location.
+Open [http://localhost:5173/?demo=1](http://localhost:5173/?demo=1). Demo Mode does not require an account, Firebase project or emulator, payment method, or device location.
 
 Useful checks:
 
@@ -40,23 +40,29 @@ npm test
 npm run build
 ```
 
-The browser suite runs phone and desktop projects. See [`docs/submission/VIDEO_SCRIPT.md`](docs/submission/VIDEO_SCRIPT.md) for the guided demonstration.
+`npm test` starts the Firebase emulators and runs the browser suite against them, on phone and desktop projects. Set `PLAYWRIGHT_PORT` if port 5173 is already in use. See [`docs/submission/VIDEO_SCRIPT.md`](docs/submission/VIDEO_SCRIPT.md) for the guided demonstration.
 
 ## Real account foundation
 
-The current persisted portion covers registration, login, authentication callback, protected member pages, sign-out, and member profiles stored in Supabase. Identity Verification remains simulated.
+The current persisted portion covers registration, login (email and password, or Google), protected member pages, sign-out, and member profiles. It runs on Firebase: Firebase Auth for accounts and Firestore for `member_profiles`. Identity Verification remains simulated.
 
-To run those account routes, provide these values in your local environment:
+Local development needs no Firebase project, account, or secrets. It runs on the [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite), which needs Java 11 or newer. In one terminal:
 
-```text
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_KEY=...
-APP_ORIGIN=http://localhost:5173
+```bash
+npm run emulators
 ```
 
-Apply [`supabase/migrations/202607190001_member_profiles.sql`](supabase/migrations/202607190001_member_profiles.sql) to the Supabase project. Google sign-in also requires its provider and callback URL to be configured in Supabase. Outside local development, `APP_ORIGIN` is required and must use HTTPS.
+In a second terminal:
 
-The full marketplace is not yet persisted in Supabase. Real Seller Activation, private listing photos, protected location services, transactions, handovers, and trust/safety records remain future work beyond this hackathon prototype.
+```bash
+npm run dev
+```
+
+Open [http://localhost:5173/register](http://localhost:5173/register). In development the app connects to the Auth (port 9099) and Firestore (port 8080) emulators automatically, using the demo project `demo-jualokal`. The Emulator UI at [http://127.0.0.1:4000](http://127.0.0.1:4000) shows the created accounts and profiles; emulator data is cleared when the emulators stop. "Continue with Google" opens the emulator's fake Google account picker.
+
+The browser signs in with the Firebase client SDK, then the server exchanges the ID token for an httpOnly session cookie and does every privileged read and write with the Firebase Admin SDK. [`firestore.rules`](firestore.rules) let a signed-in member read only their own profile, give anonymous visitors nothing, and block all client writes. See [`.env.example`](.env.example) for the optional settings, including those for a real Firebase project, and [ADR 0021](docs/adr/0021-use-firebase-with-the-emulator-suite.md) for why Jualokal moved from Supabase to Firebase.
+
+The full marketplace is not yet persisted. Real Seller Activation, private listing photos, protected location services, transactions, handovers, and trust/safety records remain future work beyond this hackathon prototype.
 
 ## Privacy boundaries
 
@@ -76,7 +82,7 @@ The team remained responsible for product decisions, review, visual acceptance, 
 
 ## Main tools
 
-Jualokal is a mobile-first web application built with React, TanStack Start and Router, TypeScript, Vite, Tailwind CSS, Supabase, and Playwright.
+Jualokal is a mobile-first web application built with React, TanStack Start and Router, TypeScript, Vite, Tailwind CSS, Firebase, and Playwright.
 
 ## License
 
