@@ -3215,12 +3215,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         inert={modalOpen}
         ref={headerRef}
       >
-        <div className="brand">
+        <a aria-label="Jualokal home" className="brand" href="/">
           <span className="brand-mark" aria-hidden="true">
             J
           </span>
           <span>jualokal</span>
-        </div>
+        </a>
         <div className="demo-header-actions">
           <span
             aria-label="Demo Mode simulation"

@@ -131,12 +131,12 @@ function VerifiedMemberExperience({
   return (
     <div className="member-shell">
       <header className="member-header">
-        <div className="brand">
+        <a aria-label="Jualokal home" className="brand" href="/">
           <span className="brand-mark" aria-hidden="true">
             J
           </span>
           <span>jualokal</span>
-        </div>
+        </a>
         <div className="member-header-actions">
           {signOutError ? <p role="alert">{signOutError}</p> : null}
           <button
