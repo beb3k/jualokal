@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn, startGoogleSignIn } from "@/utils/auth";
+import { signInWithEmail, signInWithGoogle } from "@/utils/firebase-browser";
 
 export function LoginForm() {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ export function LoginForm() {
     }
 
     try {
-      const result = await signIn({ data: { email, password } });
+      const result = await signInWithEmail(email, password);
       if (result.status === "error") {
         setError(result.message);
         return;
@@ -58,13 +58,13 @@ export function LoginForm() {
     setGoogleSubmitting(true);
 
     try {
-      const result = await startGoogleSignIn();
+      const result = await signInWithGoogle();
       if (result.status === "error") {
         setError(result.message);
         return;
       }
 
-      window.location.assign(result.url);
+      await navigate({ to: "/dashboard" });
     } catch {
       setError("Google sign-in is temporarily unavailable. Try again.");
     } finally {
