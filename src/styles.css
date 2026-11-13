@@ -98,8 +98,9 @@ button {
 
 button:focus-visible,
 a:focus-visible {
-  outline: 3px solid #d98e3e;
-  outline-offset: 3px;
+  outline: var(--jl-focus-ring);
+  outline-offset: var(--jl-focus-offset);
+  box-shadow: var(--jl-focus-shadow);
 }
 
 .public-shell,
@@ -185,7 +186,7 @@ button:disabled {
 }
 
 .button-outline {
-  border-color: rgba(23, 60, 43, 0.22);
+  border-color: rgba(23, 60, 43, 0.6);
   color: #173c2b;
   background: rgba(255, 255, 255, 0.35);
 }
@@ -216,7 +217,7 @@ button:disabled {
 
 .eyebrow {
   margin: 0 0 17px;
-  color: #a45b25;
+  color: #8f4824;
   font-size: 0.76rem;
   font-weight: 850;
   letter-spacing: 0.13em;
@@ -264,7 +265,7 @@ h2 {
   align-items: flex-start;
   gap: 9px;
   margin: 25px 0 0;
-  color: #68776f;
+  color: #4b5a52;
   font-size: 0.82rem;
   line-height: 1.55;
 }
@@ -621,7 +622,7 @@ footer {
   align-items: center;
   gap: 30px;
   padding: 35px 0;
-  color: #718078;
+  color: #4b5a52;
   font-size: 0.76rem;
 }
 
@@ -1142,7 +1143,7 @@ footer nav a:hover {
 .demo-intro p:last-child {
   max-width: 650px;
   margin: 0;
-  color: #65736b;
+  color: #4b5a52;
   line-height: 1.6;
 }
 
@@ -1162,7 +1163,7 @@ footer nav a:hover {
 .seller-workspace select,
 .seller-workspace textarea {
   width: 100%;
-  border: 1px solid rgba(23, 60, 43, 0.2);
+  border: 1px solid rgba(23, 60, 43, 0.58);
   border-radius: 12px;
   padding: 11px 12px;
   color: #17251e;
@@ -1191,7 +1192,7 @@ footer nav a:hover {
 }
 
 .distance-badge small {
-  color: #718078;
+  color: #4b5a52;
 }
 
 .demo-layout {
@@ -1339,7 +1340,7 @@ footer nav a:hover {
 }
 
 .published-photo span {
-  color: #975125;
+  color: #733a16;
   font-size: 0.61rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -1352,7 +1353,7 @@ footer nav a:hover {
 }
 
 .listing-meta {
-  color: #975125;
+  color: #7c411c;
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -1365,7 +1366,7 @@ footer nav a:hover {
 }
 
 .listing-description {
-  color: #627068;
+  color: #4b5a52;
   line-height: 1.65;
 }
 
@@ -1384,7 +1385,7 @@ footer nav a:hover {
 
 .listing-facts small,
 .listing-footer small {
-  color: #7a857f;
+  color: #4b5a52;
   font-size: 0.69rem;
 }
 
@@ -1423,7 +1424,7 @@ footer nav a:hover {
 
 .listing-questions p {
   margin: 14px 0 0;
-  color: #68776f;
+  color: #4b5a52;
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -1557,7 +1558,7 @@ footer nav a:hover {
 }
 
 .custom-select-option small {
-  color: #65736b;
+  color: #4b5a52;
   font-size: 0.7rem;
 }
 
@@ -1724,7 +1725,7 @@ footer nav a:hover {
 }
 
 .person-card small {
-  color: #7a867f;
+  color: #4b5a52;
   font-size: 0.7rem;
 }
 
@@ -1878,7 +1879,7 @@ footer nav a:hover {
 }
 
 .inventory-heading p {
-  color: #65736b;
+  color: #4b5a52;
   line-height: 1.6;
 }
 
@@ -1895,7 +1896,7 @@ footer nav a:hover {
 .discovery-filter select {
   width: 100%;
   min-height: 44px;
-  border: 1px solid rgba(23, 60, 43, 0.2);
+  border: 1px solid rgba(23, 60, 43, 0.58);
   border-radius: 12px;
   padding: 11px 12px;
   color: #17251e;
@@ -1932,7 +1933,7 @@ footer nav a:hover {
 .discovery-grid p,
 .inventory-grid small,
 .discovery-grid small {
-  color: #65736b;
+  color: #4b5a52;
   line-height: 1.45;
 }
 
@@ -2290,7 +2291,7 @@ footer nav a:hover {
 
 .location-refresh-actions small {
   max-width: 420px;
-  color: #65736b;
+  color: #4b5a52;
 }
 
 .discovery-announcement {
@@ -2348,8 +2349,54 @@ footer nav a:hover {
 }
 
 .discovery-map-canvas .maplibregl-canvas:focus-visible {
-  outline: 3px solid #b95f37;
-  outline-offset: -3px;
+  outline: var(--jl-focus-ring);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 4px var(--jl-color-focus);
+}
+
+.discovery-map-canvas:has(.maplibregl-canvas:focus-visible)::after {
+  content: "";
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--demo-header-bottom, 76px) + 6px);
+  right: 6px;
+  bottom: 6px;
+  left: 6px;
+  border: 2px solid var(--jl-color-focus-contrast);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 3px var(--jl-color-focus),
+    0 0 0 3px var(--jl-color-focus);
+  pointer-events: none;
+}
+
+@supports selector(:has(*)) {
+  .discovery-map-canvas .maplibregl-canvas:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+.discovery-map .maplibregl-ctrl-top-right {
+  z-index: 5;
+}
+
+.discovery-map .maplibregl-ctrl-group {
+  border: 1px solid rgba(23, 60, 43, 0.58);
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: 0 8px 22px rgba(46, 62, 52, 0.14);
+}
+
+.discovery-map .maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(23, 60, 43, 0.35);
+}
+
+.discovery-map .maplibregl-ctrl-group button:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: var(--jl-focus-ring);
+  outline-offset: var(--jl-focus-offset);
+  box-shadow: var(--jl-focus-shadow);
 }
 
 .discovery-map .maplibregl-ctrl-bottom-right {
@@ -2358,8 +2405,21 @@ footer nav a:hover {
 }
 
 .discovery-map .maplibregl-ctrl-attrib {
-  background: rgba(255, 253, 248, 0.92);
-  font-size: 0.625rem;
+  border: 1px solid rgba(23, 60, 43, 0.35);
+  color: #17251e;
+  background: rgba(255, 253, 248, 0.96);
+  font-size: 0.68rem;
+}
+
+.discovery-map .maplibregl-ctrl-attrib a {
+  color: #173c2b;
+  font-weight: 700;
+}
+
+.discovery-map .maplibregl-ctrl-attrib a:focus-visible {
+  outline: var(--jl-focus-ring);
+  outline-offset: 2px;
+  box-shadow: var(--jl-focus-shadow);
 }
 
 .map-context,
@@ -2385,7 +2445,7 @@ footer nav a:hover {
 
 .map-context span,
 .map-status {
-  color: #65736b;
+  color: #4b5a52;
   font-size: 0.75rem;
 }
 
@@ -2411,6 +2471,10 @@ footer nav a:hover {
   z-index: 3;
 }
 
+.map-seller-marker:has(:focus-visible) {
+  z-index: 10;
+}
+
 .seller-discovery-marker {
   position: relative;
   display: grid;
@@ -2424,6 +2488,14 @@ footer nav a:hover {
   box-shadow: 0 10px 24px rgba(23, 60, 43, 0.25);
   cursor: pointer;
   transform: rotate(-45deg);
+}
+
+.seller-discovery-marker:focus-visible {
+  outline: var(--jl-focus-ring);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 5px var(--jl-color-focus),
+    0 10px 24px rgba(23, 60, 43, 0.25);
 }
 
 .seller-marker-initials {
@@ -2496,7 +2568,7 @@ footer nav a:hover {
   border: 2px solid #fffdf8;
   border-radius: 999px;
   color: #fffdf8;
-  background: #b95f37;
+  background: #9c4f24;
   font-size: 0.68rem;
   font-weight: 850;
   transform: rotate(45deg);
@@ -2570,6 +2642,7 @@ footer nav a:hover {
   box-shadow: 0 18px 45px rgba(46, 62, 52, 0.12);
 }
 
+.map-error-card h2,
 .map-error-card h3,
 .map-error-card p,
 .map-error-card small {
@@ -2578,13 +2651,13 @@ footer nav a:hover {
 
 .map-error-card p {
   margin-top: 8px;
-  color: #65736b;
+  color: #4b5a52;
 }
 
 .map-error-card small {
   display: block;
   margin-top: 12px;
-  color: #65736b;
+  color: #4b5a52;
 }
 
 .map-error-actions {
@@ -2693,7 +2766,7 @@ footer nav a:hover {
 
 .seller-preview-listings p {
   margin: 5px 0;
-  color: #65736b;
+  color: #4b5a52;
 }
 
 .seller-chooser-options {
@@ -2773,7 +2846,7 @@ footer nav a:hover {
 /* Ticket #37: public and member presentation foundation */
 :root {
   --jl-color-ink: #17251e;
-  --jl-color-muted: #5d6c64;
+  --jl-color-muted: #4b5a52;
   --jl-color-brand: #173c2b;
   --jl-color-brand-soft: #315846;
   --jl-color-accent: #d98e3e;
@@ -3460,7 +3533,7 @@ textarea:focus-visible,
 .demo-header-filter select {
   width: 180px;
   min-height: 40px;
-  border: 1px solid var(--jl-color-line);
+  border: 1px solid rgba(23, 60, 43, 0.58);
   border-radius: 8px;
   padding: 0 10px;
   color: var(--jl-color-ink);
@@ -3478,7 +3551,7 @@ textarea:focus-visible,
 }
 
 .demo-account-chip small {
-  color: #718078;
+  color: #4b5a52;
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -3558,7 +3631,7 @@ textarea:focus-visible,
 
 .demo-controls-section select {
   min-height: 42px;
-  border: 1px solid var(--jl-color-line);
+  border: 1px solid rgba(23, 60, 43, 0.58);
   border-radius: 8px;
   padding: 0 10px;
   color: var(--jl-color-ink);
@@ -3568,7 +3641,7 @@ textarea:focus-visible,
 }
 
 .demo-controls-section small {
-  color: #62736a;
+  color: #4b5a52;
   font-size: 0.72rem;
   line-height: 1.4;
 }
@@ -3620,14 +3693,14 @@ textarea:focus-visible,
 
 .demo-controls-identity p {
   margin: 4px 0 0;
-  color: #62736a;
+  color: #4b5a52;
   font-size: 0.76rem;
   line-height: 1.45;
 }
 
 .demo-controls-hint {
   margin: 0;
-  color: #62736a;
+  color: #4b5a52;
   font-size: 0.76rem;
   line-height: 1.45;
 }
@@ -4175,7 +4248,7 @@ textarea:focus-visible,
 }
 
 .listing-card-media small {
-  color: #7e4d2f;
+  color: #522f19;
   font-size: 0.62rem;
   font-weight: 850;
   letter-spacing: 0.07em;
@@ -4977,6 +5050,33 @@ textarea:focus-visible,
   white-space: nowrap !important;
 }
 
+.skip-map-link {
+  position: fixed;
+  z-index: 80;
+  top: 10px;
+  left: 12px;
+  transform: translateY(-220%);
+  border: 2px solid #fffdf8;
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: #fffdf8;
+  background: #173c2b;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 12px 28px rgba(10, 27, 19, 0.28);
+}
+
+.skip-map-link:focus,
+.skip-map-link:focus-visible {
+  transform: translateY(0);
+  outline: var(--jl-focus-ring);
+  outline-offset: var(--jl-focus-offset);
+  box-shadow:
+    var(--jl-focus-shadow),
+    0 12px 28px rgba(10, 27, 19, 0.28);
+}
+
 .demo-shell {
   --demo-panel-width: 400px;
   --demo-panel-inset: 16px;
@@ -5127,8 +5227,11 @@ textarea:focus-visible,
 }
 
 .discovery-result-pill:focus-visible {
-  outline: 3px solid #d98e3e;
-  outline-offset: 3px;
+  outline: var(--jl-focus-ring);
+  outline-offset: var(--jl-focus-offset);
+  box-shadow:
+    var(--jl-focus-shadow),
+    0 16px 36px rgba(10, 27, 19, 0.26);
 }
 
 .discovery-panel {
@@ -5179,6 +5282,16 @@ textarea:focus-visible,
   overscroll-behavior: contain;
   padding: 20px 22px calc(28px + env(safe-area-inset-bottom));
   touch-action: pan-y;
+}
+
+.discovery-panel-scroll :is(a, button, input, select, textarea, summary, [tabindex]),
+.demo-controls-drawer :is(a, button, input, select, textarea, summary, [tabindex]) {
+  scroll-margin-block: 20px;
+}
+
+.demo-main.demo-screen :is(a, button, input, select, textarea, summary, [tabindex]) {
+  scroll-margin-top: calc(var(--demo-header-bottom, 88px) + 56px);
+  scroll-margin-bottom: 24px;
 }
 
 .discovery-panel .seller-preview {
@@ -5348,7 +5461,7 @@ textarea:focus-visible,
     width: 42px;
     height: 5px;
     border-radius: 999px;
-    background: rgba(23, 60, 43, 0.26);
+    background: rgba(23, 60, 43, 0.58);
   }
 
   .discovery-sheet-handle.is-dragging {
@@ -5356,8 +5469,14 @@ textarea:focus-visible,
   }
 
   .discovery-sheet-handle:focus-visible {
-    outline: 3px solid #d98e3e;
-    outline-offset: -4px;
+    outline: var(--jl-focus-ring);
+    outline-offset: -3px;
+    box-shadow: inset 0 0 0 5px var(--jl-color-focus);
+  }
+
+  .demo-map-frame.is-panel-open
+    .discovery-map-canvas:has(.maplibregl-canvas:focus-visible)::after {
+    bottom: calc(var(--sheet-height, 0px) + 8px);
   }
 
   .discovery-panel-heading {
@@ -5451,11 +5570,20 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .demo-shell,
   .demo-shell *,
+  .demo-shell *::before,
+  .demo-shell *::after,
+  .discovery-panel,
   .discovery-panel * {
     scroll-behavior: auto !important;
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
+    animation: none !important;
+    transition-property: none !important;
+    transition-duration: 0s !important;
+  }
+
+  .demo-shell .button:hover:not(:disabled) {
+    transform: none;
   }
 }
 
@@ -5498,7 +5626,7 @@ textarea:focus-visible,
 }
 
 .map-legend span {
-  color: #65736b;
+  color: #4b5a52;
   font-size: 0.7rem;
   font-weight: 700;
 }
@@ -5592,6 +5720,13 @@ textarea:focus-visible,
 @media (min-width: 1024px) {
   .demo-map-frame.is-panel-open .maplibregl-ctrl-bottom-right,
   .demo-map-frame.is-panel-open .maplibregl-ctrl-top-right {
+    right: calc(
+      var(--demo-panel-width, 400px) + var(--demo-panel-inset, 16px) + 8px
+    );
+  }
+
+  .demo-map-frame.is-panel-open
+    .discovery-map-canvas:has(.maplibregl-canvas:focus-visible)::after {
     right: calc(
       var(--demo-panel-width, 400px) + var(--demo-panel-inset, 16px) + 8px
     );

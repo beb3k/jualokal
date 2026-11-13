@@ -148,11 +148,21 @@ type DiscoveryView = "map" | "list";
 type DemoWorkspace = "buyer" | "seller" | "inventory" | "orders" | "trust";
 
 type PanelStage =
-  | Readonly<{ kind: "list" }>
-  | Readonly<{ kind: "chooser"; groupId: string }>
-  | Readonly<{ kind: "seller"; sellerId: string }>
-  | Readonly<{ kind: "item"; listingId: string }>
-  | Readonly<{ kind: "checkout"; listingId: string }>;
+  | Readonly<{ kind: "list"; returnFocusSelector?: string }>
+  | Readonly<{ kind: "chooser"; groupId: string; returnFocusSelector?: string }>
+  | Readonly<{ kind: "seller"; sellerId: string; returnFocusSelector?: string }>
+  | Readonly<{ kind: "item"; listingId: string; returnFocusSelector?: string }>
+  | Readonly<{ kind: "checkout"; listingId: string; returnFocusSelector?: string }>;
+
+function attachStageReturnFocus(
+  stages: readonly PanelStage[],
+  selector: string,
+): PanelStage[] {
+  if (stages.length === 0) return [];
+  const head = stages.slice(0, -1);
+  const top = stages[stages.length - 1];
+  return [...head, { ...top, returnFocusSelector: selector }];
+}
 
 type PanelTrigger = Readonly<{
   element: HTMLElement | null;
@@ -626,15 +636,26 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [mapZoom, setMapZoom] = useState(14);
   const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [mapStatus, setMapStatus] = useState("Buyer-centered view ready");
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLElement | null>(null);
   const panelReturnFocusRef = useRef<PanelTrigger | null>(null);
   const panelWasOpenRef = useRef(false);
   const suppressViewPreferenceRef = useRef(false);
   const mapPhaseRef = useRef<MapPhase>("loading");
+  const mapFallbackActiveRef = useRef(false);
+  const pendingMapRetryFocusRef = useRef(false);
+  const pendingCheckoutFocusRef = useRef(false);
+  const pendingSkipToListingsRef = useRef(false);
   const resultPillRef = useRef<HTMLButtonElement | null>(null);
   const discoveryMapRef = useRef<DiscoveryMapHandle | null>(null);
   const discoveryPanelRef = useRef<DiscoveryPanelHandle | null>(null);
   const listingDetailRef = useRef<HTMLElement | null>(null);
   const demoControlsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const checkoutViewOrderRef = useRef<HTMLButtonElement | null>(null);
+  const checkoutBackToItemRef = useRef<HTMLButtonElement | null>(null);
+  const resetDialogRef = useRef<HTMLElement | null>(null);
+  const resetCancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const trustOverviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (demoClockPaused) return;
@@ -660,12 +681,75 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }, [checkoutState.holds.length, demoClockPaused, handoverStates]);
 
   useEffect(() => {
+    const shell = shellRef.current;
+    const header = headerRef.current;
+    if (!shell || !header) return;
+
+    const measureHeader = () => {
+      const shellRect = shell.getBoundingClientRect();
+      const headerBottom = Math.max(
+        0,
+        Math.round(header.getBoundingClientRect().bottom - shellRect.top),
+      );
+      shell.style.setProperty("--demo-header-bottom", `${headerBottom}px`);
+    };
+
+    measureHeader();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measureHeader);
+    observer?.observe(header);
+    observer?.observe(shell);
+    window.addEventListener("resize", measureHeader);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measureHeader);
+      shell.style.removeProperty("--demo-header-bottom");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!resetConfirmationOpen) return;
+    resetCancelButtonRef.current?.focus();
+
+    const handleResetKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelResetConfirmation();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        resetDialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleResetKeyboard);
+    return () => window.removeEventListener("keydown", handleResetKeyboard);
+  }, [resetConfirmationOpen]);
+
+  useEffect(() => {
     if (panelStages.length === 0) return;
     const handlePanelKeyboard = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (demoControlsOpen || resetConfirmationOpen) return;
       event.preventDefault();
-      setPanelStages((current) => current.slice(0, -1));
+      backPanelStage();
     };
     window.addEventListener("keydown", handlePanelKeyboard);
     return () => window.removeEventListener("keydown", handlePanelKeyboard);
@@ -711,7 +795,16 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           return;
         }
       }
-      resultPillRef.current?.focus();
+      if (resultPillRef.current?.isConnected) {
+        resultPillRef.current.focus();
+        return;
+      }
+      const canvas = document.querySelector<HTMLElement>(".maplibregl-canvas");
+      if (canvas && !canvas.closest("[inert]")) {
+        canvas.focus();
+        return;
+      }
+      demoControlsTriggerRef.current?.focus();
     });
   }, [activeWorkspace, panelStages.length]);
 
@@ -1109,6 +1202,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const mapFallbackActive =
     discoveryOutcome.kind === "results" &&
     (mapFailureSimulated || mapPhase === "error");
+  mapFallbackActiveRef.current = mapFallbackActive;
   const mapScreenActive = activeWorkspace === "buyer";
   const panelStage = panelStages.at(-1);
   const panelOpen = panelStages.length > 0;
@@ -1185,6 +1279,37 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       }
     }
   }, [panelStageKey]);
+
+  useEffect(() => {
+    if (
+      panelStage?.kind !== "checkout" ||
+      selectedBuyerHold ||
+      !pendingCheckoutFocusRef.current
+    ) {
+      return;
+    }
+    pendingCheckoutFocusRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      const target = completedCheckoutCommitmentId
+        ? checkoutViewOrderRef.current
+        : checkoutBackToItemRef.current;
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [completedCheckoutCommitmentId, panelStage?.kind, selectedBuyerHold]);
+
+  useEffect(() => {
+    if (panelStage?.kind !== "list" || !pendingSkipToListingsRef.current) return;
+    pendingSkipToListingsRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById("discovery-listings")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [panelStage?.kind]);
+
+  useEffect(() => {
+    pendingMapRetryFocusRef.current = false;
+  }, [mapInstanceKey]);
   const selectedListingDistanceKm =
     browsingDistanceOverrideKm ??
     (selectedSessionListing ? selectedListingSeller.distanceKm : undefined);
@@ -1369,6 +1494,9 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setDemoControlsOpen(false);
     setPanelStages([]);
     setActiveWorkspace("trust");
+    window.requestAnimationFrame(() => {
+      trustOverviewRef.current?.focus({ preventScroll: true });
+    });
   }
 
   function returnToMap() {
@@ -1386,8 +1514,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function openResetConfirmation() {
-    closeDemoControls();
+    setDemoControlsOpen(false);
     setResetConfirmationOpen(true);
+  }
+
+  function cancelResetConfirmation() {
+    setResetConfirmationOpen(false);
+    window.requestAnimationFrame(() => {
+      demoControlsTriggerRef.current?.focus();
+    });
   }
 
   function exitDemo() {
@@ -1441,14 +1576,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function backPanelStage() {
-    if (panelStages.length === 1 && mapFallbackActive) {
+    if (panelStages.length === 1 && mapFallbackActiveRef.current) {
       suppressViewPreferenceRef.current = true;
     }
     setPanelStages((current) => current.slice(0, -1));
   }
 
   function closePanel() {
-    suppressViewPreferenceRef.current = mapFallbackActive;
+    suppressViewPreferenceRef.current = mapFallbackActiveRef.current;
     setPanelStages([]);
     setCompletedCheckoutCommitmentId(null);
     setDiscoveryAnnouncement(
@@ -1456,22 +1591,29 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     );
   }
 
-  function pushItemStage(listingId: string) {
+  function pushItemStage(listingId: string, returnFocusSelector?: string) {
     setCompletedCheckoutCommitmentId(null);
     setPanelStages((current) => {
-      const base = current.filter(
+      const filtered = current.filter(
         (stage) => stage.kind === "list" || stage.kind === "seller",
       );
+      const base = returnFocusSelector
+        ? attachStageReturnFocus(filtered, returnFocusSelector)
+        : filtered;
       return [...base, { kind: "item", listingId }];
     });
   }
 
   function openCheckoutStage(listingId: string) {
     setCompletedCheckoutCommitmentId(null);
-    setPanelStages((current) => [
-      ...current.filter((stage) => stage.kind !== "checkout"),
-      { kind: "checkout", listingId },
-    ]);
+    setPanelStages((current) => {
+      const filtered = current.filter((stage) => stage.kind !== "checkout");
+      const base = attachStageReturnFocus(
+        filtered,
+        '[data-panel-trigger="item-checkout"]',
+      );
+      return [...base, { kind: "checkout", listingId }];
+    });
   }
 
   function markBrowsingLocationStale() {
@@ -1550,6 +1692,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   }
 
   function retryMap(closeFallbackList = false) {
+    pendingMapRetryFocusRef.current = !closeFallbackList;
     setMapFailureSimulated(false);
     mapPhaseRef.current = "loading";
     setMapPhase("loading");
@@ -1563,11 +1706,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   function openSellerPreview(
     sellerId: string,
     trigger: HTMLButtonElement,
+    listListingId?: string,
   ) {
     rememberPanelTrigger(trigger, markerKeyFromTrigger(trigger));
     setPanelStages((current) => {
       const list = current.filter((stage) => stage.kind === "list");
-      return [...list, { kind: "seller", sellerId }];
+      const base =
+        list.length > 0 && listListingId
+          ? attachStageReturnFocus(
+              list,
+              `[data-panel-trigger="list-seller:${CSS.escape(listListingId)}"]`,
+            )
+          : list;
+      return [...base, { kind: "seller", sellerId }];
     });
   }
 
@@ -1600,7 +1751,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     const listing = sessionListings.find((candidate) => candidate.id === listingId);
     if (!listing) return;
     loadListingForEditing(listing);
-    pushItemStage(listing.id);
+    pushItemStage(
+      listing.id,
+      `[data-panel-trigger="seller-item:${CSS.escape(listing.id)}"]`,
+    );
   }
 
   function openListingDetail(
@@ -1609,7 +1763,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   ) {
     if (trigger) rememberPanelTrigger(trigger);
     loadListingForEditing(listing);
-    pushItemStage(listing.id);
+    pushItemStage(
+      listing.id,
+      `[data-panel-trigger="list-item:${CSS.escape(listing.id)}"]`,
+    );
   }
 
   function recenterMap() {
@@ -1710,6 +1867,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function expireSelectedHold() {
     if (!selectedBuyerHold) return;
+    pendingCheckoutFocusRef.current = true;
     setClockOffsetMs(selectedBuyerHold.expiresAtMs - Date.now());
     setClockNowMs(selectedBuyerHold.expiresAtMs);
     setDemoClockPaused(false);
@@ -1723,6 +1881,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function abandonSelectedHold() {
     if (!selectedBuyerHold) return;
+    pendingCheckoutFocusRef.current = true;
     setCheckoutState((currentState) =>
       endCheckoutHold(
         currentState,
@@ -1735,6 +1894,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function simulateFailedSelectedPayment() {
     if (!selectedBuyerHold) return;
+    pendingCheckoutFocusRef.current = true;
     setCheckoutState((currentState) =>
       endCheckoutHold(
         currentState,
@@ -1787,6 +1947,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         ? "Simulated payment succeeded. Purchase Commitment, unchangeable Purchase Snapshot, and simulated Escrow created."
         : "Simulated payment did not complete. The hold expired or the buyer reached the active purchase limit.",
     );
+    pendingCheckoutFocusRef.current = true;
     setCompletedCheckoutCommitmentId(createdCommitment?.id ?? null);
   }
 
@@ -2635,6 +2796,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setDiscoveryAnnouncement("Demo reset with simulated snapshot 1");
     setResetConfirmationOpen(false);
     setDemoControlsOpen(false);
+    requestAnimationFrame(() => {
+      const target = resultPillRef.current ?? demoControlsTriggerRef.current;
+      target?.focus({ preventScroll: true });
+    });
   }
 
   function renderDiscoveryState() {
@@ -2646,7 +2811,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           <p className="eyebrow">Simulated Browsing Location · Bandung</p>
           <h1>Location permission denied</h1>
           <p>Choose a simulated replacement and refresh. No discovery request was run.</p>
-          <button className="button button-primary" onClick={refreshNearbyListings}>
+          <button className="button button-primary" onClick={refreshNearbyListings} type="button">
             Refresh nearby listings
           </button>
         </section>
@@ -2659,7 +2824,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           <p className="eyebrow">Simulated Browsing Location · Bandung</p>
           <h1>Location unavailable</h1>
           <p>Try a new simulated snapshot when location is available.</p>
-          <button className="button button-primary" onClick={refreshNearbyListings}>
+          <button className="button button-primary" onClick={refreshNearbyListings} type="button">
             Refresh nearby listings
           </button>
         </section>
@@ -2672,7 +2837,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           <p className="eyebrow">Simulated Browsing Location · Bandung</p>
           <h1>Browsing Location needs refresh</h1>
           <p>The resumed session is stale. Refresh explicitly to continue nearby discovery.</p>
-          <button className="button button-primary" onClick={refreshNearbyListings}>
+          <button className="button button-primary" onClick={refreshNearbyListings} type="button">
             Refresh nearby listings
           </button>
         </section>
@@ -2704,6 +2869,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               setDiscoveryCategory("All");
               setDiscoveryAnnouncement("All categories restored; nearby results updated.");
             }}
+            type="button"
           >
             Show All categories
           </button>
@@ -2720,7 +2886,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
         <h1>No nearby listings yet</h1>
         <p>The valid 2 km discovery result is empty. The radius was not widened.</p>
         <div className="empty-state-actions">
-          <button className="button button-primary" onClick={refreshNearbyListings}>
+          <button className="button button-primary" onClick={refreshNearbyListings} type="button">
             Refresh nearby listings
           </button>
           <button
@@ -2733,6 +2899,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               if (nextListing) loadListingForEditing(nextListing);
               setActiveWorkspace("seller");
             }}
+            type="button"
           >
             Sell an item nearby
           </button>
@@ -2743,7 +2910,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
   function renderDiscoveryList() {
     return (
-      <section aria-label="Demo marketplace listings" className="discovery-panel-list">
+      <section
+        aria-label="Demo marketplace listings"
+        className="discovery-panel-list"
+        id="discovery-listings"
+        tabIndex={-1}
+      >
         <div className="inventory-heading discovery-heading">
           <div>
             <p className="eyebrow">Nearby Demo Listings - Simulation</p>
@@ -2762,7 +2934,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               The same results, Browsing Location, Category Filter, and Distance Bands remain
               unchanged for this session.
             </p>
-            <button className="button button-primary" onClick={() => retryMap(true)}>
+            <button
+              className="button button-primary"
+              onClick={() => retryMap(true)}
+              type="button"
+            >
               Retry map
             </button>
           </section>
@@ -2817,9 +2993,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                       <div>
                         <button
                           className="text-button seller-identity-button"
+                          data-panel-trigger={`list-seller:${listing.id}`}
                           onClick={(event) =>
-                            openSellerPreview(seller.id, event.currentTarget)
+                            openSellerPreview(seller.id, event.currentTarget, listing.id)
                           }
+                          type="button"
                         >
                           {seller.publicName}
                         </button>
@@ -2842,9 +3020,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                     </div>
                     <button
                       className="button button-primary"
+                      data-panel-trigger={`list-item:${listing.id}`}
                       onClick={(event) =>
                         openListingDetail(listing, event.currentTarget)
                       }
+                      type="button"
                     >
                       View item
                     </button>
@@ -2922,10 +3102,15 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             <h3>Simulated payment succeeded</h3>
             <p>{checkoutNotice}</p>
             <div className="listing-actions">
-              <button className="button button-primary" onClick={showOrders}>
+              <button
+                className="button button-primary"
+                onClick={showOrders}
+                ref={checkoutViewOrderRef}
+                type="button"
+              >
                 View order
               </button>
-              <button className="button button-outline" onClick={closePanel}>
+              <button className="button button-outline" onClick={closePanel} type="button">
                 Back to map
               </button>
             </div>
@@ -2934,7 +3119,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
           <section className="checkout-panel">
             <p>No active Checkout Hold.</p>
             {checkoutNotice ? <p role="status">{checkoutNotice}</p> : null}
-            <button className="button button-outline" onClick={backPanelStage}>
+            <button
+              className="button button-outline"
+              onClick={backPanelStage}
+              ref={checkoutBackToItemRef}
+              type="button"
+            >
               Back to item
             </button>
           </section>
@@ -2965,6 +3155,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               className="button button-outline"
               key={seller.id}
               onClick={() => openSellerFromChooser(seller.id)}
+              type="button"
             >
               {seller.publicName} · Fictional Demo Seller
               {visibleHeldListings.some(
@@ -2979,13 +3170,51 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     );
   }
 
+  const modalOpen = demoControlsOpen || resetConfirmationOpen;
+
   return (
     <div
       className={`demo-shell ${
         mapScreenActive ? "demo-shell-map" : "demo-shell-workspace"
       }`}
+      ref={shellRef}
     >
-      <header className="demo-header">
+      {activeWorkspace === "buyer" &&
+      !selectedAccountRestricted &&
+      !selectedAccountSuspended &&
+      discoveryOutcome.kind === "results" ? (
+        <>
+          <a
+            aria-hidden={modalOpen ? true : undefined}
+            className="skip-map-link"
+            href="#discovery-listings"
+            inert={modalOpen}
+            onClick={(event) => {
+              event.preventDefault();
+              if (panelStage?.kind === "list") {
+                document
+                  .getElementById("discovery-listings")
+                  ?.focus({ preventScroll: true });
+                return;
+              }
+              pendingSkipToListingsRef.current = true;
+              openListPanel(null, mapFallbackActive);
+            }}
+          >
+            Skip map to listings
+          </a>
+          <h1 className="visually-hidden">
+            Jualokal Demo Mode — Seller discovery map
+          </h1>
+        </>
+      ) : null}
+
+      <header
+        aria-hidden={modalOpen ? true : undefined}
+        className="demo-header"
+        inert={modalOpen}
+        ref={headerRef}
+      >
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             J
@@ -3014,7 +3243,11 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               ))}
             </select>
           </label>
-          <button className="button button-compact button-outline" onClick={showOrders}>
+          <button
+            className="button button-compact button-outline"
+            onClick={showOrders}
+            type="button"
+          >
             Orders
           </button>
           <span className="demo-account-chip">
@@ -3028,6 +3261,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
             className="button button-compact button-primary"
             onClick={openDemoControls}
             ref={demoControlsTriggerRef}
+            type="button"
           >
             Demo controls
           </button>
@@ -3036,12 +3270,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
       {!selectedAccountRestricted && !selectedAccountSuspended ? (
         <section
-          aria-hidden={!mapScreenActive}
+          aria-hidden={!mapScreenActive || modalOpen}
           aria-label="Seller discovery map"
           className={`demo-map-frame${mapScreenActive ? "" : " is-covered"}${
             panelOpen ? " is-panel-open" : ""
           }`}
-          inert={!mapScreenActive}
+          inert={!mapScreenActive || modalOpen}
           role="region"
         >
           {discoveryOutcome.kind === "results" ? (
@@ -3050,6 +3284,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 browsingLocationSnapshot.kind === "valid" ? buyerPoint : null
               }
               buyer={buyerPoint}
+              focusOnMount={pendingMapRetryFocusRef.current}
               key={mapInstanceKey}
               markers={discoveryMarkerViews}
               mapFailure={mapFailureSimulated}
@@ -3059,7 +3294,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               onRecenter={recenterMap}
               onRetry={() => retryMap(false)}
               onSelectGroup={selectSellerMarkerGroup}
-              onUseListView={() => openListPanel(undefined, true)}
+              onUseListView={(trigger) => openListPanel(trigger ?? null, true)}
               onZoomChange={setMapZoom}
               panelOpen={panelOpen}
               ref={discoveryMapRef}
@@ -3077,7 +3312,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ) : null}
 
       {(selectedAccountRestricted || selectedAccountSuspended) && activeWorkspace !== "inventory" ? (
-        <main className="demo-main demo-screen" aria-label="Restricted account screen">
+        <main
+          aria-hidden={modalOpen ? true : undefined}
+          aria-label="Restricted account screen"
+          className="demo-main demo-screen"
+          inert={modalOpen}
+        >
           <section aria-label="Restricted simulated account" className="registration-panel">
             <p className="eyebrow">Private account status - Simulation</p>
             <h1>Account unavailable</h1>
@@ -3099,8 +3339,10 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
           {!panelOpen && discoveryOutcome.kind === "results" ? (
             <button
+              aria-hidden={modalOpen ? true : undefined}
               aria-label={`Open List panel: ${discoveryMarkerViews.length} seller areas, ${visibleDemoListings.length} listings`}
               className="discovery-result-pill"
+              inert={modalOpen}
               onClick={() => openListPanel(resultPillRef.current, mapFallbackActive)}
               ref={resultPillRef}
               type="button"
@@ -3114,11 +3356,14 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
           {panelOpen && panelStage ? (
             <DiscoveryPanel
+              inert={modalOpen}
               label={panelLabel}
               onBack={backPanelStage}
               onClose={closePanel}
               ref={discoveryPanelRef}
+              returnFocusSelector={panelStage.returnFocusSelector ?? null}
               stage={panelStage.kind}
+              stageDepth={panelStages.length}
               stageKey={panelStageKey}
               title={panelTitle}
             >
@@ -3137,9 +3382,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ) : null}
 
       {activeWorkspace === "inventory" ? (
-        <main className="demo-main demo-screen" aria-label="Demo inventory">
+        <main
+          aria-hidden={modalOpen ? true : undefined}
+          aria-label="Demo inventory"
+          className="demo-main demo-screen"
+          inert={modalOpen}
+        >
           <div className="demo-screen-bar">
-            <button className="button button-compact button-outline" onClick={returnToMap}>
+            <button
+              className="button button-compact button-outline"
+              onClick={returnToMap}
+              type="button"
+            >
               Back to map
             </button>
           </div>
@@ -3205,9 +3459,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ) : null}
 
       {activeWorkspace === "seller" ? (
-        <main className="demo-main demo-screen" aria-label="Seller workspace">
+        <main
+          aria-hidden={modalOpen ? true : undefined}
+          aria-label="Seller workspace"
+          className="demo-main demo-screen"
+          inert={modalOpen}
+        >
           <div className="demo-screen-bar">
-            <button className="button button-compact button-outline" onClick={returnToMap}>
+            <button
+              className="button button-compact button-outline"
+              onClick={returnToMap}
+              type="button"
+            >
               Back to map
             </button>
           </div>
@@ -3413,9 +3676,18 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       ) : null}
 
       {activeWorkspace === "orders" && (selectedBuyer || selectedSeller) ? (
-        <main className="demo-main demo-screen" aria-label="Orders screen">
+        <main
+          aria-hidden={modalOpen ? true : undefined}
+          aria-label="Orders screen"
+          className="demo-main demo-screen"
+          inert={modalOpen}
+        >
           <div className="demo-screen-bar">
-            <button className="button button-compact button-outline" onClick={returnToMap}>
+            <button
+              className="button button-compact button-outline"
+              onClick={returnToMap}
+              type="button"
+            >
               Back to map
             </button>
           </div>
@@ -3715,16 +3987,27 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
 
       {activeWorkspace === "trust" && selectedBuyer && selectedTrustState && selectedTierProgress &&
       selectedPublicTrustSummary && selectedTradingAvailability ? (
-        <main className="demo-main demo-screen" aria-label="Trust overview">
+        <main
+          aria-hidden={modalOpen ? true : undefined}
+          aria-label="Trust overview"
+          className="demo-main demo-screen"
+          inert={modalOpen}
+        >
           <div className="demo-screen-bar">
-            <button className="button button-compact button-outline" onClick={returnToMap}>
+            <button
+              className="button button-compact button-outline"
+              onClick={returnToMap}
+              type="button"
+            >
               Back to map
             </button>
           </div>
           <div
             aria-label="Buyer trust and reviewer context"
             className="trust-overview demo-support-region"
+            ref={trustOverviewRef}
             role="region"
+            tabIndex={-1}
           >
           <div className="demo-support-heading">
             <span className="shell-region-label">Supporting context</span>
@@ -3878,11 +4161,13 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
       />
 
       {resetConfirmationOpen ? (
-        <div className="dialog-backdrop">
+        <div className="dialog-backdrop" onClick={cancelResetConfirmation}>
           <section
             aria-labelledby="reset-demo-title"
             aria-modal="true"
             className="registration-panel"
+            onClick={(event) => event.stopPropagation()}
+            ref={resetDialogRef}
             role="dialog"
           >
             <p className="eyebrow">Demo Mode reset - Simulation</p>
@@ -3893,10 +4178,19 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
               experiences are never affected.
             </p>
             <div className="listing-actions">
-              <button className="button button-outline" onClick={() => setResetConfirmationOpen(false)}>
+              <button
+                className="button button-outline"
+                onClick={cancelResetConfirmation}
+                ref={resetCancelButtonRef}
+                type="button"
+              >
                 Cancel reset
               </button>
-              <button className="button button-primary" onClick={resetDemo}>
+              <button
+                className="button button-primary"
+                onClick={resetDemo}
+                type="button"
+              >
                 Reset this simulated session
               </button>
             </div>

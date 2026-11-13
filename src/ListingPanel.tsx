@@ -80,24 +80,35 @@ export function CheckoutHoldPanel({ checkout }: { checkout: CheckoutHoldView }) 
         <button
           className="button button-outline"
           onClick={checkout.onAdvanceToExpiryBoundary}
+          type="button"
         >
           Advance to one second before hold expiry
         </button>
-        <button className="button button-outline" onClick={checkout.onExpire}>
+        <button
+          className="button button-outline"
+          onClick={checkout.onExpire}
+          type="button"
+        >
           Advance to exact hold expiry
         </button>
-        <button className="button button-outline" onClick={checkout.onAbandon}>
+        <button
+          className="button button-outline"
+          onClick={checkout.onAbandon}
+          type="button"
+        >
           Abandon checkout
         </button>
         <button
           className="button button-outline"
           onClick={checkout.onSimulateFailedPayment}
+          type="button"
         >
           Simulate failed payment
         </button>
         <button
           className="button button-primary"
           onClick={checkout.onSimulateSuccessfulPayment}
+          type="button"
         >
           Simulate successful payment
         </button>
@@ -182,7 +193,9 @@ export function SellerPreviewPanel({
                 <strong>{formatRupiah(listing.price)}</strong>
                 <button
                   className="button button-primary"
+                  data-panel-trigger={`seller-item:${listing.id}`}
                   onClick={() => onViewItem(listing.id)}
+                  type="button"
                 >
                   View item
                 </button>
@@ -326,7 +339,9 @@ export default function ListingPanel({
                 {onOpenCheckout ? (
                   <button
                     className="button button-primary"
+                    data-panel-trigger="item-checkout"
                     onClick={onOpenCheckout}
+                    type="button"
                   >
                     Open Checkout Hold
                   </button>
@@ -337,8 +352,10 @@ export default function ListingPanel({
                 <p className="eyebrow">Single-item checkout - Simulation</p>
                 <button
                   className="button button-primary"
+                  data-panel-trigger="item-checkout"
                   disabled={checkout.disabled}
                   onClick={checkout.onStart}
+                  type="button"
                 >
                   Start 5-minute Checkout Hold
                 </button>
@@ -380,7 +397,11 @@ export default function ListingPanel({
                 ))}
               </select>
             </label>
-            <button className="button button-outline" onClick={questions.onRequestUpdate}>
+            <button
+              className="button button-outline"
+              onClick={questions.onRequestUpdate}
+              type="button"
+            >
               Request listing update
             </button>
             {questions.pendingQuestion ? (

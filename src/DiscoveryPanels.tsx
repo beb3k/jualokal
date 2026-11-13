@@ -61,6 +61,9 @@ type SheetDrag = {
 type DiscoveryPanelProps = Readonly<{
   stage: DiscoveryPanelStage;
   stageKey: string;
+  stageDepth: number;
+  returnFocusSelector?: string | null;
+  inert?: boolean;
   title: string;
   label: string;
   onBack: () => void;
@@ -69,13 +72,25 @@ type DiscoveryPanelProps = Readonly<{
 }>;
 
 // Non-modal panel. The map stays reachable behind it: there is no backdrop,
-// no focus trap, and no aria-modal. Focus moves to Close on every stage change.
+// no focus trap, and no aria-modal. Focus moves to Close on forward open and
+// returns to the triggering control on Back when that control still exists.
 // On phones the same shell becomes a bottom sheet; only the handle starts a
 // resize gesture, so panel content keeps its own scrolling and the map keeps
 // the gestures that begin outside the sheet.
 const DiscoveryPanel = forwardRef<DiscoveryPanelHandle, DiscoveryPanelProps>(
   function DiscoveryPanel(
-    { stage, stageKey, title, label, onBack, onClose, children },
+    {
+      stage,
+      stageKey,
+      stageDepth,
+      returnFocusSelector,
+      inert = false,
+      title,
+      label,
+      onBack,
+      onClose,
+      children,
+    },
     ref,
   ) {
     const panelRef = useRef<HTMLElement | null>(null);
@@ -83,6 +98,11 @@ const DiscoveryPanel = forwardRef<DiscoveryPanelHandle, DiscoveryPanelProps>(
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const scrollPositionsRef = useRef(new Map<string, number>());
     const restoringStageRef = useRef<string | null>(null);
+    const previousStageDepthRef = useRef(0);
+    const stageDepthRef = useRef(stageDepth);
+    stageDepthRef.current = stageDepth;
+    const returnFocusSelectorRef = useRef(returnFocusSelector);
+    returnFocusSelectorRef.current = returnFocusSelector;
     const availableRef = useRef(0);
     const dragRef = useRef<SheetDrag | null>(null);
     const suppressClickRef = useRef(false);
@@ -92,15 +112,37 @@ const DiscoveryPanel = forwardRef<DiscoveryPanelHandle, DiscoveryPanelProps>(
     const [dragging, setDragging] = useState(false);
 
     useEffect(() => {
-      closeButtonRef.current?.focus();
-    }, [stageKey]);
+      const currentDepth = stageDepthRef.current;
+      const navigatingBack = currentDepth < previousStageDepthRef.current;
+      previousStageDepthRef.current = currentDepth;
 
-    useEffect(() => {
       restoringStageRef.current = stageKey;
+      const savedScroll = scrollPositionsRef.current.get(stageKey) ?? 0;
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = savedScroll;
+      }
+
+      const selector = returnFocusSelectorRef.current;
+      if (navigatingBack && selector) {
+        const trigger = panelRef.current?.querySelector<HTMLElement>(selector);
+        const canFocusTrigger = Boolean(
+          trigger &&
+            !trigger.hasAttribute("disabled") &&
+            !trigger.closest("[hidden]") &&
+            trigger.getClientRects().length > 0,
+        );
+        if (canFocusTrigger && trigger) {
+          trigger.focus({ preventScroll: true });
+        } else {
+          closeButtonRef.current?.focus();
+        }
+      } else {
+        closeButtonRef.current?.focus();
+      }
+
       const frame = window.requestAnimationFrame(() => {
         if (scrollRef.current) {
-          scrollRef.current.scrollTop =
-            scrollPositionsRef.current.get(stageKey) ?? 0;
+          scrollRef.current.scrollTop = savedScroll;
         }
         restoringStageRef.current = null;
       });
@@ -289,12 +331,15 @@ const DiscoveryPanel = forwardRef<DiscoveryPanelHandle, DiscoveryPanelProps>(
 
     return (
       <aside
+        aria-hidden={inert ? true : undefined}
         aria-label={label}
         className="discovery-panel"
         data-panel-stage={stage}
+        inert={inert}
         ref={panelRef}
       >
         <button
+          aria-description={`Sheet height ${Math.round(snap * 100)} percent. Drag handle or use arrow keys to resize.`}
           aria-label="Resize panel"
           className={`discovery-sheet-handle${dragging ? " is-dragging" : ""}`}
           onClick={handleSheetClick}

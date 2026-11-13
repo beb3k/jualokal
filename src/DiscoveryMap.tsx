@@ -77,6 +77,7 @@ type DiscoveryMapProps = Readonly<{
   panelOpen: boolean;
   status: string;
   mapFailure?: boolean;
+  focusOnMount?: boolean;
   simulationNote?: string | null;
   onMapPhaseChange: (phase: MapPhase) => void;
   onRetry: () => void;
@@ -87,7 +88,7 @@ type DiscoveryMapProps = Readonly<{
   ) => void;
   onRecenter: () => void;
   onFitMaximum?: () => void;
-  onUseListView: () => void;
+  onUseListView: (trigger?: HTMLButtonElement) => void;
   onZoomChange?: (zoom: number) => void;
 }>;
 
@@ -278,6 +279,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       panelOpen,
       status,
       mapFailure = false,
+      focusOnMount = false,
       simulationNote = null,
       onMapPhaseChange,
       onRetry,
@@ -290,13 +292,17 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     },
     ref,
   ) {
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
+  const retryButtonRef = useRef<HTMLButtonElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const moduleRef = useRef<MapLibreModule | null>(null);
   const buyerMarkerRef = useRef<MapLibreMarker | null>(null);
   const sellerMarkersRef = useRef<Array<{ key: string; marker: MapLibreMarker }>>([]);
   const loadedRef = useRef(false);
   const savedCameraRef = useRef<SavedCamera | null>(null);
+  const focusPendingRef = useRef(focusOnMount);
 
   const buyerRef = useRef(buyer);
   buyerRef.current = buyer;
@@ -344,6 +350,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       bounds.extend([point.lng, point.lat]);
     }
 
+    const reducedMotion = prefersReducedMotion();
     const canvas = map.getCanvas();
     const wide = canvas.clientWidth >= 1024;
     const coverage = readPanelCoverage(map, containerRef.current);
@@ -364,7 +371,8 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
             right: 24,
           },
       maxZoom: FIRST_FIT_MAX_ZOOM,
-      duration: prefersReducedMotion() ? 0 : 450,
+      animate: !reducedMotion,
+      duration: reducedMotion ? 0 : 450,
     });
   }, []);
 
@@ -449,6 +457,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     }
 
     savedCameraRef.current = null;
+    const reducedMotion = prefersReducedMotion();
     const canvas = map.getCanvas();
     const wide = canvas.clientWidth >= 1024;
     const coverage = readPanelCoverage(map, containerRef.current);
@@ -469,7 +478,8 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
             right: 24,
           },
       maxZoom: FIT_MAXIMUM_MAX_ZOOM,
-      duration: prefersReducedMotion() ? 0 : 450,
+      animate: !reducedMotion,
+      duration: reducedMotion ? 0 : 450,
     });
   }, []);
 
@@ -521,12 +531,20 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       };
     }
 
-    map.flyTo({
-      center: [anchor.lng, anchor.lat],
-      zoom: Math.max(map.getZoom(), 15),
-      padding,
-      duration: prefersReducedMotion() ? 0 : 600,
-    });
+    if (prefersReducedMotion()) {
+      map.jumpTo({
+        center: [anchor.lng, anchor.lat],
+        zoom: Math.max(map.getZoom(), 15),
+        padding,
+      });
+    } else {
+      map.flyTo({
+        center: [anchor.lng, anchor.lat],
+        zoom: Math.max(map.getZoom(), 15),
+        padding,
+        duration: 600,
+      });
+    }
   }, []);
 
   const restorePreviousCamera = useCallback(() => {
@@ -535,14 +553,24 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     if (!map || !saved) return;
 
     savedCameraRef.current = null;
-    map.easeTo({
-      center: [saved.lng, saved.lat],
-      zoom: saved.zoom,
-      bearing: saved.bearing,
-      pitch: saved.pitch,
-      padding: saved.padding,
-      duration: prefersReducedMotion() ? 0 : 450,
-    });
+    if (prefersReducedMotion()) {
+      map.jumpTo({
+        center: [saved.lng, saved.lat],
+        zoom: saved.zoom,
+        bearing: saved.bearing,
+        pitch: saved.pitch,
+        padding: saved.padding,
+      });
+    } else {
+      map.easeTo({
+        center: [saved.lng, saved.lat],
+        zoom: saved.zoom,
+        bearing: saved.bearing,
+        pitch: saved.pitch,
+        padding: saved.padding,
+        duration: 450,
+      });
+    }
   }, []);
 
   useImperativeHandle(
@@ -564,6 +592,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     const focusedMarker = document.activeElement instanceof HTMLElement
       ? document.activeElement.closest<HTMLElement>("[data-discovery-marker]")
       : null;
+    const focusedMarkerKey = focusedMarker?.dataset.discoveryMarker ?? null;
 
     for (const { marker } of sellerMarkersRef.current) marker.remove();
     sellerMarkersRef.current = [];
@@ -606,11 +635,18 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
         button.addEventListener("click", (event) => {
           event.stopPropagation();
           if (markerModel.separation === "separable") {
-            map.flyTo({
-              center: [markerModel.anchor.lng, markerModel.anchor.lat],
-              zoom: Math.max(map.getZoom(), SEPARABLE_GROUP_ZOOM),
-              duration: prefersReducedMotion() ? 0 : 600,
-            });
+            if (prefersReducedMotion()) {
+              map.jumpTo({
+                center: [markerModel.anchor.lng, markerModel.anchor.lat],
+                zoom: Math.max(map.getZoom(), SEPARABLE_GROUP_ZOOM),
+              });
+            } else {
+              map.flyTo({
+                center: [markerModel.anchor.lng, markerModel.anchor.lat],
+                zoom: Math.max(map.getZoom(), SEPARABLE_GROUP_ZOOM),
+                duration: 600,
+              });
+            }
           }
           callbacksRef.current.onSelectGroup(markerModel, button);
         });
@@ -652,7 +688,16 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       sellerMarkersRef.current.push({ key: markerModel.key, marker });
     }
 
-    if (focusedMarker && !focusedMarker.isConnected) {
+    if (focusedMarkerKey) {
+      const replacement = containerRef.current?.querySelector<HTMLButtonElement>(
+        `[data-discovery-marker="${CSS.escape(focusedMarkerKey)}"] button`,
+      );
+      if (replacement) {
+        replacement.focus({ preventScroll: true });
+      } else {
+        map.getCanvas().focus();
+      }
+    } else if (focusedMarker && !focusedMarker.isConnected) {
       map.getCanvas().focus();
     }
   }, []);
@@ -756,6 +801,13 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
           new maplibre.NavigationControl({ showCompass: false }),
           "top-right",
         );
+        const zoomGroup = container.querySelector<HTMLElement>(
+          ".maplibregl-ctrl-top-right .maplibregl-ctrl-group",
+        );
+        if (zoomGroup) {
+          zoomGroup.setAttribute("role", "group");
+          zoomGroup.setAttribute("aria-label", "Map zoom controls");
+        }
         map.addControl(
           new maplibre.AttributionControl({
             compact: false,
@@ -881,9 +933,47 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     syncBoundaryLayers();
   }, [boundaryCenter?.lat, boundaryCenter?.lng, phase, syncBoundaryLayers]);
 
+  useEffect(() => {
+    if (phase === "loading") {
+      if (focusPendingRef.current) {
+        loadingRef.current?.focus();
+      }
+      return;
+    }
+
+    if (phase === "ready") {
+      if (focusPendingRef.current) {
+        focusPendingRef.current = false;
+        window.requestAnimationFrame(() => {
+          mapRef.current?.getCanvas().focus();
+        });
+      }
+      return;
+    }
+
+    if (phase === "error") {
+      const focusWasInSurface = Boolean(
+        surfaceRef.current &&
+          document.activeElement instanceof HTMLElement &&
+          surfaceRef.current.contains(document.activeElement),
+      );
+      if (focusPendingRef.current || focusWasInSurface) {
+        focusPendingRef.current = false;
+        window.requestAnimationFrame(() => {
+          retryButtonRef.current?.focus();
+        });
+      }
+    }
+  }, [phase]);
+
   return (
-    <div className="discovery-map-surface">
-      <div ref={containerRef} className="discovery-map-canvas" />
+    <div className="discovery-map-surface" ref={surfaceRef}>
+      <div
+        aria-hidden={phase !== "ready"}
+        className="discovery-map-canvas"
+        inert={phase !== "ready"}
+        ref={containerRef}
+      />
 
       <div className="map-context">
         <strong>Buyer-centered view</strong>
@@ -894,7 +984,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       </div>
 
       {phase === "loading" ? (
-        <div className="map-loading" role="status">
+        <div className="map-loading" ref={loadingRef} role="status" tabIndex={-1}>
           <span className="map-loading-indicator" aria-hidden="true" />
           <span>Loading the street map...</span>
         </div>
@@ -903,19 +993,22 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       {phase === "error" ? (
         <div className="map-error" role="alert">
           <div className="map-error-card">
-            <h3>The street map did not load.</h3>
+            <h2>The street map did not load.</h2>
             <p>{errorDetail || "Check your connection and retry."}</p>
             <div className="map-error-actions">
               <button
                 className="button button-primary"
                 onClick={() => callbacksRef.current.onRetry()}
+                ref={retryButtonRef}
                 type="button"
               >
                 Retry map
               </button>
               <button
                 className="button button-outline"
-                onClick={() => callbacksRef.current.onUseListView()}
+                onClick={(event) =>
+                  callbacksRef.current.onUseListView(event.currentTarget)
+                }
                 type="button"
               >
                 Use List view
