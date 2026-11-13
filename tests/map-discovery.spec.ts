@@ -495,3 +495,70 @@ test("Map Fallback preserves results and saved preference until retry recovers",
   await expect(page.getByRole("img", { name: "Your location" })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Map rendering recovered" })).toBeVisible();
 });
+
+test("Map detail toggle defaults to Clean, persists Detailed across reload, and resets cleanly", async ({
+  page,
+}, testInfo) => {
+  await openDemo(page);
+
+  const map = page.getByRole("region", { name: "Seller discovery map" });
+  const detailGroup = map.getByRole("group", { name: "Map detail" });
+  const cleanButton = detailGroup.getByRole("button", { name: "Clean" });
+  const detailedButton = detailGroup.getByRole("button", { name: "Detailed" });
+
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "true", { timeout: 15_000 });
+  await expect(detailedButton).toHaveAttribute("aria-pressed", "false");
+  await expect(map.getByRole("img", { name: "Your location" })).toBeVisible();
+  await expect(map.getByRole("button", { name: "Seller marker, DP, 5 Listings" })).toBeVisible();
+  await expect(map).toContainText("OpenFreeMap");
+
+  const viewport = page.viewportSize();
+  const cleanBox = await cleanButton.boundingBox();
+  const detailedBox = await detailedButton.boundingBox();
+  const recenterBox = await map.getByRole("button", { name: "Recenter map" }).boundingBox();
+  const resultPillBox = await page
+    .getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" })
+    .boundingBox();
+  expect(viewport && cleanBox && detailedBox && recenterBox && resultPillBox).toBeTruthy();
+  expect(cleanBox!.x + cleanBox!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(detailedBox!.x + detailedBox!.width).toBeLessThanOrEqual(viewport!.width);
+  if (testInfo.project.name === "phone") {
+    expect(cleanBox!.y + cleanBox!.height).toBeLessThanOrEqual(resultPillBox!.y);
+  } else {
+    expect(detailedBox!.x + detailedBox!.width).toBeLessThanOrEqual(resultPillBox!.x);
+  }
+
+  await detailedButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(detailedButton).toHaveAttribute("aria-pressed", "true");
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "false");
+  await expect(map.getByRole("status")).toContainText("Detailed street map selected");
+  await expect(map.getByRole("button", { name: "Seller marker, DP, 5 Listings" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open List panel: 3 seller areas, 25 listings" }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(detailedButton).toHaveAttribute("aria-pressed", "true", { timeout: 15_000 });
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "false");
+
+  const drawer = await openDemoControls(page);
+  await drawer.getByRole("button", { name: "Reset Demo" }).click();
+  await page
+    .getByRole("dialog", { name: "Reset Demo" })
+    .getByRole("button", { name: "Reset this simulated session" })
+    .click();
+
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "true", { timeout: 15_000 });
+  await expect(detailedButton).toHaveAttribute("aria-pressed", "false");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("jualokal.map-detail")))
+    .toBeNull();
+
+  await page.evaluate(() => {
+    localStorage.setItem("jualokal.map-detail", "unexpected-value");
+  });
+  await page.reload();
+  await expect(cleanButton).toHaveAttribute("aria-pressed", "true", { timeout: 15_000 });
+  await expect(detailedButton).toHaveAttribute("aria-pressed", "false");
+});

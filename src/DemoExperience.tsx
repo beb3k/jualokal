@@ -14,6 +14,7 @@ import DiscoveryMap, {
   type DiscoveryMapHandle,
   type DiscoverySellerGroupMarker,
   type DiscoverySellerMarker,
+  type MapDetailLevel,
   type MapPhase,
 } from "./DiscoveryMap";
 import DiscoveryPanel, {
@@ -139,6 +140,7 @@ const structuredQuestions = [
 
 const prototypeDiscoveryRadiusKm = 2;
 const discoveryViewStorageKey = "jualokal.discovery-view";
+const mapDetailStorageKey = "jualokal.map-detail";
 const mapHomeAnchorVersion = "fictional-anchor-v1";
 const separableGroupZoom = 16.5;
 const defaultIncludedParts = "Item and all parts shown in the fictional photos.";
@@ -176,6 +178,17 @@ function initialDiscoveryView(): DiscoveryView {
   return window.localStorage.getItem(discoveryViewStorageKey) === "list"
     ? "list"
     : "map";
+}
+
+function readStoredMapDetail(): MapDetailLevel {
+  if (typeof window === "undefined") return "clean";
+  try {
+    return window.localStorage.getItem(mapDetailStorageKey) === "detailed"
+      ? "detailed"
+      : "clean";
+  } catch {
+    return "clean";
+  }
 }
 
 function initialPanelStages(): PanelStage[] {
@@ -624,6 +637,7 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
   const [discoveryCategory, setDiscoveryCategory] =
     useState<DiscoveryCategory>(initialDiscoveryCategory);
   const [discoveryView, setDiscoveryView] = useState<DiscoveryView>(initialDiscoveryView);
+  const [mapDetail, setMapDetail] = useState<MapDetailLevel>(readStoredMapDetail);
   const [mapPhase, setMapPhase] = useState<MapPhase>("loading");
   const [mapFailureSimulated, setMapFailureSimulated] = useState(false);
   const [discoveryAnnouncement, setDiscoveryAnnouncement] = useState(
@@ -1787,6 +1801,20 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     );
   }
 
+  function selectMapDetail(nextDetail: MapDetailLevel) {
+    setMapDetail(nextDetail);
+    try {
+      window.localStorage.setItem(mapDetailStorageKey, nextDetail);
+    } catch {
+      // Ignore storage write failures when browser storage is restricted.
+    }
+    setMapStatus(
+      nextDetail === "clean"
+        ? "Clean map detail selected"
+        : "Detailed street map selected",
+    );
+  }
+
   function loadListingForEditing(listing: SessionListing) {
     setSelectedListingId(listing.id);
     setTitle(listing.title);
@@ -2788,6 +2816,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
     setDiscoveryView("map");
     suppressViewPreferenceRef.current = false;
     window.localStorage.setItem(discoveryViewStorageKey, "map");
+    setMapDetail("clean");
+    try {
+      window.localStorage.removeItem(mapDetailStorageKey);
+    } catch {
+      // Ignore storage cleanup failures when browser storage is restricted.
+    }
     setPanelStages([]);
     setCompletedCheckoutCommitmentId(null);
     setMapZoom(14);
@@ -3284,10 +3318,12 @@ function DemoExperience({ onExit }: { onExit: () => void }) {
                 browsingLocationSnapshot.kind === "valid" ? buyerPoint : null
               }
               buyer={buyerPoint}
+              detailLevel={mapDetail}
               focusOnMount={pendingMapRetryFocusRef.current}
               key={mapInstanceKey}
               markers={discoveryMarkerViews}
               mapFailure={mapFailureSimulated}
+              onDetailLevelChange={selectMapDetail}
               onFitMaximum={fitMaximumMap}
               onMapPhaseChange={handleMapPhaseChange}
               onOpenSeller={openSellerPreview}
