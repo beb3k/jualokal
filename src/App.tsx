@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from "react";
-import { House, MapPin, Package, ShieldCheck, UserRoundCheck } from "lucide-react";
 import { LandingCoverflow } from "./components/landing-coverflow";
 import { MarketplacePaths } from "./components/marketplace-paths";
+import { MarketplacePrinciples } from "./components/marketplace-principles";
 
 const DemoExperience = lazy(() => import("./DemoExperience"));
 
@@ -85,61 +85,7 @@ function App() {
 
         <MarketplacePaths />
 
-        <section className="principles" aria-labelledby="principles-title">
-          <div className="section-heading">
-            <p className="eyebrow">A more deliberate marketplace</p>
-            <h2 id="principles-title">Local exchange without public exposure.</h2>
-          </div>
-          <div className="principle-grid">
-            <article>
-              <span className="principle-number">01</span>
-              <div aria-hidden="true" className="principle-art principle-art-access">
-                <UserRoundCheck className="art-access-person" />
-                <span className="art-access-gate" />
-              </div>
-              <h3>Accountable access</h3>
-              <p>Registration begins publicly. Marketplace details wait behind verification.</p>
-            </article>
-            <article>
-              <span className="principle-number">02</span>
-              <div aria-hidden="true" className="principle-art principle-art-nearby">
-                <House className="art-nearby-home art-nearby-home-start" />
-                <span className="art-nearby-path" />
-                <Package className="art-nearby-package" />
-                <House className="art-nearby-home art-nearby-home-end" />
-              </div>
-              <h3>Neighbourhood scale</h3>
-              <p>Portable goods move through short, in-person handovers—not delivery.</p>
-            </article>
-            <article>
-              <span className="principle-number">03</span>
-              <div aria-hidden="true" className="principle-art principle-art-private">
-                <span className="art-private-radius" />
-                <MapPin className="art-private-pin" />
-                <ShieldCheck className="art-private-shield" />
-              </div>
-              <h3>Location stays protected</h3>
-              <p>People can meet nearby without publishing where a seller lives.</p>
-            </article>
-          </div>
-        </section>
-
-        <section className="demo-invitation">
-          <div>
-            <p className="eyebrow">Safe to explore</p>
-            <h2>See the marketplace without sharing anything private.</h2>
-          </div>
-          <div className="invitation-copy">
-            <p>
-              Demo Mode uses isolated fictional accounts, listings, locations, and transaction
-              history. Nothing shown is real marketplace activity.
-            </p>
-            <button className="button button-light" onClick={openDemo} type="button">
-              Open the fictional demo
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </section>
+        <MarketplacePrinciples onOpenDemo={openDemo} />
       </main>
 
       <footer>
