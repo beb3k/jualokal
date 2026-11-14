@@ -39,8 +39,11 @@ const TINT = {
   road: "#fffdf8",
   roadCasing: "#e5dccb",
   label: "#173c2b",
+  mutedLabel: "#495b51",
   labelHalo: "#fffdf8",
 } as const;
+
+export type MapDetailLevel = "clean" | "detailed";
 
 export type DiscoverySellerMarker =
   | Readonly<{
@@ -76,9 +79,11 @@ type DiscoveryMapProps = Readonly<{
   markers: readonly DiscoverySellerMarker[];
   panelOpen: boolean;
   status: string;
+  detailLevel?: MapDetailLevel;
   mapFailure?: boolean;
   focusOnMount?: boolean;
   simulationNote?: string | null;
+  onDetailLevelChange?: (next: MapDetailLevel) => void;
   onMapPhaseChange: (phase: MapPhase) => void;
   onRetry: () => void;
   onOpenSeller: (sellerId: string, trigger: HTMLButtonElement) => void;
@@ -200,8 +205,247 @@ function resolveStyleUrl() {
 type MutableStyleLayer = {
   id?: string;
   type?: string;
+  "source-layer"?: string;
+  filter?: unknown;
+  layout?: Record<string, unknown>;
   paint?: Record<string, unknown>;
 };
+
+const NOTABLE_PUBLIC_POI_CLASSES = [
+  "airport",
+  "attraction",
+  "bus",
+  "castle",
+  "cinema",
+  "college",
+  "community_centre",
+  "ferry",
+  "garden",
+  "harbor",
+  "hospital",
+  "library",
+  "marketplace",
+  "monument",
+  "museum",
+  "park",
+  "pitch",
+  "place_of_worship",
+  "playground",
+  "police",
+  "post",
+  "rail",
+  "railway",
+  "school",
+  "stadium",
+  "station",
+  "theatre",
+  "town_hall",
+  "university",
+  "zoo",
+] as const;
+
+type DetailRuleKind =
+  | "hide-in-clean"
+  | "public-poi-filter"
+  | "soften-minor-road"
+  | "soften-symbol";
+
+type BaseLayerSnapshot = Readonly<{
+  kind: DetailRuleKind;
+  visibility: "visible" | "none";
+  filter: unknown;
+  paint: Readonly<Record<string, unknown>>;
+}>;
+
+const DETAIL_PAINT_KEYS = [
+  "line-opacity",
+  "text-color",
+  "text-opacity",
+  "icon-opacity",
+] as const;
+
+function classifyLayerForDetail(layer: MutableStyleLayer): DetailRuleKind | null {
+  const id = layer.id ?? "";
+  if (id === BOUNDARY_FILL_LAYER_ID || id === BOUNDARY_LINE_LAYER_ID) {
+    return null;
+  }
+
+  const sourceLayer = layer["source-layer"] ?? "";
+
+  if (
+    sourceLayer === "building" ||
+    layer.type === "fill-extrusion" ||
+    /^building/i.test(id) ||
+    sourceLayer === "housenumber" ||
+    /housenumber/i.test(id)
+  ) {
+    return "hide-in-clean";
+  }
+
+  if (sourceLayer === "poi" || /^poi_/i.test(id)) {
+    if (/^poi_r1$/i.test(id)) return "public-poi-filter";
+    if (/^poi_transit$/i.test(id)) return "soften-symbol";
+    return "hide-in-clean";
+  }
+
+  if (
+    /^(?:road|tunnel|bridge)_(?:service_track|path_pedestrian)/i.test(id) ||
+    /^road_one_way_arrow/i.test(id) ||
+    /^highway-name-(?:path|minor)$/i.test(id) ||
+    /^(?:road_minor|tunnel_street|bridge_street)_casing$/i.test(id)
+  ) {
+    return "hide-in-clean";
+  }
+
+  if (/^(?:road_minor|tunnel_minor|bridge_street)$/i.test(id)) {
+    return "soften-minor-road";
+  }
+
+  if (
+    layer.type === "symbol" &&
+    sourceLayer !== "place" &&
+    !/^label_/i.test(id)
+  ) {
+    return "soften-symbol";
+  }
+
+  return null;
+}
+
+function captureBaseDetailState(style: MapStyle): Map<string, BaseLayerSnapshot> {
+  const snapshots = new Map<string, BaseLayerSnapshot>();
+  const layers = style.layers as unknown as MutableStyleLayer[] | undefined;
+
+  for (const layer of layers ?? []) {
+    const id = layer.id;
+    if (!id) continue;
+    const kind = classifyLayerForDetail(layer);
+    if (!kind) continue;
+
+    const paint: Record<string, unknown> = {};
+    for (const key of DETAIL_PAINT_KEYS) {
+      if (layer.paint && key in layer.paint) {
+        paint[key] = layer.paint[key];
+      }
+    }
+
+    snapshots.set(id, {
+      kind,
+      visibility: layer.layout?.visibility === "none" ? "none" : "visible",
+      filter: layer.filter,
+      paint,
+    });
+  }
+
+  return snapshots;
+}
+
+function buildPublicPoiFilter(baseFilter: unknown) {
+  const classMatch = [
+    "match",
+    ["get", "class"],
+    [...NOTABLE_PUBLIC_POI_CLASSES],
+    true,
+    false,
+  ];
+  return baseFilter ? ["all", baseFilter, classMatch] : classMatch;
+}
+
+type DetailPaintKey = (typeof DETAIL_PAINT_KEYS)[number];
+
+function resolveDetailChanges(base: BaseLayerSnapshot, detailLevel: MapDetailLevel) {
+  const clean = detailLevel === "clean";
+  let visibility = base.visibility;
+  let filter = base.filter;
+  const paint: Partial<Record<DetailPaintKey, unknown>> = {};
+
+  switch (base.kind) {
+    case "hide-in-clean":
+      visibility = clean ? "none" : base.visibility;
+      break;
+    case "public-poi-filter":
+      filter = clean ? buildPublicPoiFilter(base.filter) : base.filter;
+      paint["text-color"] = clean ? TINT.mutedLabel : (base.paint["text-color"] ?? TINT.label);
+      paint["text-opacity"] = clean ? 0.88 : (base.paint["text-opacity"] ?? 1);
+      paint["icon-opacity"] = clean ? 0.88 : (base.paint["icon-opacity"] ?? 1);
+      break;
+    case "soften-minor-road":
+      paint["line-opacity"] = clean ? 0.42 : (base.paint["line-opacity"] ?? 1);
+      break;
+    case "soften-symbol":
+      paint["text-color"] = clean ? TINT.mutedLabel : (base.paint["text-color"] ?? TINT.label);
+      paint["text-opacity"] = clean ? 0.85 : (base.paint["text-opacity"] ?? 1);
+      paint["icon-opacity"] = clean ? 0.85 : (base.paint["icon-opacity"] ?? 1);
+      break;
+  }
+
+  return { visibility, filter, paint };
+}
+
+function applyDetailToStyle(
+  style: MapStyle,
+  detailLevel: MapDetailLevel,
+  baseState: Map<string, BaseLayerSnapshot>,
+) {
+  const layers = style.layers as unknown as MutableStyleLayer[] | undefined;
+  for (const layer of layers ?? []) {
+    const base = layer.id ? baseState.get(layer.id) : undefined;
+    if (!base) continue;
+
+    const changes = resolveDetailChanges(base, detailLevel);
+    if (changes.visibility === "none") {
+      layer.layout = { ...(layer.layout ?? {}), visibility: "none" };
+    } else if (layer.layout && "visibility" in layer.layout) {
+      layer.layout = { ...layer.layout, visibility: changes.visibility };
+    }
+
+    if (base.kind === "public-poi-filter") {
+      if (changes.filter !== undefined) {
+        layer.filter = changes.filter;
+      } else {
+        delete layer.filter;
+      }
+    }
+
+    const paintEntries = Object.entries(changes.paint).filter(
+      ([, value]) => value !== undefined,
+    );
+    if (paintEntries.length > 0) {
+      layer.paint = {
+        ...(layer.paint ?? {}),
+        ...Object.fromEntries(paintEntries),
+      };
+    }
+  }
+  return style;
+}
+
+function applyDetailToMap(
+  map: MapLibreMap,
+  detailLevel: MapDetailLevel,
+  baseState: Map<string, BaseLayerSnapshot>,
+) {
+  for (const [layerId, base] of baseState.entries()) {
+    if (!map.getLayer(layerId)) continue;
+    const changes = resolveDetailChanges(base, detailLevel);
+
+    map.setLayoutProperty(layerId, "visibility", changes.visibility);
+    if (base.kind === "public-poi-filter") {
+      map.setFilter(
+        layerId,
+        (changes.filter ?? null) as Parameters<MapLibreMap["setFilter"]>[1],
+      );
+    }
+    for (const key of DETAIL_PAINT_KEYS) {
+      if (!(key in changes.paint)) continue;
+      if (key === "text-color") {
+        map.setPaintProperty(layerId, key, changes.paint[key] as string | undefined);
+      } else {
+        map.setPaintProperty(layerId, key, changes.paint[key] as number | undefined);
+      }
+    }
+  }
+}
 
 function tintStyle(style: MapStyle): MapStyle {
   const layers = style.layers as unknown as MutableStyleLayer[] | undefined;
@@ -278,9 +522,11 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       markers,
       panelOpen,
       status,
+      detailLevel = "clean",
       mapFailure = false,
       focusOnMount = false,
       simulationNote = null,
+      onDetailLevelChange,
       onMapPhaseChange,
       onRetry,
       onOpenSeller,
@@ -303,6 +549,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
   const loadedRef = useRef(false);
   const savedCameraRef = useRef<SavedCamera | null>(null);
   const focusPendingRef = useRef(focusOnMount);
+  const baseDetailStateRef = useRef<Map<string, BaseLayerSnapshot>>(new Map());
 
   const buyerRef = useRef(buyer);
   buyerRef.current = buyer;
@@ -310,9 +557,12 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
   boundaryRef.current = boundaryCenter;
   const panelOpenRef = useRef(panelOpen);
   panelOpenRef.current = panelOpen;
+  const detailLevelRef = useRef(detailLevel);
+  detailLevelRef.current = detailLevel;
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const callbacksRef = useRef({
+    onDetailLevelChange,
     onMapPhaseChange,
     onRetry,
     onOpenSeller,
@@ -323,6 +573,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     onZoomChange,
   });
   callbacksRef.current = {
+    onDetailLevelChange,
     onMapPhaseChange,
     onRetry,
     onOpenSeller,
@@ -780,9 +1031,16 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
         moduleRef.current = maplibre;
         maplibre.setWorkerUrl(maplibreWorkerUrl);
 
+        const tintedStyle = tintStyle(style);
+        baseDetailStateRef.current = captureBaseDetailState(tintedStyle);
+
         map = new maplibre.Map({
           container,
-          style: tintStyle(style),
+          style: applyDetailToStyle(
+            tintedStyle,
+            detailLevelRef.current,
+            baseDetailStateRef.current,
+          ),
           center: [buyerRef.current.lng, buyerRef.current.lat],
           zoom: 14,
           minZoom: MIN_ZOOM,
@@ -843,7 +1101,14 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
         resizeObserver = new ResizeObserver(() => map?.resize());
         resizeObserver.observe(container);
 
-        map.on("style.load", syncBoundaryLayers);
+        map.on("style.load", () => {
+          applyDetailToMap(
+            createdMap,
+            detailLevelRef.current,
+            baseDetailStateRef.current,
+          );
+          syncBoundaryLayers();
+        });
 
         map.on("zoomend", () => {
           if (!cancelled) {
@@ -906,6 +1171,7 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
       sellerMarkersRef.current = [];
       loadedRef.current = false;
       savedCameraRef.current = null;
+      baseDetailStateRef.current = new Map();
     };
   }, [mapFailure]);
 
@@ -932,6 +1198,11 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
     if (phase !== "ready") return;
     syncBoundaryLayers();
   }, [boundaryCenter?.lat, boundaryCenter?.lng, phase, syncBoundaryLayers]);
+
+  useEffect(() => {
+    if (phase !== "ready" || !mapRef.current) return;
+    applyDetailToMap(mapRef.current, detailLevel, baseDetailStateRef.current);
+  }, [detailLevel, phase]);
 
   useEffect(() => {
     if (phase === "loading") {
@@ -1039,6 +1310,34 @@ const DiscoveryMap = forwardRef<DiscoveryMapHandle, DiscoveryMapProps>(
             >
               Recenter map
             </button>
+            {onDetailLevelChange ? (
+              <div
+                aria-label="Map detail"
+                className="map-detail-toggle"
+                role="group"
+              >
+                {(
+                  [
+                    ["clean", "Clean"],
+                    ["detailed", "Detailed"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    aria-pressed={detailLevel === value}
+                    className="button button-compact button-outline"
+                    key={value}
+                    onClick={() => {
+                      if (detailLevel !== value) {
+                        callbacksRef.current.onDetailLevelChange?.(value);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {boundaryCenter ? (
               <button
                 className="button button-compact button-outline map-fit-control"
