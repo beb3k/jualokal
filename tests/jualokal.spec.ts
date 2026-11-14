@@ -34,7 +34,7 @@ test("public visitors understand Jualokal and reach real registration without se
 
   await expectHorizontallyContained(
     page,
-    page.getByRole("img", { name: "Jualokal privacy promise" }),
+    page.getByRole("region", { name: "How a nearby handover works" }),
   );
   await expectHorizontallyContained(page, marketplacePaths);
   for (const pathCard of await marketplacePaths.locator("article").all()) {
